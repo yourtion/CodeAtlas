@@ -68,7 +68,7 @@ go build -o bin/api cmd/api/main.go
 go build -o bin/codeatlas cmd/cli/main.go
 
 # Build frontend
-npm run build
+pnpm run build
 ```
 
 ### Running Tests
@@ -154,6 +154,10 @@ go run cmd/cli/main.go
 
 ## Code Quality Standards
 
+**Important!!! Write test after code written !!! Run and pass all test then commit !!!**
+
+**Check all docs and update with code implement !!!**
+
 - Write clean, readable, and maintainable code
 - Follow language-specific style guides (Go, JavaScript)
 - Implement comprehensive error handling
@@ -162,3 +166,4 @@ go run cmd/cli/main.go
 - Use meaningful variable and function names
 - Keep functions small and focused
 - Avoid code duplication
+- Avoid `any` type in web project
