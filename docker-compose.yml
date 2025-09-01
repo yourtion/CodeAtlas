@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database with pgvector and AGE extensions
+  db:
+    build: ./docker
+    environment:
+      POSTGRES_DB: codeatlas
+      POSTGRES_USER: codeatlas
+      POSTGRES_PASSWORD: codeatlas
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d
+
+  # CodeAtlas API server
+  api:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile.api
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=codeatlas
+      - DB_PASSWORD=codeatlas
+      - DB_NAME=codeatlas
+    depends_on:
+      - db
+
+  # CodeAtlas CLI tool (for testing)
+  cli:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile.cli
+    environment:
+      - API_URL=http://api:8080
+    depends_on:
+      - api
