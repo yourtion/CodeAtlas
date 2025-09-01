@@ -1,0 +1,29 @@
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+WORKDIR /app
+
+# Copy go mod and sum files
+COPY go.mod go.sum ./
+
+# Download all dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the binary
+RUN go build -o codeatlas-cli cmd/cli/main.go
+
+# Final stage
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates git
+
+WORKDIR /root/
+
+# Copy the binary from builder stage
+COPY --from=builder /app/codeatlas-cli .
+
+# Default command
+CMD ["./codeatlas-cli", "--help"]
