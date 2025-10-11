@@ -16,6 +16,136 @@ type FileInfo struct {
 	Size     int64  `json:"size"`
 }
 
+// ScannedFile represents a discovered file with metadata
+type ScannedFile struct {
+	Path     string // Relative path from root
+	AbsPath  string // Absolute path
+	Language string // Detected language
+	Size     int64  // File size in bytes
+}
+
+// FileScanner scans directories for source files with ignore filter support
+type FileScanner struct {
+	rootPath  string
+	filter    *IgnoreFilter
+	maxSize   int64 // Maximum file size in bytes (0 = no limit)
+	languages []string // Language filter (empty = all languages)
+}
+
+// NewFileScanner creates a new FileScanner
+func NewFileScanner(rootPath string, filter *IgnoreFilter) *FileScanner {
+	return &FileScanner{
+		rootPath: rootPath,
+		filter:   filter,
+		maxSize:  1024 * 1024, // Default 1MB
+	}
+}
+
+// SetMaxSize sets the maximum file size to scan
+func (s *FileScanner) SetMaxSize(size int64) {
+	s.maxSize = size
+}
+
+// SetLanguageFilter sets the language filter
+func (s *FileScanner) SetLanguageFilter(languages []string) {
+	s.languages = languages
+}
+
+// Scan walks the directory tree and returns all matching files
+func (s *FileScanner) Scan() ([]ScannedFile, error) {
+	var files []ScannedFile
+	
+	// Ensure root path exists
+	if _, err := os.Stat(s.rootPath); err != nil {
+		return nil, fmt.Errorf("root path does not exist: %w", err)
+	}
+
+	err := filepath.WalkDir(s.rootPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Get relative path for ignore filter
+		relPath, err := filepath.Rel(s.rootPath, path)
+		if err != nil {
+			return err
+		}
+
+		// Apply ignore filter at directory level for efficiency
+		if d.IsDir() {
+			if s.filter != nil && s.filter.ShouldIgnore(relPath, true) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Apply ignore filter for files
+		if s.filter != nil && s.filter.ShouldIgnore(relPath, false) {
+			return nil
+		}
+
+		// Skip binary files
+		if isBinaryFile(path) {
+			return nil
+		}
+
+		// Get file info for size check
+		info, err := d.Info()
+		if err != nil {
+			return nil // Skip files we can't stat
+		}
+
+		// Skip files exceeding size limit
+		if s.maxSize > 0 && info.Size() > s.maxSize {
+			return nil
+		}
+
+		// Detect language
+		language := determineLanguage(path)
+		
+		// Apply language filter if specified
+		if len(s.languages) > 0 {
+			matched := false
+			for _, lang := range s.languages {
+				if strings.EqualFold(language, lang) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return nil
+			}
+		}
+
+		// Skip unknown languages unless no filter is set
+		if language == "Unknown" && len(s.languages) == 0 {
+			return nil
+		}
+
+		// Create scanned file entry
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			absPath = path
+		}
+
+		scannedFile := ScannedFile{
+			Path:     relPath,
+			AbsPath:  absPath,
+			Language: language,
+			Size:     info.Size(),
+		}
+
+		files = append(files, scannedFile)
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan directory: %w", err)
+	}
+
+	return files, nil
+}
+
 // ScanRepository scans a repository and returns file information
 func ScanRepository(repoPath string) ([]FileInfo, error) {
 	var files []FileInfo
