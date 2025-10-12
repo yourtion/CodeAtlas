@@ -28,14 +28,34 @@ type File struct {
 	Size         int64  `json:"size"`
 }
 
+const (
+	// Version is the current version of the CLI
+	Version = "1.0.0"
+)
+
 func main() {
 	app := &cli.App{
-		Name:  "codeatlas",
-		Usage: "CodeAtlas CLI tool for code repository analysis",
+		Name:    "codeatlas",
+		Usage:   "CodeAtlas CLI tool for code repository analysis",
+		Version: Version,
 		Commands: []*cli.Command{
+			createParseCommand(),
 			{
 				Name:  "upload",
 				Usage: "Upload repository to CodeAtlas server",
+				Description: `Upload a local repository to the CodeAtlas server for analysis.
+   This command scans the repository, uploads file metadata and content
+   to the server for knowledge graph construction.
+
+EXAMPLES:
+   # Upload repository with auto-detected name
+   codeatlas upload --path /path/to/repo --server http://localhost:8080
+
+   # Upload with custom repository name
+   codeatlas upload --path /path/to/repo --server http://localhost:8080 --name my-project
+
+ENVIRONMENT VARIABLES:
+   CODEATLAS_SERVER    Default server URL (can be overridden with --server flag)`,
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     "path",
@@ -46,8 +66,8 @@ func main() {
 					&cli.StringFlag{
 						Name:     "server",
 						Aliases:  []string{"s"},
-						Usage:    "CodeAtlas server URL",
-						Required: true,
+						Usage:    "CodeAtlas server URL (can also use CODEATLAS_SERVER env var)",
+						Required: false,
 					},
 					&cli.StringFlag{
 						Name:     "name",
@@ -60,6 +80,14 @@ func main() {
 					repoPath := c.String("path")
 					serverURL := c.String("server")
 					repoName := c.String("name")
+
+					// Get server URL from environment variable if not provided
+					if serverURL == "" {
+						serverURL = os.Getenv("CODEATLAS_SERVER")
+						if serverURL == "" {
+							return fmt.Errorf("server URL must be specified via --server flag or CODEATLAS_SERVER environment variable")
+						}
+					}
 
 					// Use directory name as repository name if not provided
 					if repoName == "" {

@@ -238,6 +238,11 @@ func isLargeFile(path string) bool {
 	return info.Size() > 1024*1024
 }
 
+// DetermineLanguage determines the programming language based on file extension (exported)
+func DetermineLanguage(path string) string {
+	return determineLanguage(path)
+}
+
 // determineLanguage determines the programming language based on file extension
 func determineLanguage(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
