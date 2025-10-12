@@ -628,6 +628,97 @@ class ClassWithDocstring:
 	}
 }
 
+func TestPythonParser_ExtractCallRelationships(t *testing.T) {
+	tsParser, err := NewTreeSitterParser()
+	if err != nil {
+		t.Fatalf("Failed to create Tree-sitter parser: %v", err)
+	}
+
+	parser := NewPythonParser(tsParser)
+
+	code := `def helper():
+    return "helper"
+
+def caller():
+    result = helper()
+    print(result)
+
+class Service:
+    def process(self):
+        self.validate()
+        helper()
+    
+    def validate(self):
+        return True
+
+async def async_caller():
+    result = await helper()
+    print(result)
+`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.py")
+	if err := os.WriteFile(tmpFile, []byte(code), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	file := ScannedFile{
+		Path:     "test.py",
+		AbsPath:  tmpFile,
+		Language: "python",
+	}
+
+	result, err := parser.Parse(file)
+	if err != nil {
+		t.Logf("Parse returned error (may be expected): %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	// Check for call dependencies
+	callDeps := []ParsedDependency{}
+	for _, dep := range result.Dependencies {
+		if dep.Type == "call" {
+			callDeps = append(callDeps, dep)
+		}
+	}
+
+	if len(callDeps) == 0 {
+		t.Error("Expected call dependencies but found none")
+	}
+
+	// Check for specific call relationships
+	foundCalls := make(map[string]map[string]bool)
+	for _, dep := range callDeps {
+		if dep.Type == "call" {
+			if foundCalls[dep.Source] == nil {
+				foundCalls[dep.Source] = make(map[string]bool)
+			}
+			foundCalls[dep.Source][dep.Target] = true
+		}
+	}
+
+	// Verify some expected calls exist
+	expectedCallers := []string{"caller", "process", "async_caller"}
+	for _, caller := range expectedCallers {
+		if foundCalls[caller] == nil {
+			t.Errorf("No calls found from %s", caller)
+		}
+	}
+
+	// Check for specific call from caller to helper
+	if foundCalls["caller"] != nil && !foundCalls["caller"]["helper"] {
+		t.Error("Expected call from caller to helper not found")
+	}
+
+	// Check for method call from process to validate
+	if foundCalls["process"] != nil && !foundCalls["process"]["self.validate"] {
+		t.Error("Expected call from process to self.validate not found")
+	}
+}
+
 func TestPythonParser_ErrorHandling(t *testing.T) {
 	tsParser, err := NewTreeSitterParser()
 	if err != nil {
