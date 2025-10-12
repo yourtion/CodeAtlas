@@ -873,6 +873,90 @@ func TestJSParser_ErrorHandling(t *testing.T) {
 	}
 }
 
+func TestJSParser_ExtractCallRelationships(t *testing.T) {
+	tsParser, err := NewTreeSitterParser()
+	if err != nil {
+		t.Fatalf("Failed to create Tree-sitter parser: %v", err)
+	}
+
+	jsParser := NewJSParser(tsParser)
+
+	code := `function helper() {
+	return "helper";
+}
+
+function caller() {
+	const result = helper();
+	console.log(result);
+}
+
+class Service {
+	process() {
+		this.validate();
+		helper();
+	}
+	
+	validate() {
+		return true;
+	}
+}
+
+const arrowCaller = () => {
+	helper();
+	console.log("done");
+};
+`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.js")
+	if err := os.WriteFile(tmpFile, []byte(code), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	scannedFile := ScannedFile{
+		Path:     "test.js",
+		AbsPath:  tmpFile,
+		Language: "javascript",
+		Size:     int64(len(code)),
+	}
+
+	parsedFile, err := jsParser.Parse(scannedFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	// Check for call dependencies
+	callDeps := []ParsedDependency{}
+	for _, dep := range parsedFile.Dependencies {
+		if dep.Type == "call" {
+			callDeps = append(callDeps, dep)
+		}
+	}
+
+	if len(callDeps) == 0 {
+		t.Error("Expected call dependencies but found none")
+	}
+
+	// Check for specific call relationships
+	foundCalls := make(map[string]map[string]bool)
+	for _, dep := range callDeps {
+		if dep.Type == "call" {
+			if foundCalls[dep.Source] == nil {
+				foundCalls[dep.Source] = make(map[string]bool)
+			}
+			foundCalls[dep.Source][dep.Target] = true
+		}
+	}
+
+	// Verify some expected calls exist
+	expectedCallers := []string{"caller", "process", "arrowCaller"}
+	for _, caller := range expectedCallers {
+		if foundCalls[caller] == nil {
+			t.Errorf("No calls found from %s", caller)
+		}
+	}
+}
+
 func TestJSParser_ComplexExample(t *testing.T) {
 	tsParser, err := NewTreeSitterParser()
 	if err != nil {

@@ -70,6 +70,11 @@ func (p *JSParser) Parse(file ScannedFile) (*ParsedFile, error) {
 		// Non-fatal, continue
 	}
 
+	// Extract call relationships
+	if err := p.extractCallRelationships(rootNode, parsedFile, content, language); err != nil {
+		// Non-fatal, continue
+	}
+
 	// Return parse error if there was one, but with partial results
 	if parseErr != nil {
 		return parsedFile, fmt.Errorf("parse error: %w", parseErr)
@@ -701,4 +706,65 @@ func (p *JSParser) isGeneratorFunction(funcNode *sitter.Node, content []byte) bo
 	// Look for generator marker (*)
 	funcText := funcNode.Content(content)
 	return strings.Contains(funcText, "function*")
+}
+
+// extractCallRelationships extracts function call relationships
+func (p *JSParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte, language string) error {
+	// Query for call expressions
+	query := `(call_expression function: [(identifier) (member_expression)] @call.target)`
+	
+	matches, err := p.tsParser.Query(rootNode, query, language)
+	if err != nil {
+		return err
+	}
+
+	for _, match := range matches {
+		for _, capture := range match.Captures {
+			callTarget := capture.Node.Content(content)
+			
+			// Find the containing function for this call
+			caller := p.findContainingFunction(capture.Node, parsedFile)
+			if caller != "" {
+				dependency := ParsedDependency{
+					Type:   "call",
+					Source: caller,
+					Target: callTarget,
+				}
+				
+				parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
+			}
+		}
+	}
+
+	return nil
+}
+
+// findContainingFunction finds the name of the function/method containing a node
+func (p *JSParser) findContainingFunction(node *sitter.Node, parsedFile *ParsedFile) string {
+	current := node.Parent()
+	
+	for current != nil {
+		// Check if this is a function, arrow function, or method
+		nodeType := current.Type()
+		if nodeType == "function_declaration" || 
+		   nodeType == "function_expression" || 
+		   nodeType == "arrow_function" || 
+		   nodeType == "method_definition" {
+			// Find the matching symbol in our parsed symbols
+			for _, symbol := range parsedFile.Symbols {
+				if symbol.Node == current {
+					return symbol.Name
+				}
+				// Also check children for nested symbols
+				for _, child := range symbol.Children {
+					if child.Node == current {
+						return child.Name
+					}
+				}
+			}
+		}
+		current = current.Parent()
+	}
+	
+	return ""
 }

@@ -531,9 +531,16 @@ func main() {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	// Check imports
-	if len(parsedFile.Dependencies) != 3 {
-		t.Errorf("Expected 3 imports, got %d", len(parsedFile.Dependencies))
+	// Check imports (filter only import type dependencies)
+	importDeps := []ParsedDependency{}
+	for _, dep := range parsedFile.Dependencies {
+		if dep.Type == "import" {
+			importDeps = append(importDeps, dep)
+		}
+	}
+
+	if len(importDeps) != 3 {
+		t.Errorf("Expected 3 imports, got %d", len(importDeps))
 	}
 
 	expectedImports := map[string]bool{
@@ -542,10 +549,7 @@ func main() {
 		"github.com/example/pkg": false,
 	}
 
-	for _, dep := range parsedFile.Dependencies {
-		if dep.Type != "import" {
-			t.Errorf("Expected dependency type 'import', got '%s'", dep.Type)
-		}
+	for _, dep := range importDeps {
 		if _, exists := expectedImports[dep.Target]; exists {
 			expectedImports[dep.Target] = true
 		}
@@ -630,6 +634,97 @@ type Person struct {
 				t.Errorf("Expected at least package symbol in partial results")
 			}
 		})
+	}
+}
+
+func TestGoParser_ExtractCallRelationships(t *testing.T) {
+	tsParser, err := NewTreeSitterParser()
+	if err != nil {
+		t.Fatalf("Failed to create Tree-sitter parser: %v", err)
+	}
+
+	goParser := NewGoParser(tsParser)
+
+	code := `package main
+
+import "fmt"
+
+func helper() string {
+	return "helper"
+}
+
+func caller() {
+	result := helper()
+	fmt.Println(result)
+}
+
+type Service struct{}
+
+func (s *Service) Process() {
+	s.Validate()
+}
+
+func (s *Service) Validate() bool {
+	return true
+}
+`
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.go")
+	if err := os.WriteFile(tmpFile, []byte(code), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	scannedFile := ScannedFile{
+		Path:     "test.go",
+		AbsPath:  tmpFile,
+		Language: "go",
+		Size:     int64(len(code)),
+	}
+
+	parsedFile, err := goParser.Parse(scannedFile)
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	// Check for call dependencies
+	callDeps := []ParsedDependency{}
+	for _, dep := range parsedFile.Dependencies {
+		if dep.Type == "call" {
+			callDeps = append(callDeps, dep)
+		}
+	}
+
+	if len(callDeps) == 0 {
+		t.Error("Expected call dependencies but found none")
+	}
+
+	// Check for specific call relationships
+	expectedCalls := map[string][]string{
+		"caller":  {"helper", "fmt.Println"},
+		"Process": {"s.Validate"},
+	}
+
+	foundCalls := make(map[string]map[string]bool)
+	for _, dep := range callDeps {
+		if dep.Type == "call" {
+			if foundCalls[dep.Source] == nil {
+				foundCalls[dep.Source] = make(map[string]bool)
+			}
+			foundCalls[dep.Source][dep.Target] = true
+		}
+	}
+
+	for caller, expectedTargets := range expectedCalls {
+		if foundCalls[caller] == nil {
+			t.Errorf("No calls found from %s", caller)
+			continue
+		}
+		for _, target := range expectedTargets {
+			if !foundCalls[caller][target] {
+				t.Errorf("Expected call from %s to %s not found", caller, target)
+			}
+		}
 	}
 }
 
@@ -724,9 +819,16 @@ func main() {
 		}
 	}
 
-	// Check imports
-	if len(parsedFile.Dependencies) != 2 {
-		t.Errorf("Expected 2 imports, got %d", len(parsedFile.Dependencies))
+	// Check imports (filter only import type dependencies)
+	importDeps := []ParsedDependency{}
+	for _, dep := range parsedFile.Dependencies {
+		if dep.Type == "import" {
+			importDeps = append(importDeps, dep)
+		}
+	}
+
+	if len(importDeps) != 2 {
+		t.Errorf("Expected 2 imports, got %d", len(importDeps))
 	}
 
 	// Verify struct has fields

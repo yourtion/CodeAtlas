@@ -116,6 +116,11 @@ func (p *GoParser) Parse(file ScannedFile) (*ParsedFile, error) {
 		// Non-fatal, continue
 	}
 
+	// Extract call relationships
+	if err := p.extractCallRelationships(rootNode, parsedFile, content); err != nil {
+		// Non-fatal, continue
+	}
+
 	// Return parse error if there was one, but with partial results
 	if parseErr != nil {
 		return parsedFile, fmt.Errorf("parse error: %w", parseErr)
@@ -563,6 +568,57 @@ func (p *GoParser) extractDocstring(node *sitter.Node, content []byte) string {
 	}
 
 	return strings.Join(comments, "\n")
+}
+
+// extractCallRelationships extracts function call relationships
+func (p *GoParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
+	// Query for call expressions
+	query := `(call_expression function: [(identifier) (selector_expression)] @call.target)`
+	
+	matches, err := p.tsParser.Query(rootNode, query, "go")
+	if err != nil {
+		return err
+	}
+
+	for _, match := range matches {
+		for _, capture := range match.Captures {
+			callTarget := capture.Node.Content(content)
+			
+			// Find the containing function/method for this call
+			caller := p.findContainingFunction(capture.Node, parsedFile)
+			if caller != "" {
+				dependency := ParsedDependency{
+					Type:   "call",
+					Source: caller,
+					Target: callTarget,
+				}
+				
+				parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
+			}
+		}
+	}
+
+	return nil
+}
+
+// findContainingFunction finds the name of the function/method containing a node
+func (p *GoParser) findContainingFunction(node *sitter.Node, parsedFile *ParsedFile) string {
+	current := node.Parent()
+	
+	for current != nil {
+		// Check if this is a function or method declaration
+		if current.Type() == "function_declaration" || current.Type() == "method_declaration" {
+			// Find the matching symbol in our parsed symbols
+			for _, symbol := range parsedFile.Symbols {
+				if symbol.Node == current {
+					return symbol.Name
+				}
+			}
+		}
+		current = current.Parent()
+	}
+	
+	return ""
 }
 
 // Helper functions
