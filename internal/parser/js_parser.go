@@ -24,7 +24,11 @@ func (p *JSParser) Parse(file ScannedFile) (*ParsedFile, error) {
 	// Read file content
 	content, err := readFileContent(file.AbsPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return nil, &DetailedParseError{
+			File:    file.Path,
+			Message: fmt.Sprintf("failed to read file: %v", err),
+			Type:    "filesystem",
+		}
 	}
 
 	// Determine language (js vs ts)
@@ -42,7 +46,11 @@ func (p *JSParser) Parse(file ScannedFile) (*ParsedFile, error) {
 
 	// If we have no root node at all, return error immediately
 	if rootNode == nil {
-		return parsedFile, fmt.Errorf("parse error: %w", parseErr)
+		return parsedFile, &DetailedParseError{
+			File:    file.Path,
+			Message: fmt.Sprintf("failed to parse %s file: %v", language, parseErr),
+			Type:    "parse",
+		}
 	}
 
 	// Extract imports (ES6 and CommonJS)
@@ -77,7 +85,11 @@ func (p *JSParser) Parse(file ScannedFile) (*ParsedFile, error) {
 
 	// Return parse error if there was one, but with partial results
 	if parseErr != nil {
-		return parsedFile, fmt.Errorf("parse error: %w", parseErr)
+		return parsedFile, &DetailedParseError{
+			File:    file.Path,
+			Message: fmt.Sprintf("syntax error in %s file: %v", language, parseErr),
+			Type:    "parse",
+		}
 	}
 
 	return parsedFile, nil

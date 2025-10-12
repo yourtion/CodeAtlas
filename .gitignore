@@ -1,2 +1,10 @@
 docker/pgdata
 node_modules
+
+# Test coverage
+*.out
+coverage.html
+*.coverprofile
+
+# Build artifacts
+bin/

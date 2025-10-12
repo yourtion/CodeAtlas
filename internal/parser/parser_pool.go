@@ -101,12 +101,17 @@ func (p *ParserPool) Process(files []ScannedFile) ([]*ParsedFile, []error) {
 		if result.Error != nil {
 			errors = append(errors, result.Error)
 			// Get file path for error logging
-			filePath := ""
+			filePath := "unknown"
 			if result.File != nil {
 				filePath = result.File.Path
 			}
 			if p.logger != nil {
 				p.logger.LogError(filePath, result.Error)
+			}
+			
+			// Even with errors, we might have partial results
+			if result.File != nil {
+				parsedFiles = append(parsedFiles, result.File)
 			}
 		} else if result.File != nil {
 			parsedFiles = append(parsedFiles, result.File)
@@ -114,7 +119,7 @@ func (p *ParserPool) Process(files []ScannedFile) ([]*ParsedFile, []error) {
 
 		// Log progress if verbose
 		if p.verbose && p.logger != nil {
-			fileName := ""
+			fileName := "unknown"
 			if result.File != nil {
 				fileName = result.File.Path
 			}

@@ -220,11 +220,14 @@ func (cmd *ParseCommand) Execute() error {
 	}
 
 	logger.Info("Starting parsing with %d workers", cmd.Workers)
+	startTime := time.Now()
 
 	// Process files
 	parsedFiles, parseErrors := pool.Process(files)
 
-	logger.Info("Parsed %d files successfully, %d errors", len(parsedFiles), len(parseErrors))
+	parseTime := time.Since(startTime)
+	logger.Info("Parsed %d files successfully, %d errors in %v", len(parsedFiles), len(parseErrors), parseTime)
+	logger.Debug("Average time per file: %v", parseTime/time.Duration(len(files)))
 
 	// Map to schema
 	mapper := schema.NewSchemaMapper()
@@ -232,7 +235,12 @@ func (cmd *ParseCommand) Execute() error {
 	var allEdges []schema.DependencyEdge
 	var mappingErrors []schema.ParseError
 
-	for _, parsedFile := range parsedFiles {
+	logger.Debug("Starting schema mapping for %d files", len(parsedFiles))
+	mapStartTime := time.Now()
+
+	for i, parsedFile := range parsedFiles {
+		logger.Debug("[%d/%d] Mapping file: %s", i+1, len(parsedFiles), parsedFile.Path)
+		
 		schemaFile, edges, err := mapper.MapToSchema(parsedFile)
 		if err != nil {
 			mappingErrors = append(mappingErrors, schema.ParseError{
@@ -246,17 +254,37 @@ func (cmd *ParseCommand) Execute() error {
 
 		schemaFiles = append(schemaFiles, *schemaFile)
 		allEdges = append(allEdges, edges...)
+		
+		logger.Debug("Mapped %d symbols and %d edges from %s", len(schemaFile.Symbols), len(edges), parsedFile.Path)
 	}
 
-	// Collect all errors
+	mapTime := time.Since(mapStartTime)
+	logger.Debug("Schema mapping completed in %v", mapTime)
+
+	// Collect all errors with detailed information
 	var allErrors []schema.ParseError
 	for _, err := range parseErrors {
-		allErrors = append(allErrors, schema.ParseError{
-			Message: err.Error(),
-			Type:    schema.ErrorParse,
-		})
+		// Check if it's a DetailedParseError
+		if detailedErr, ok := err.(*parser.DetailedParseError); ok {
+			allErrors = append(allErrors, schema.ParseError{
+				File:    detailedErr.File,
+				Line:    detailedErr.Line,
+				Column:  detailedErr.Column,
+				Message: detailedErr.Message,
+				Type:    schema.ErrorType(detailedErr.Type),
+			})
+		} else {
+			// Generic error
+			allErrors = append(allErrors, schema.ParseError{
+				Message: err.Error(),
+				Type:    schema.ErrorParse,
+			})
+		}
 	}
 	allErrors = append(allErrors, mappingErrors...)
+	
+	logger.Debug("Total errors collected: %d (%d parse errors, %d mapping errors)", 
+		len(allErrors), len(parseErrors), len(mappingErrors))
 
 	// Create output
 	output := schema.ParseOutput{
@@ -293,7 +321,13 @@ func (cmd *ParseCommand) Execute() error {
 
 	// Print summary
 	if cmd.Verbose {
-		cmd.printSummary(output.Metadata)
+		cmd.printSummary(output.Metadata, output)
+	}
+
+	// Log final statistics
+	logger.Info("Parsing complete: %d/%d files successful", output.Metadata.SuccessCount, output.Metadata.TotalFiles)
+	if len(allErrors) > 0 {
+		logger.Warn("%d errors encountered during parsing", len(allErrors))
 	}
 
 	return nil
@@ -406,20 +440,72 @@ func (cmd *ParseCommand) scanDirectory(logger *utils.Logger) ([]parser.ScannedFi
 }
 
 // printSummary prints a summary of the parsing operation
-func (cmd *ParseCommand) printSummary(metadata schema.ParseMetadata) {
+func (cmd *ParseCommand) printSummary(metadata schema.ParseMetadata, output schema.ParseOutput) {
 	fmt.Println("\n=== Parse Summary ===")
-	fmt.Printf("Total files: %d\n", metadata.TotalFiles)
-	fmt.Printf("Successfully parsed: %d\n", metadata.SuccessCount)
-	fmt.Printf("Failed: %d\n", metadata.FailureCount)
+	fmt.Printf("Version: %s\n", metadata.Version)
+	fmt.Printf("Timestamp: %s\n", metadata.Timestamp.Format(time.RFC3339))
+	fmt.Printf("\nFiles:\n")
+	fmt.Printf("  Total files scanned: %d\n", metadata.TotalFiles)
+	fmt.Printf("  Successfully parsed: %d\n", metadata.SuccessCount)
+	fmt.Printf("  Failed: %d\n", metadata.FailureCount)
+	fmt.Printf("  Success rate: %.1f%%\n", float64(metadata.SuccessCount)/float64(metadata.TotalFiles)*100)
 	
+	// Count symbols by type
+	symbolCounts := make(map[schema.SymbolKind]int)
+	totalSymbols := 0
+	for _, file := range output.Files {
+		for _, symbol := range file.Symbols {
+			symbolCounts[symbol.Kind]++
+			totalSymbols++
+		}
+	}
+	
+	if totalSymbols > 0 {
+		fmt.Printf("\nSymbols extracted:\n")
+		fmt.Printf("  Total: %d\n", totalSymbols)
+		for kind, count := range symbolCounts {
+			fmt.Printf("  %s: %d\n", kind, count)
+		}
+	}
+	
+	// Count relationships by type
+	edgeCounts := make(map[schema.EdgeType]int)
+	totalEdges := len(output.Relationships)
+	for _, edge := range output.Relationships {
+		edgeCounts[edge.EdgeType]++
+	}
+	
+	if totalEdges > 0 {
+		fmt.Printf("\nRelationships extracted:\n")
+		fmt.Printf("  Total: %d\n", totalEdges)
+		for edgeType, count := range edgeCounts {
+			fmt.Printf("  %s: %d\n", edgeType, count)
+		}
+	}
+	
+	// Error breakdown
 	if len(metadata.Errors) > 0 {
-		fmt.Println("\nErrors:")
+		errorCounts := make(map[schema.ErrorType]int)
+		for _, err := range metadata.Errors {
+			errorCounts[err.Type]++
+		}
+		
+		fmt.Printf("\nError breakdown:\n")
+		for errType, count := range errorCounts {
+			fmt.Printf("  %s: %d\n", errType, count)
+		}
+		
+		fmt.Println("\nError details (showing first 10):")
 		for i, err := range metadata.Errors {
 			if i >= 10 {
 				fmt.Printf("... and %d more errors\n", len(metadata.Errors)-10)
 				break
 			}
-			fmt.Printf("  - %s: %s (%s)\n", err.File, err.Message, err.Type)
+			if err.Line > 0 {
+				fmt.Printf("  - %s:%d:%d: %s (%s)\n", err.File, err.Line, err.Column, err.Message, err.Type)
+			} else {
+				fmt.Printf("  - %s: %s (%s)\n", err.File, err.Message, err.Type)
+			}
 		}
 	}
 }
