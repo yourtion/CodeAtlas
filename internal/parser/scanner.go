@@ -62,13 +62,17 @@ func (s *FileScanner) Scan() ([]ScannedFile, error) {
 
 	err := filepath.WalkDir(s.rootPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			// Log but continue with other files
+			fmt.Fprintf(os.Stderr, "Warning: error accessing %s: %v\n", path, err)
+			return nil
 		}
 
 		// Get relative path for ignore filter
 		relPath, err := filepath.Rel(s.rootPath, path)
 		if err != nil {
-			return err
+			// Log but continue
+			fmt.Fprintf(os.Stderr, "Warning: failed to get relative path for %s: %v\n", path, err)
+			return nil
 		}
 
 		// Apply ignore filter at directory level for efficiency
