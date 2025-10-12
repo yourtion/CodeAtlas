@@ -552,3 +552,233 @@ func TestFileScanner_Scan_FileSize(t *testing.T) {
 		t.Errorf("Expected size %d, got %d", expectedSize, files[0].Size)
 	}
 }
+
+func TestScanRepository(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create test files
+	goFile := filepath.Join(tempDir, "main.go")
+	if err := os.WriteFile(goFile, []byte("package main\nfunc main() {}"), 0644); err != nil {
+		t.Fatalf("Failed to create Go file: %v", err)
+	}
+
+	jsFile := filepath.Join(tempDir, "app.js")
+	if err := os.WriteFile(jsFile, []byte("console.log('hello');"), 0644); err != nil {
+		t.Fatalf("Failed to create JS file: %v", err)
+	}
+
+	// Create a subdirectory with a file
+	subDir := filepath.Join(tempDir, "src")
+	if err := os.Mkdir(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdirectory: %v", err)
+	}
+	pyFile := filepath.Join(subDir, "test.py")
+	if err := os.WriteFile(pyFile, []byte("print('hello')"), 0644); err != nil {
+		t.Fatalf("Failed to create Python file: %v", err)
+	}
+
+	// Create a hidden file (should be skipped)
+	hiddenFile := filepath.Join(tempDir, ".hidden")
+	if err := os.WriteFile(hiddenFile, []byte("hidden"), 0644); err != nil {
+		t.Fatalf("Failed to create hidden file: %v", err)
+	}
+
+	// Create a binary file (should be skipped)
+	binaryFile := filepath.Join(tempDir, "image.png")
+	if err := os.WriteFile(binaryFile, []byte("binary data"), 0644); err != nil {
+		t.Fatalf("Failed to create binary file: %v", err)
+	}
+
+	files, err := ScanRepository(tempDir)
+	if err != nil {
+		t.Fatalf("ScanRepository failed: %v", err)
+	}
+
+	// Should have 3 files (main.go, app.js, test.py)
+	if len(files) != 3 {
+		t.Errorf("Expected 3 files, got %d", len(files))
+	}
+
+	// Verify file contents
+	foundGo := false
+	foundJS := false
+	foundPy := false
+	for _, file := range files {
+		if file.Path == "main.go" {
+			foundGo = true
+			if file.Language != "Go" {
+				t.Errorf("Expected language 'Go', got '%s'", file.Language)
+			}
+		}
+		if file.Path == "app.js" {
+			foundJS = true
+			if file.Language != "JavaScript" {
+				t.Errorf("Expected language 'JavaScript', got '%s'", file.Language)
+			}
+		}
+		if filepath.Base(file.Path) == "test.py" {
+			foundPy = true
+			if file.Language != "Python" {
+				t.Errorf("Expected language 'Python', got '%s'", file.Language)
+			}
+		}
+	}
+
+	if !foundGo {
+		t.Error("main.go not found in results")
+	}
+	if !foundJS {
+		t.Error("app.js not found in results")
+	}
+	if !foundPy {
+		t.Error("test.py not found in results")
+	}
+}
+
+func TestScanRepository_SkipDirectories(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create node_modules directory (should be skipped)
+	nodeModules := filepath.Join(tempDir, "node_modules")
+	if err := os.Mkdir(nodeModules, 0755); err != nil {
+		t.Fatalf("Failed to create node_modules: %v", err)
+	}
+	nodeFile := filepath.Join(nodeModules, "package.js")
+	if err := os.WriteFile(nodeFile, []byte("module.exports = {}"), 0644); err != nil {
+		t.Fatalf("Failed to create file in node_modules: %v", err)
+	}
+
+	// Create vendor directory (should be skipped)
+	vendor := filepath.Join(tempDir, "vendor")
+	if err := os.Mkdir(vendor, 0755); err != nil {
+		t.Fatalf("Failed to create vendor: %v", err)
+	}
+	vendorFile := filepath.Join(vendor, "lib.go")
+	if err := os.WriteFile(vendorFile, []byte("package lib"), 0644); err != nil {
+		t.Fatalf("Failed to create file in vendor: %v", err)
+	}
+
+	// Create .git directory (should be skipped)
+	gitDir := filepath.Join(tempDir, ".git")
+	if err := os.Mkdir(gitDir, 0755); err != nil {
+		t.Fatalf("Failed to create .git: %v", err)
+	}
+	gitFile := filepath.Join(gitDir, "config")
+	if err := os.WriteFile(gitFile, []byte("config"), 0644); err != nil {
+		t.Fatalf("Failed to create file in .git: %v", err)
+	}
+
+	// Create a regular file
+	mainFile := filepath.Join(tempDir, "main.go")
+	if err := os.WriteFile(mainFile, []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create main file: %v", err)
+	}
+
+	files, err := ScanRepository(tempDir)
+	if err != nil {
+		t.Fatalf("ScanRepository failed: %v", err)
+	}
+
+	// Should only have main.go
+	if len(files) != 1 {
+		t.Errorf("Expected 1 file, got %d", len(files))
+	}
+
+	if len(files) > 0 && files[0].Path != "main.go" {
+		t.Errorf("Expected main.go, got %s", files[0].Path)
+	}
+}
+
+func TestScanRepository_NonExistentPath(t *testing.T) {
+	_, err := ScanRepository("/nonexistent/path")
+	if err == nil {
+		t.Error("Expected error for non-existent path")
+	}
+}
+
+func TestIsLargeFile(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a small file
+	smallFile := filepath.Join(tempDir, "small.txt")
+	if err := os.WriteFile(smallFile, []byte("small content"), 0644); err != nil {
+		t.Fatalf("Failed to create small file: %v", err)
+	}
+
+	// Create a large file (> 1MB)
+	largeFile := filepath.Join(tempDir, "large.txt")
+	largeContent := make([]byte, 2*1024*1024) // 2MB
+	if err := os.WriteFile(largeFile, largeContent, 0644); err != nil {
+		t.Fatalf("Failed to create large file: %v", err)
+	}
+
+	// Test small file
+	if isLargeFile(smallFile) {
+		t.Error("Small file should not be considered large")
+	}
+
+	// Test large file
+	if !isLargeFile(largeFile) {
+		t.Error("Large file should be considered large")
+	}
+
+	// Test non-existent file
+	if !isLargeFile("/nonexistent/file.txt") {
+		t.Error("Non-existent file should be considered large (error case)")
+	}
+}
+
+func TestScanRepository_LargeFileSkipping(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a normal file
+	normalFile := filepath.Join(tempDir, "normal.go")
+	if err := os.WriteFile(normalFile, []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create normal file: %v", err)
+	}
+
+	// Create a large file (> 1MB)
+	largeFile := filepath.Join(tempDir, "large.go")
+	largeContent := make([]byte, 2*1024*1024) // 2MB
+	if err := os.WriteFile(largeFile, largeContent, 0644); err != nil {
+		t.Fatalf("Failed to create large file: %v", err)
+	}
+
+	files, err := ScanRepository(tempDir)
+	if err != nil {
+		t.Fatalf("ScanRepository failed: %v", err)
+	}
+
+	// Should only have normal.go (large.go should be skipped)
+	if len(files) != 1 {
+		t.Errorf("Expected 1 file, got %d", len(files))
+	}
+
+	if len(files) > 0 && files[0].Path != "normal.go" {
+		t.Errorf("Expected normal.go, got %s", files[0].Path)
+	}
+}
+
+func TestScanRepository_ReadError(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a file
+	testFile := filepath.Join(tempDir, "test.go")
+	if err := os.WriteFile(testFile, []byte("package main"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Make the file unreadable (this may not work on all systems)
+	if err := os.Chmod(testFile, 0000); err != nil {
+		t.Skipf("Cannot change file permissions: %v", err)
+	}
+	defer os.Chmod(testFile, 0644) // Restore permissions for cleanup
+
+	_, err := ScanRepository(tempDir)
+	// On some systems this may succeed, on others it may fail
+	// We just verify the function handles it gracefully
+	if err != nil {
+		// Error is expected and acceptable
+		t.Logf("Got expected error: %v", err)
+	}
+}
