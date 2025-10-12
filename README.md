@@ -127,6 +127,30 @@ npm install
 npm run dev
 ```
 
+### 测试与代码覆盖率
+
+运行测试：
+```bash
+# 运行所有测试
+make test
+
+# 运行特定模块测试
+make test-api
+make test-cli
+make test-models
+
+# 生成测试覆盖率报告
+make test-coverage
+
+# 查看函数级覆盖率统计
+make test-coverage-func
+
+# 使用高级覆盖率分析脚本
+./scripts/coverage.sh all
+```
+
+详细的测试和覆盖率指南请参考 [测试覆盖率文档](./docs/testing-coverage.md)。
+
 ---
 
 ## 🧭 路线图
