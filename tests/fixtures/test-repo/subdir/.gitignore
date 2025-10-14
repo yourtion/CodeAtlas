@@ -1,0 +1,3 @@
+# Nested .gitignore
+*.secret
+local_config.js
