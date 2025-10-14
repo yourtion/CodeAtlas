@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -179,6 +180,37 @@ func (cmd *ParseCommand) Execute() error {
 		return fmt.Errorf("cannot specify both --path and --file")
 	}
 
+	// Setup profiling if environment variables are set
+	if cpuProfile := os.Getenv("CPUPROFILE"); cpuProfile != "" {
+		f, err := os.Create(cpuProfile)
+		if err != nil {
+			return fmt.Errorf("failed to create CPU profile: %w", err)
+		}
+		defer f.Close()
+		
+		if err := pprof.StartCPUProfile(f); err != nil {
+			return fmt.Errorf("failed to start CPU profile: %w", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	// Setup memory profiling
+	if memProfile := os.Getenv("MEMPROFILE"); memProfile != "" {
+		defer func() {
+			f, err := os.Create(memProfile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to create memory profile: %v\n", err)
+				return
+			}
+			defer f.Close()
+			
+			runtime.GC() // Get up-to-date statistics
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				fmt.Fprintf(os.Stderr, "Failed to write memory profile: %v\n", err)
+			}
+		}()
+	}
+
 	// Create logger
 	logger := utils.NewLogger(cmd.Verbose)
 
@@ -211,8 +243,16 @@ func (cmd *ParseCommand) Execute() error {
 		return fmt.Errorf("failed to initialize Tree-sitter parser: %w", err)
 	}
 
+	// Optimize worker count if not explicitly set
+	workers := cmd.Workers
+	if workers == runtime.NumCPU() && len(files) < 50 {
+		// Use optimal worker count for small file sets
+		workers = parser.OptimalWorkerCount(len(files))
+		logger.Debug("Optimized worker count from %d to %d for %d files", cmd.Workers, workers, len(files))
+	}
+
 	// Create parser pool
-	pool := parser.NewParserPool(cmd.Workers, tsParser)
+	pool := parser.NewParserPool(workers, tsParser)
 	pool.SetVerbose(cmd.Verbose)
 	
 	if cmd.Verbose {
@@ -300,24 +340,35 @@ func (cmd *ParseCommand) Execute() error {
 		},
 	}
 
-	// Serialize to JSON
-	jsonData, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to serialize output: %w", err)
+	// Write output with streaming for large datasets
+	var writer *os.File
+	if cmd.Output != "" {
+		writer, err = os.Create(cmd.Output)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %w", err)
+		}
+		defer writer.Close()
+	} else {
+		writer = os.Stdout
 	}
 
-	// Write output
-	if cmd.Output != "" {
-		// Write to file
-		err = os.WriteFile(cmd.Output, jsonData, 0644)
-		if err != nil {
-			return fmt.Errorf("failed to write output file: %w", err)
-		}
-		logger.Info("Output written to %s", cmd.Output)
-	} else {
-		// Write to stdout
-		fmt.Println(string(jsonData))
+	// Use streaming JSON encoder for better memory efficiency
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	
+	if err := encoder.Encode(output); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
 	}
+
+	if cmd.Output != "" {
+		logger.Info("Output written to %s", cmd.Output)
+	}
+	
+	// Clear large data structures to help GC
+	schemaFiles = nil
+	allEdges = nil
+	parsedFiles = nil
+	runtime.GC()
 
 	// Print summary
 	if cmd.Verbose {
