@@ -1,0 +1,12 @@
+# Test .gitignore patterns
+*.log
+*.tmp
+build/
+dist/
+node_modules/
+__pycache__/
+*.pyc
+
+# Specific test patterns
+ignored_file.go
+test_data/
