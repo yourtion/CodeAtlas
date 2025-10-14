@@ -127,6 +127,62 @@ npm install
 npm run dev
 ```
 
+### CLI 工具使用
+
+#### Parse 命令 - 代码解析
+
+`parse` 命令用于分析源代码并输出结构化的 JSON AST 表示。支持 Go、JavaScript/TypeScript 和 Python。
+
+**基本用法：**
+
+```bash
+# 解析整个仓库
+codeatlas parse --path /path/to/repository
+
+# 解析单个文件
+codeatlas parse --file /path/to/file.go
+
+# 保存输出到文件
+codeatlas parse --path /path/to/repository --output result.json
+
+# 只解析特定语言
+codeatlas parse --path /path/to/repository --language go
+
+# 使用多个并发工作线程
+codeatlas parse --path /path/to/repository --workers 8
+
+# 启用详细日志
+codeatlas parse --path /path/to/repository --verbose
+```
+
+**常用选项：**
+
+| 选项 | 说明 | 示例 |
+|------|------|------|
+| `--path`, `-p` | 仓库或目录路径 | `--path ./myproject` |
+| `--file`, `-f` | 单个文件路径 | `--file main.go` |
+| `--output`, `-o` | 输出文件路径 | `--output result.json` |
+| `--language`, `-l` | 按语言过滤 | `--language go` |
+| `--workers`, `-w` | 并发工作线程数 | `--workers 4` |
+| `--verbose`, `-v` | 详细日志 | `--verbose` |
+| `--ignore-pattern` | 忽略模式 | `--ignore-pattern "*.test.js"` |
+| `--no-ignore` | 禁用所有忽略规则 | `--no-ignore` |
+
+**详细文档：**
+- [CLI Parse 命令完整文档](./docs/cli/cli-parse-command.md) - 完整的命令参考和使用指南
+- [快速参考](./docs/cli/parse-command-quick-reference.md) - 常用命令速查
+- [故障排除指南](./docs/cli/parse-troubleshooting.md) - 常见问题解决方案
+- [环境变量配置](./docs/cli/parse-environment-variables.md) - 环境变量说明
+- [性能优化指南](./docs/testing/performance.md) - 性能调优和基准测试
+- [性能验证结果](./docs/testing/performance-validation-results.md) - 性能测试结果
+- [输出示例](./docs/examples/parse-output-example.json) - JSON 输出格式示例
+
+#### Upload 命令 - 上传到服务器
+
+```bash
+codeatlas upload -p /path/to/repo -s http://localhost:8080
+```
+
 ### 测试与代码覆盖率
 
 运行测试：

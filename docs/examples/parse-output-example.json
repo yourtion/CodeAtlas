@@ -1,0 +1,350 @@
+{
+  "files": [
+    {
+      "file_id": "550e8400-e29b-41d4-a716-446655440000",
+      "path": "src/main.go",
+      "language": "go",
+      "size": 2048,
+      "checksum": "a3b2c1d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
+      "nodes": [
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440001",
+          "file_id": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "package_clause",
+          "span": {
+            "start_line": 1,
+            "end_line": 1,
+            "start_byte": 0,
+            "end_byte": 12
+          },
+          "text": "package main"
+        },
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440002",
+          "file_id": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "import_declaration",
+          "span": {
+            "start_line": 3,
+            "end_line": 6,
+            "start_byte": 14,
+            "end_byte": 65
+          }
+        },
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440003",
+          "file_id": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "function_declaration",
+          "span": {
+            "start_line": 8,
+            "end_line": 15,
+            "start_byte": 67,
+            "end_byte": 250
+          },
+          "attributes": {
+            "name": "main",
+            "receiver": ""
+          }
+        },
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440004",
+          "file_id": "550e8400-e29b-41d4-a716-446655440000",
+          "type": "function_declaration",
+          "span": {
+            "start_line": 17,
+            "end_line": 25,
+            "start_byte": 252,
+            "end_byte": 450
+          },
+          "attributes": {
+            "name": "processData",
+            "receiver": ""
+          }
+        }
+      ],
+      "symbols": [
+        {
+          "symbol_id": "770e8400-e29b-41d4-a716-446655440005",
+          "file_id": "550e8400-e29b-41d4-a716-446655440000",
+          "name": "main",
+          "kind": "function",
+          "signature": "func main()",
+          "span": {
+            "start_line": 8,
+            "end_line": 15,
+            "start_byte": 67,
+            "end_byte": 250
+          },
+          "docstring": "main is the entry point of the application"
+        },
+        {
+          "symbol_id": "770e8400-e29b-41d4-a716-446655440006",
+          "file_id": "550e8400-e29b-41d4-a716-446655440000",
+          "name": "processData",
+          "kind": "function",
+          "signature": "func processData(data string) error",
+          "span": {
+            "start_line": 17,
+            "end_line": 25,
+            "start_byte": 252,
+            "end_byte": 450
+          },
+          "docstring": "processData validates and processes the input data"
+        }
+      ]
+    },
+    {
+      "file_id": "550e8400-e29b-41d4-a716-446655440010",
+      "path": "src/utils/helper.go",
+      "language": "go",
+      "size": 1536,
+      "checksum": "b4c3d2e1f5a6789012345678901234567890abcdef1234567890abcdef654321",
+      "nodes": [
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440011",
+          "file_id": "550e8400-e29b-41d4-a716-446655440010",
+          "type": "package_clause",
+          "span": {
+            "start_line": 1,
+            "end_line": 1,
+            "start_byte": 0,
+            "end_byte": 13
+          },
+          "text": "package utils"
+        },
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440012",
+          "file_id": "550e8400-e29b-41d4-a716-446655440010",
+          "type": "function_declaration",
+          "span": {
+            "start_line": 5,
+            "end_line": 10,
+            "start_byte": 50,
+            "end_byte": 180
+          },
+          "attributes": {
+            "name": "ValidateInput",
+            "receiver": ""
+          }
+        }
+      ],
+      "symbols": [
+        {
+          "symbol_id": "770e8400-e29b-41d4-a716-446655440013",
+          "file_id": "550e8400-e29b-41d4-a716-446655440010",
+          "name": "ValidateInput",
+          "kind": "function",
+          "signature": "func ValidateInput(input string) bool",
+          "span": {
+            "start_line": 5,
+            "end_line": 10,
+            "start_byte": 50,
+            "end_byte": 180
+          },
+          "docstring": "ValidateInput checks if the input string is valid"
+        }
+      ]
+    },
+    {
+      "file_id": "550e8400-e29b-41d4-a716-446655440020",
+      "path": "src/app.js",
+      "language": "javascript",
+      "size": 3072,
+      "checksum": "c5d4e3f2a1b6789012345678901234567890abcdef1234567890abcdef789012",
+      "nodes": [
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440021",
+          "file_id": "550e8400-e29b-41d4-a716-446655440020",
+          "type": "import_statement",
+          "span": {
+            "start_line": 1,
+            "end_line": 1,
+            "start_byte": 0,
+            "end_byte": 35
+          },
+          "text": "import express from 'express';"
+        },
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440022",
+          "file_id": "550e8400-e29b-41d4-a716-446655440020",
+          "type": "class_declaration",
+          "span": {
+            "start_line": 3,
+            "end_line": 20,
+            "start_byte": 37,
+            "end_byte": 450
+          },
+          "attributes": {
+            "name": "Application"
+          }
+        }
+      ],
+      "symbols": [
+        {
+          "symbol_id": "770e8400-e29b-41d4-a716-446655440023",
+          "file_id": "550e8400-e29b-41d4-a716-446655440020",
+          "name": "Application",
+          "kind": "class",
+          "signature": "class Application",
+          "span": {
+            "start_line": 3,
+            "end_line": 20,
+            "start_byte": 37,
+            "end_byte": 450
+          },
+          "docstring": "Application class manages the Express server"
+        },
+        {
+          "symbol_id": "770e8400-e29b-41d4-a716-446655440024",
+          "file_id": "550e8400-e29b-41d4-a716-446655440020",
+          "name": "start",
+          "kind": "function",
+          "signature": "start(port)",
+          "span": {
+            "start_line": 10,
+            "end_line": 15,
+            "start_byte": 200,
+            "end_byte": 350
+          },
+          "docstring": "Starts the Express server on the specified port"
+        }
+      ]
+    },
+    {
+      "file_id": "550e8400-e29b-41d4-a716-446655440030",
+      "path": "src/models.py",
+      "language": "python",
+      "size": 2560,
+      "checksum": "d6e5f4a3b2c1789012345678901234567890abcdef1234567890abcdef890123",
+      "nodes": [
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440031",
+          "file_id": "550e8400-e29b-41d4-a716-446655440030",
+          "type": "import_statement",
+          "span": {
+            "start_line": 1,
+            "end_line": 1,
+            "start_byte": 0,
+            "end_byte": 25
+          },
+          "text": "from typing import List"
+        },
+        {
+          "node_id": "660e8400-e29b-41d4-a716-446655440032",
+          "file_id": "550e8400-e29b-41d4-a716-446655440030",
+          "type": "class_definition",
+          "span": {
+            "start_line": 3,
+            "end_line": 25,
+            "start_byte": 27,
+            "end_byte": 600
+          },
+          "attributes": {
+            "name": "User"
+          }
+        }
+      ],
+      "symbols": [
+        {
+          "symbol_id": "770e8400-e29b-41d4-a716-446655440033",
+          "file_id": "550e8400-e29b-41d4-a716-446655440030",
+          "name": "User",
+          "kind": "class",
+          "signature": "class User",
+          "span": {
+            "start_line": 3,
+            "end_line": 25,
+            "start_byte": 27,
+            "end_byte": 600
+          },
+          "docstring": "User model representing a system user with authentication"
+        },
+        {
+          "symbol_id": "770e8400-e29b-41d4-a716-446655440034",
+          "file_id": "550e8400-e29b-41d4-a716-446655440030",
+          "name": "__init__",
+          "kind": "function",
+          "signature": "def __init__(self, username: str, email: str)",
+          "span": {
+            "start_line": 8,
+            "end_line": 12,
+            "start_byte": 150,
+            "end_byte": 280
+          },
+          "docstring": "Initialize a new User instance"
+        },
+        {
+          "symbol_id": "770e8400-e29b-41d4-a716-446655440035",
+          "file_id": "550e8400-e29b-41d4-a716-446655440030",
+          "name": "validate",
+          "kind": "function",
+          "signature": "def validate(self) -> bool",
+          "span": {
+            "start_line": 14,
+            "end_line": 20,
+            "start_byte": 282,
+            "end_byte": 450
+          },
+          "docstring": "Validate user data before saving"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "edge_id": "880e8400-e29b-41d4-a716-446655440040",
+      "source_id": "770e8400-e29b-41d4-a716-446655440005",
+      "target_id": "770e8400-e29b-41d4-a716-446655440006",
+      "edge_type": "call",
+      "source_file": "src/main.go",
+      "target_file": "src/main.go"
+    },
+    {
+      "edge_id": "880e8400-e29b-41d4-a716-446655440041",
+      "source_id": "770e8400-e29b-41d4-a716-446655440006",
+      "target_id": "770e8400-e29b-41d4-a716-446655440013",
+      "edge_type": "call",
+      "source_file": "src/main.go",
+      "target_file": "src/utils/helper.go"
+    },
+    {
+      "edge_id": "880e8400-e29b-41d4-a716-446655440042",
+      "source_id": "770e8400-e29b-41d4-a716-446655440005",
+      "target_id": "",
+      "edge_type": "import",
+      "source_file": "src/main.go",
+      "target_module": "fmt"
+    },
+    {
+      "edge_id": "880e8400-e29b-41d4-a716-446655440043",
+      "source_id": "770e8400-e29b-41d4-a716-446655440005",
+      "target_id": "",
+      "edge_type": "import",
+      "source_file": "src/main.go",
+      "target_module": "github.com/example/project/utils"
+    },
+    {
+      "edge_id": "880e8400-e29b-41d4-a716-446655440044",
+      "source_id": "770e8400-e29b-41d4-a716-446655440023",
+      "target_id": "",
+      "edge_type": "import",
+      "source_file": "src/app.js",
+      "target_module": "express"
+    },
+    {
+      "edge_id": "880e8400-e29b-41d4-a716-446655440045",
+      "source_id": "770e8400-e29b-41d4-a716-446655440033",
+      "target_id": "",
+      "edge_type": "import",
+      "source_file": "src/models.py",
+      "target_module": "typing"
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-12T10:30:00Z",
+    "total_files": 4,
+    "success_count": 4,
+    "failure_count": 0,
+    "errors": []
+  }
+}
