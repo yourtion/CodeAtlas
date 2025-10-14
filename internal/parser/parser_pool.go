@@ -38,7 +38,9 @@ func NewParserPool(workers int, tsParser *TreeSitterParser) *ParserPool {
 		workers = runtime.NumCPU()
 	}
 	
-	// Cap at 16 workers
+	// Optimize worker count based on CPU cores
+	// For small file counts, fewer workers may be more efficient
+	// Cap at 16 workers to avoid excessive context switching
 	if workers > 16 {
 		workers = 16
 	}
@@ -48,6 +50,31 @@ func NewParserPool(workers int, tsParser *TreeSitterParser) *ParserPool {
 		tsParser: tsParser,
 		verbose:  false,
 	}
+}
+
+// OptimalWorkerCount returns the optimal number of workers for a given file count
+func OptimalWorkerCount(fileCount int) int {
+	cpus := runtime.NumCPU()
+	
+	// For very small file counts, use fewer workers
+	if fileCount < 10 {
+		return min(2, cpus)
+	}
+	
+	// For small file counts, use half the CPUs
+	if fileCount < 50 {
+		return min(cpus/2, cpus)
+	}
+	
+	// For medium to large file counts, use all CPUs but cap at 16
+	return min(cpus, 16)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // SetVerbose enables or disables verbose logging
