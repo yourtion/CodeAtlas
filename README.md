@@ -103,6 +103,28 @@ flowchart TD
 
 ### 运行开发环境
 
+#### 方式 1: DevContainer（推荐）⭐
+
+使用 DevContainer 可以获得开箱即用的完整开发环境，包含所有依赖和测试数据。
+
+**使用 VS Code:**
+1. 安装 [Dev Containers 扩展](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+2. 打开项目，点击 "Reopen in Container"
+3. 等待容器构建完成（首次约 3-5 分钟）
+4. 开始开发！
+
+**使用 GitHub Codespaces:**
+- 点击 "Code" → "Codespaces" → "Create codespace"
+
+**命令行方式:**
+```bash
+make devcontainer-up
+```
+
+详细文档：[DevContainer 开发环境指南](docs/devcontainer-guide.md)
+
+#### 方式 2: 传统方式
+
 1. 启动数据库和后端服务：
 ```bash
 docker-compose up -d
@@ -110,12 +132,16 @@ docker-compose up -d
 
 2. 运行 API 服务：
 ```bash
+make run-api
+# 或
 cd cmd/api
 go run main.go
 ```
 
 3. 运行 CLI 工具：
 ```bash
+make run-cli
+# 或
 cd cmd/cli
 go run main.go upload -p /path/to/repo -s http://localhost:8080
 ```
@@ -123,8 +149,8 @@ go run main.go upload -p /path/to/repo -s http://localhost:8080
 4. 运行前端：
 ```bash
 cd web
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ### CLI 工具使用

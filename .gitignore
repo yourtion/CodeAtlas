@@ -8,3 +8,6 @@ coverage.html
 
 # Build artifacts
 bin/
+
+# DevContainer
+.devcontainer/.env

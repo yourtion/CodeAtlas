@@ -1,0 +1,72 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build API",
+      "type": "shell",
+      "command": "make build-api",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Build CLI",
+      "type": "shell",
+      "command": "make build-cli",
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run API Server",
+      "type": "shell",
+      "command": "make run-api",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Starting server.*$",
+          "endsPattern": "^.*Server started.*$"
+        }
+      }
+    },
+    {
+      "label": "Run Tests",
+      "type": "shell",
+      "command": "make test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run Tests with Coverage",
+      "type": "shell",
+      "command": "make test-coverage",
+      "group": "test",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Initialize Database",
+      "type": "shell",
+      "command": "make init-db",
+      "problemMatcher": []
+    },
+    {
+      "label": "Test DevContainer Setup",
+      "type": "shell",
+      "command": "./scripts/test_devcontainer.sh",
+      "problemMatcher": []
+    }
+  ]
+}

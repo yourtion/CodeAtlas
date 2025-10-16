@@ -105,6 +105,27 @@ docker-up:
 docker-down:
 	docker-compose down
 
+# DevContainer targets
+.PHONY: devcontainer-build
+devcontainer-build:
+	docker-compose -f .devcontainer/docker-compose.yml build
+
+.PHONY: devcontainer-up
+devcontainer-up:
+	docker-compose -f .devcontainer/docker-compose.yml up -d
+
+.PHONY: devcontainer-down
+devcontainer-down:
+	docker-compose -f .devcontainer/docker-compose.yml down
+
+.PHONY: devcontainer-logs
+devcontainer-logs:
+	docker-compose -f .devcontainer/docker-compose.yml logs -f
+
+.PHONY: devcontainer-clean
+devcontainer-clean:
+	docker-compose -f .devcontainer/docker-compose.yml down -v
+
 # Install dependencies
 .PHONY: install
 install:
@@ -136,5 +157,10 @@ help:
 	@echo "  make clean                - Clean build artifacts and coverage files"
 	@echo "  make docker-up            - Start Docker services"
 	@echo "  make docker-down          - Stop Docker services"
+	@echo "  make devcontainer-build   - Build devcontainer images"
+	@echo "  make devcontainer-up      - Start devcontainer environment"
+	@echo "  make devcontainer-down    - Stop devcontainer environment"
+	@echo "  make devcontainer-logs    - View devcontainer logs"
+	@echo "  make devcontainer-clean   - Stop and remove devcontainer volumes"
 	@echo "  make install              - Install dependencies"
 	@echo "  make help                 - Show this help message"
