@@ -1,0 +1,42 @@
+{
+  "go.toolsManagement.autoUpdate": true,
+  "go.useLanguageServer": true,
+  "go.lintTool": "golangci-lint",
+  "go.lintOnSave": "workspace",
+  "go.testFlags": ["-v", "-race"],
+  "go.coverOnSave": true,
+  "go.coverageDecorator": {
+    "type": "gutter"
+  },
+  "go.testEnvVars": {
+    "DB_HOST": "db",
+    "DB_PORT": "5432",
+    "DB_USER": "codeatlas",
+    "DB_PASSWORD": "codeatlas",
+    "DB_NAME": "codeatlas"
+  },
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  },
+  "[go]": {
+    "editor.defaultFormatter": "golang.go"
+  },
+  "[svelte]": {
+    "editor.defaultFormatter": "svelte.svelte-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "files.exclude": {
+    "**/.git": true,
+    "**/node_modules": true,
+    "**/bin": true,
+    "**/*.out": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/bin/**": true,
+    "**/docker/pgdata/**": true
+  }
+}

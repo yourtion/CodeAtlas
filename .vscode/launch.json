@@ -1,0 +1,75 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug API Server",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/api",
+      "env": {
+        "DB_HOST": "db",
+        "DB_PORT": "5432",
+        "DB_USER": "codeatlas",
+        "DB_PASSWORD": "codeatlas",
+        "DB_NAME": "codeatlas"
+      },
+      "args": [],
+      "showLog": true
+    },
+    {
+      "name": "Debug CLI",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/cli",
+      "env": {},
+      "args": [
+        "upload",
+        "-p",
+        "/path/to/repo",
+        "-s",
+        "http://localhost:8080"
+      ],
+      "showLog": true
+    },
+    {
+      "name": "Debug Current Test",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${fileDirname}",
+      "env": {
+        "DB_HOST": "db",
+        "DB_PORT": "5432",
+        "DB_USER": "codeatlas",
+        "DB_PASSWORD": "codeatlas",
+        "DB_NAME": "codeatlas"
+      },
+      "args": [
+        "-test.v",
+        "-test.run",
+        "^${selectedText}$"
+      ],
+      "showLog": true
+    },
+    {
+      "name": "Debug All Tests",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}",
+      "env": {
+        "DB_HOST": "db",
+        "DB_PORT": "5432",
+        "DB_USER": "codeatlas",
+        "DB_PASSWORD": "codeatlas",
+        "DB_NAME": "codeatlas"
+      },
+      "args": [
+        "-test.v"
+      ],
+      "showLog": true
+    }
+  ]
+}

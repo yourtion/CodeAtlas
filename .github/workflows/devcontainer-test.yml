@@ -1,0 +1,64 @@
+name: DevContainer Test
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '.devcontainer/**'
+      - 'scripts/seed_data.sql'
+      - 'scripts/init_devcontainer.sh'
+      - 'scripts/test_devcontainer.sh'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '.devcontainer/**'
+      - 'scripts/seed_data.sql'
+      - 'scripts/init_devcontainer.sh'
+      - 'scripts/test_devcontainer.sh'
+  workflow_dispatch:
+
+jobs:
+  test-devcontainer:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build devcontainer
+        run: |
+          docker-compose -f .devcontainer/docker-compose.yml build
+
+      - name: Start devcontainer services
+        run: |
+          docker-compose -f .devcontainer/docker-compose.yml up -d
+          
+      - name: Wait for database
+        run: |
+          timeout 60 bash -c 'until docker-compose -f .devcontainer/docker-compose.yml exec -T db pg_isready -U codeatlas -d codeatlas; do sleep 2; done'
+
+      - name: Check database schema
+        run: |
+          docker-compose -f .devcontainer/docker-compose.yml exec -T db psql -U codeatlas -d codeatlas -c "\dt"
+
+      - name: Verify seed data
+        run: |
+          REPO_COUNT=$(docker-compose -f .devcontainer/docker-compose.yml exec -T db psql -U codeatlas -d codeatlas -t -c "SELECT COUNT(*) FROM repositories;" | xargs)
+          echo "Repository count: $REPO_COUNT"
+          if [ "$REPO_COUNT" -lt 1 ]; then
+            echo "Error: No repositories found in database"
+            exit 1
+          fi
+
+      - name: Test Go build
+        run: |
+          docker-compose -f .devcontainer/docker-compose.yml exec -T dev make build
+
+      - name: Run tests
+        run: |
+          docker-compose -f .devcontainer/docker-compose.yml exec -T dev make test
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f .devcontainer/docker-compose.yml down -v
