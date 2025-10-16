@@ -23,6 +23,9 @@ SET search_path = ag_catalog, "$user", public;
 -- CORE TABLES
 -- ============================================================================
 
+-- Reset search path to create tables in public schema
+SET search_path = public, ag_catalog, "$user";
+
 -- Repositories table
 CREATE TABLE IF NOT EXISTS repositories (
     repo_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
