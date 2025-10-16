@@ -4,6 +4,7 @@
 BINARY_NAME=codeatlas
 API_BINARY=bin/api
 CLI_BINARY=bin/cli
+INIT_DB_BINARY=bin/init-db
 
 # Default target
 .PHONY: all
@@ -20,6 +21,10 @@ build-api:
 .PHONY: build-cli
 build-cli:
 	go build -o ${CLI_BINARY} cmd/cli/main.go
+
+.PHONY: build-init-db
+build-init-db:
+	go build -o ${INIT_DB_BINARY} scripts/init_db.go
 
 # Test targets
 .PHONY: test
@@ -72,10 +77,23 @@ run-api: build-api
 run-cli: build-cli
 	./${CLI_BINARY}
 
+# Database initialization
+.PHONY: init-db
+init-db: build-init-db
+	./${INIT_DB_BINARY}
+
+.PHONY: init-db-stats
+init-db-stats: build-init-db
+	./${INIT_DB_BINARY} -stats
+
+.PHONY: init-db-with-index
+init-db-with-index: build-init-db
+	./${INIT_DB_BINARY} -create-vector-index -vector-index-lists 100
+
 # Clean targets
 .PHONY: clean
 clean:
-	rm -f ${API_BINARY} ${CLI_BINARY}
+	rm -f ${API_BINARY} ${CLI_BINARY} ${INIT_DB_BINARY}
 	rm -f coverage.out coverage.html
 
 # Docker targets
@@ -101,6 +119,7 @@ help:
 	@echo "  make build                - Build all binaries"
 	@echo "  make build-api            - Build API server"
 	@echo "  make build-cli            - Build CLI tool"
+	@echo "  make build-init-db        - Build database initialization tool"
 	@echo "  make test                 - Run all tests"
 	@echo "  make test-cli             - Run CLI tests"
 	@echo "  make test-api             - Run API tests"
@@ -111,6 +130,9 @@ help:
 	@echo "  make test-coverage-clean  - Remove coverage files"
 	@echo "  make run-api              - Build and run API server"
 	@echo "  make run-cli              - Build and run CLI tool"
+	@echo "  make init-db              - Initialize database schema"
+	@echo "  make init-db-stats        - Initialize database and show statistics"
+	@echo "  make init-db-with-index   - Initialize database with vector index"
 	@echo "  make clean                - Clean build artifacts and coverage files"
 	@echo "  make docker-up            - Start Docker services"
 	@echo "  make docker-down          - Stop Docker services"
