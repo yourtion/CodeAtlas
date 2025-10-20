@@ -9,30 +9,30 @@ import (
 
 // ValidationError represents a validation error with context
 type ValidationError struct {
-	Type      ValidationErrorType `json:"type"`
-	Message   string              `json:"message"`
-	EntityID  string              `json:"entity_id,omitempty"`
-	EntityType string             `json:"entity_type,omitempty"`
-	FilePath  string              `json:"file_path,omitempty"`
-	Field     string              `json:"field,omitempty"`
-	Value     interface{}         `json:"value,omitempty"`
+	Type       ValidationErrorType `json:"type"`
+	Message    string              `json:"message"`
+	EntityID   string              `json:"entity_id,omitempty"`
+	EntityType string              `json:"entity_type,omitempty"`
+	FilePath   string              `json:"file_path,omitempty"`
+	Field      string              `json:"field,omitempty"`
+	Value      interface{}         `json:"value,omitempty"`
 }
 
 // ValidationErrorType represents the category of validation error
 type ValidationErrorType string
 
 const (
-	ErrRequired           ValidationErrorType = "required_field"
-	ErrInvalidType        ValidationErrorType = "invalid_type"
-	ErrInvalidValue       ValidationErrorType = "invalid_value"
+	ErrRequired             ValidationErrorType = "required_field"
+	ErrInvalidType          ValidationErrorType = "invalid_type"
+	ErrInvalidValue         ValidationErrorType = "invalid_value"
 	ErrReferentialIntegrity ValidationErrorType = "referential_integrity"
-	ErrDuplicateID        ValidationErrorType = "duplicate_id"
-	ErrInvalidSpan        ValidationErrorType = "invalid_span"
+	ErrDuplicateID          ValidationErrorType = "duplicate_id"
+	ErrInvalidSpan          ValidationErrorType = "invalid_span"
 )
 
 func (e *ValidationError) Error() string {
 	var parts []string
-	
+
 	if e.EntityType != "" {
 		if e.EntityID != "" {
 			parts = append(parts, fmt.Sprintf("%s[%s]", e.EntityType, e.EntityID))
@@ -40,20 +40,20 @@ func (e *ValidationError) Error() string {
 			parts = append(parts, e.EntityType)
 		}
 	}
-	
+
 	if e.FilePath != "" {
 		parts = append(parts, fmt.Sprintf("file=%s", e.FilePath))
 	}
-	
+
 	if e.Field != "" {
 		parts = append(parts, fmt.Sprintf("field=%s", e.Field))
 	}
-	
+
 	context := ""
 	if len(parts) > 0 {
 		context = fmt.Sprintf(" (%s)", strings.Join(parts, ", "))
 	}
-	
+
 	return fmt.Sprintf("%s: %s%s", e.Type, e.Message, context)
 }
 
@@ -83,16 +83,16 @@ func (r *ValidationResult) ErrorCount() int {
 type Validator interface {
 	// Validate checks the parsed output against schema constraints
 	Validate(output *schema.ParseOutput) *ValidationResult
-	
+
 	// ValidateFile validates a single file entity
 	ValidateFile(file *schema.File) *ValidationResult
-	
+
 	// ValidateSymbol validates a single symbol entity
 	ValidateSymbol(symbol *schema.Symbol) *ValidationResult
-	
+
 	// ValidateASTNode validates a single AST node entity
 	ValidateASTNode(node *schema.ASTNode) *ValidationResult
-	
+
 	// ValidateEdge validates a single edge entity
 	ValidateEdge(edge *schema.DependencyEdge) *ValidationResult
 }
@@ -119,7 +119,7 @@ func NewSchemaValidator() *SchemaValidator {
 // Validate validates the entire ParseOutput structure
 func (v *SchemaValidator) Validate(output *schema.ParseOutput) *ValidationResult {
 	result := &ValidationResult{Valid: true}
-	
+
 	if output == nil {
 		result.AddError(&ValidationError{
 			Type:    ErrRequired,
@@ -127,16 +127,16 @@ func (v *SchemaValidator) Validate(output *schema.ParseOutput) *ValidationResult
 		})
 		return result
 	}
-	
+
 	// Reset ID tracking for this validation
 	v.fileIDs = make(map[string]bool)
 	v.symbolIDs = make(map[string]bool)
 	v.nodeIDs = make(map[string]bool)
 	v.edgeIDs = make(map[string]bool)
-	
+
 	// Validate metadata
 	v.validateMetadata(&output.Metadata, result)
-	
+
 	// Validate files and collect IDs
 	for _, file := range output.Files {
 		fileResult := v.ValidateFile(&file)
@@ -145,7 +145,7 @@ func (v *SchemaValidator) Validate(output *schema.ParseOutput) *ValidationResult
 			result.Valid = false
 		}
 	}
-	
+
 	// Validate relationships and check referential integrity
 	for _, edge := range output.Relationships {
 		edgeResult := v.ValidateEdge(&edge)
@@ -154,14 +154,14 @@ func (v *SchemaValidator) Validate(output *schema.ParseOutput) *ValidationResult
 			result.Valid = false
 		}
 	}
-	
+
 	return result
 }
 
 // ValidateFile validates a file entity
 func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 	result := &ValidationResult{Valid: true}
-	
+
 	if file == nil {
 		result.AddError(&ValidationError{
 			Type:    ErrRequired,
@@ -169,7 +169,7 @@ func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 		})
 		return result
 	}
-	
+
 	// Validate required fields
 	if file.FileID == "" {
 		result.AddError(&ValidationError{
@@ -195,7 +195,7 @@ func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 			v.fileIDs[file.FileID] = true
 		}
 	}
-	
+
 	if file.Path == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -205,7 +205,7 @@ func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 			Field:      "path",
 		})
 	}
-	
+
 	if file.Language == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -216,7 +216,7 @@ func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 			Field:      "language",
 		})
 	}
-	
+
 	if file.Size < 0 {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidValue,
@@ -228,7 +228,7 @@ func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 			Value:      file.Size,
 		})
 	}
-	
+
 	if file.Checksum == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -239,7 +239,7 @@ func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 			Field:      "checksum",
 		})
 	}
-	
+
 	// Validate symbols in this file
 	for _, symbol := range file.Symbols {
 		// Ensure symbol belongs to this file
@@ -254,14 +254,14 @@ func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 				Value:      symbol.FileID,
 			})
 		}
-		
+
 		symbolResult := v.ValidateSymbol(&symbol)
 		result.Errors = append(result.Errors, symbolResult.Errors...)
 		if symbolResult.HasErrors() {
 			result.Valid = false
 		}
 	}
-	
+
 	// Validate AST nodes in this file
 	for _, node := range file.Nodes {
 		// Ensure node belongs to this file
@@ -276,21 +276,21 @@ func (v *SchemaValidator) ValidateFile(file *schema.File) *ValidationResult {
 				Value:      node.FileID,
 			})
 		}
-		
+
 		nodeResult := v.ValidateASTNode(&node)
 		result.Errors = append(result.Errors, nodeResult.Errors...)
 		if nodeResult.HasErrors() {
 			result.Valid = false
 		}
 	}
-	
+
 	return result
 }
 
 // ValidateSymbol validates a symbol entity
 func (v *SchemaValidator) ValidateSymbol(symbol *schema.Symbol) *ValidationResult {
 	result := &ValidationResult{Valid: true}
-	
+
 	if symbol == nil {
 		result.AddError(&ValidationError{
 			Type:    ErrRequired,
@@ -298,7 +298,7 @@ func (v *SchemaValidator) ValidateSymbol(symbol *schema.Symbol) *ValidationResul
 		})
 		return result
 	}
-	
+
 	// Validate required fields
 	if symbol.SymbolID == "" {
 		result.AddError(&ValidationError{
@@ -322,7 +322,7 @@ func (v *SchemaValidator) ValidateSymbol(symbol *schema.Symbol) *ValidationResul
 			v.symbolIDs[symbol.SymbolID] = true
 		}
 	}
-	
+
 	if symbol.FileID == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -332,7 +332,7 @@ func (v *SchemaValidator) ValidateSymbol(symbol *schema.Symbol) *ValidationResul
 			Field:      "file_id",
 		})
 	}
-	
+
 	if symbol.Name == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -342,7 +342,7 @@ func (v *SchemaValidator) ValidateSymbol(symbol *schema.Symbol) *ValidationResul
 			Field:      "name",
 		})
 	}
-	
+
 	// Validate symbol kind
 	if symbol.Kind == "" {
 		result.AddError(&ValidationError{
@@ -361,7 +361,7 @@ func (v *SchemaValidator) ValidateSymbol(symbol *schema.Symbol) *ValidationResul
 			schema.SymbolPackage:   true,
 			schema.SymbolModule:    true,
 		}
-		
+
 		if !validKinds[symbol.Kind] {
 			result.AddError(&ValidationError{
 				Type:       ErrInvalidValue,
@@ -373,21 +373,21 @@ func (v *SchemaValidator) ValidateSymbol(symbol *schema.Symbol) *ValidationResul
 			})
 		}
 	}
-	
+
 	// Validate span
 	spanResult := v.validateSpan(&symbol.Span, "symbol", symbol.SymbolID)
 	result.Errors = append(result.Errors, spanResult.Errors...)
 	if spanResult.HasErrors() {
 		result.Valid = false
 	}
-	
+
 	return result
 }
 
 // ValidateASTNode validates an AST node entity
 func (v *SchemaValidator) ValidateASTNode(node *schema.ASTNode) *ValidationResult {
 	result := &ValidationResult{Valid: true}
-	
+
 	if node == nil {
 		result.AddError(&ValidationError{
 			Type:    ErrRequired,
@@ -395,7 +395,7 @@ func (v *SchemaValidator) ValidateASTNode(node *schema.ASTNode) *ValidationResul
 		})
 		return result
 	}
-	
+
 	// Validate required fields
 	if node.NodeID == "" {
 		result.AddError(&ValidationError{
@@ -419,7 +419,7 @@ func (v *SchemaValidator) ValidateASTNode(node *schema.ASTNode) *ValidationResul
 			v.nodeIDs[node.NodeID] = true
 		}
 	}
-	
+
 	if node.FileID == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -429,7 +429,7 @@ func (v *SchemaValidator) ValidateASTNode(node *schema.ASTNode) *ValidationResul
 			Field:      "file_id",
 		})
 	}
-	
+
 	if node.Type == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -439,14 +439,14 @@ func (v *SchemaValidator) ValidateASTNode(node *schema.ASTNode) *ValidationResul
 			Field:      "type",
 		})
 	}
-	
+
 	// Validate span
 	spanResult := v.validateSpan(&node.Span, "ast_node", node.NodeID)
 	result.Errors = append(result.Errors, spanResult.Errors...)
 	if spanResult.HasErrors() {
 		result.Valid = false
 	}
-	
+
 	// Validate parent reference if present
 	if node.ParentID != "" && !v.nodeIDs[node.ParentID] {
 		result.AddError(&ValidationError{
@@ -458,14 +458,14 @@ func (v *SchemaValidator) ValidateASTNode(node *schema.ASTNode) *ValidationResul
 			Value:      node.ParentID,
 		})
 	}
-	
+
 	return result
 }
 
 // ValidateEdge validates a dependency edge entity
 func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationResult {
 	result := &ValidationResult{Valid: true}
-	
+
 	if edge == nil {
 		result.AddError(&ValidationError{
 			Type:    ErrRequired,
@@ -473,7 +473,7 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 		})
 		return result
 	}
-	
+
 	// Validate required fields
 	if edge.EdgeID == "" {
 		result.AddError(&ValidationError{
@@ -497,7 +497,7 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 			v.edgeIDs[edge.EdgeID] = true
 		}
 	}
-	
+
 	if edge.SourceID == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -519,7 +519,7 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 			})
 		}
 	}
-	
+
 	// Target ID is optional for some edge types (e.g., external imports)
 	if edge.TargetID != "" && !v.symbolIDs[edge.TargetID] {
 		result.AddError(&ValidationError{
@@ -531,7 +531,7 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 			Value:      edge.TargetID,
 		})
 	}
-	
+
 	// Validate edge type
 	if edge.EdgeType == "" {
 		result.AddError(&ValidationError{
@@ -549,7 +549,7 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 			schema.EdgeImplements: true,
 			schema.EdgeReference:  true,
 		}
-		
+
 		if !validTypes[edge.EdgeType] {
 			result.AddError(&ValidationError{
 				Type:       ErrInvalidValue,
@@ -561,7 +561,7 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 			})
 		}
 	}
-	
+
 	if edge.SourceFile == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -571,7 +571,7 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 			Field:      "source_file",
 		})
 	}
-	
+
 	// For certain edge types, validate additional constraints
 	switch edge.EdgeType {
 	case schema.EdgeImport:
@@ -597,7 +597,7 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 			})
 		}
 	}
-	
+
 	return result
 }
 
@@ -610,7 +610,7 @@ func (v *SchemaValidator) validateMetadata(metadata *schema.ParseMetadata, resul
 		})
 		return
 	}
-	
+
 	if metadata.Version == "" {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -619,7 +619,7 @@ func (v *SchemaValidator) validateMetadata(metadata *schema.ParseMetadata, resul
 			Field:      "version",
 		})
 	}
-	
+
 	if metadata.TotalFiles < 0 {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidValue,
@@ -629,7 +629,7 @@ func (v *SchemaValidator) validateMetadata(metadata *schema.ParseMetadata, resul
 			Value:      metadata.TotalFiles,
 		})
 	}
-	
+
 	if metadata.SuccessCount < 0 {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidValue,
@@ -639,7 +639,7 @@ func (v *SchemaValidator) validateMetadata(metadata *schema.ParseMetadata, resul
 			Value:      metadata.SuccessCount,
 		})
 	}
-	
+
 	if metadata.FailureCount < 0 {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidValue,
@@ -649,7 +649,7 @@ func (v *SchemaValidator) validateMetadata(metadata *schema.ParseMetadata, resul
 			Value:      metadata.FailureCount,
 		})
 	}
-	
+
 	if metadata.SuccessCount+metadata.FailureCount != metadata.TotalFiles {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidValue,
@@ -663,7 +663,7 @@ func (v *SchemaValidator) validateMetadata(metadata *schema.ParseMetadata, resul
 // validateSpan validates a span structure
 func (v *SchemaValidator) validateSpan(span *schema.Span, entityType, entityID string) *ValidationResult {
 	result := &ValidationResult{Valid: true}
-	
+
 	if span == nil {
 		result.AddError(&ValidationError{
 			Type:       ErrRequired,
@@ -674,7 +674,7 @@ func (v *SchemaValidator) validateSpan(span *schema.Span, entityType, entityID s
 		})
 		return result
 	}
-	
+
 	if span.StartLine < 1 {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidValue,
@@ -685,7 +685,7 @@ func (v *SchemaValidator) validateSpan(span *schema.Span, entityType, entityID s
 			Value:      span.StartLine,
 		})
 	}
-	
+
 	if span.EndLine < span.StartLine {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidSpan,
@@ -696,7 +696,7 @@ func (v *SchemaValidator) validateSpan(span *schema.Span, entityType, entityID s
 			Value:      span.EndLine,
 		})
 	}
-	
+
 	if span.StartByte < 0 {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidValue,
@@ -707,7 +707,7 @@ func (v *SchemaValidator) validateSpan(span *schema.Span, entityType, entityID s
 			Value:      span.StartByte,
 		})
 	}
-	
+
 	if span.EndByte < span.StartByte {
 		result.AddError(&ValidationError{
 			Type:       ErrInvalidSpan,
@@ -718,6 +718,6 @@ func (v *SchemaValidator) validateSpan(span *schema.Span, entityType, entityID s
 			Value:      span.EndByte,
 		})
 	}
-	
+
 	return result
 }

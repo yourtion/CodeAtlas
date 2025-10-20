@@ -98,7 +98,7 @@ func (p *PythonParser) extractModuleDocstring(rootNode *sitter.Node, parsedFile 
 				strNode := child.Child(j)
 				if strNode.Type() == "string" {
 					docstring := p.cleanDocstring(strNode.Content(content))
-					
+
 					symbol := ParsedSymbol{
 						Name:      "__module__",
 						Kind:      "module",
@@ -106,7 +106,7 @@ func (p *PythonParser) extractModuleDocstring(rootNode *sitter.Node, parsedFile 
 						Span:      nodeToSpan(strNode),
 						Node:      strNode,
 					}
-					
+
 					parsedFile.Symbols = append(parsedFile.Symbols, symbol)
 					return nil
 				}
@@ -125,7 +125,7 @@ func (p *PythonParser) extractModuleDocstring(rootNode *sitter.Node, parsedFile 
 func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
 	// Simple import: import module
 	importQuery := `(import_statement name: (dotted_name) @import.name)`
-	
+
 	matches, err := p.tsParser.Query(rootNode, importQuery, "python")
 	if err != nil {
 		return err
@@ -134,20 +134,20 @@ func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedF
 	for _, match := range matches {
 		for _, capture := range match.Captures {
 			importName := capture.Node.Content(content)
-			
+
 			dependency := ParsedDependency{
 				Type:         "import",
 				Target:       importName,
 				TargetModule: importName,
 			}
-			
+
 			parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
 		}
 	}
 
 	// From import: from module import name
 	fromImportQuery := `(import_from_statement module_name: (dotted_name) @import.module)`
-	
+
 	matches, err = p.tsParser.Query(rootNode, fromImportQuery, "python")
 	if err != nil {
 		return err
@@ -156,13 +156,13 @@ func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedF
 	for _, match := range matches {
 		for _, capture := range match.Captures {
 			moduleName := capture.Node.Content(content)
-			
+
 			dependency := ParsedDependency{
 				Type:         "import",
 				Target:       moduleName,
 				TargetModule: moduleName,
 			}
-			
+
 			parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
 		}
 	}
@@ -174,7 +174,7 @@ func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedF
 func (p *PythonParser) extractFunctions(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
 	// Regular function definitions
 	funcQuery := `(function_definition name: (identifier) @func.name) @func.def`
-	
+
 	matches, err := p.tsParser.Query(rootNode, funcQuery, "python")
 	if err != nil {
 		return err
@@ -183,7 +183,7 @@ func (p *PythonParser) extractFunctions(rootNode *sitter.Node, parsedFile *Parse
 	for _, match := range matches {
 		var funcNode *sitter.Node
 		var funcName string
-		
+
 		for _, capture := range match.Captures {
 			if capture.Index == 0 { // func.name
 				funcName = capture.Node.Content(content)
@@ -191,7 +191,7 @@ func (p *PythonParser) extractFunctions(rootNode *sitter.Node, parsedFile *Parse
 				funcNode = capture.Node
 			}
 		}
-		
+
 		if funcNode != nil && funcName != "" {
 			// Skip if this is a method (inside a class)
 			if p.isInsideClass(funcNode) {
@@ -202,18 +202,18 @@ func (p *PythonParser) extractFunctions(rootNode *sitter.Node, parsedFile *Parse
 			docstring := p.extractPythonDocstring(funcNode, content)
 			decorators := p.extractDecorators(funcNode, content)
 			isAsync := p.isAsyncFunction(funcNode)
-			
+
 			kind := "function"
 			if isAsync {
 				kind = "async_function"
 			}
-			
+
 			// Add decorator info to signature if present
 			fullSignature := signature
 			if len(decorators) > 0 {
 				fullSignature = strings.Join(decorators, "\n") + "\n" + signature
 			}
-			
+
 			symbol := ParsedSymbol{
 				Name:      funcName,
 				Kind:      kind,
@@ -222,7 +222,7 @@ func (p *PythonParser) extractFunctions(rootNode *sitter.Node, parsedFile *Parse
 				Docstring: docstring,
 				Node:      funcNode,
 			}
-			
+
 			parsedFile.Symbols = append(parsedFile.Symbols, symbol)
 		}
 	}
@@ -233,7 +233,7 @@ func (p *PythonParser) extractFunctions(rootNode *sitter.Node, parsedFile *Parse
 // extractClasses extracts class definitions
 func (p *PythonParser) extractClasses(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
 	classQuery := `(class_definition name: (identifier) @class.name) @class.def`
-	
+
 	matches, err := p.tsParser.Query(rootNode, classQuery, "python")
 	if err != nil {
 		return err
@@ -242,7 +242,7 @@ func (p *PythonParser) extractClasses(rootNode *sitter.Node, parsedFile *ParsedF
 	for _, match := range matches {
 		var classNode *sitter.Node
 		var className string
-		
+
 		for _, capture := range match.Captures {
 			if capture.Index == 0 { // class.name
 				className = capture.Node.Content(content)
@@ -250,7 +250,7 @@ func (p *PythonParser) extractClasses(rootNode *sitter.Node, parsedFile *ParsedF
 				classNode = capture.Node
 			}
 		}
-		
+
 		if classNode != nil && className != "" {
 			// Skip nested classes
 			if p.isInsideClass(classNode) {
@@ -261,17 +261,17 @@ func (p *PythonParser) extractClasses(rootNode *sitter.Node, parsedFile *ParsedF
 			baseClasses := p.extractBaseClasses(classNode, content)
 			decorators := p.extractDecorators(classNode, content)
 			docstring := p.extractPythonDocstring(classNode, content)
-			
+
 			signature := fmt.Sprintf("class %s", className)
 			if len(baseClasses) > 0 {
 				signature = fmt.Sprintf("class %s(%s)", className, strings.Join(baseClasses, ", "))
 			}
-			
+
 			// Add decorator info to signature if present
 			if len(decorators) > 0 {
 				signature = strings.Join(decorators, "\n") + "\n" + signature
 			}
-			
+
 			symbol := ParsedSymbol{
 				Name:      className,
 				Kind:      "class",
@@ -281,9 +281,9 @@ func (p *PythonParser) extractClasses(rootNode *sitter.Node, parsedFile *ParsedF
 				Node:      classNode,
 				Children:  methods,
 			}
-			
+
 			parsedFile.Symbols = append(parsedFile.Symbols, symbol)
-			
+
 			// Add inheritance dependencies
 			for _, baseClass := range baseClasses {
 				dependency := ParsedDependency{
@@ -302,20 +302,20 @@ func (p *PythonParser) extractClasses(rootNode *sitter.Node, parsedFile *ParsedF
 // extractClassMethods extracts methods from a class
 func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byte) []ParsedSymbol {
 	var methods []ParsedSymbol
-	
+
 	// Find the class body (block)
 	classBody := findChildByType(classNode, "block")
 	if classBody == nil {
 		return methods
 	}
-	
+
 	// Look for function definitions in the class body
 	for i := 0; i < int(classBody.ChildCount()); i++ {
 		child := classBody.Child(i)
-		
+
 		if child.Type() == "function_definition" {
 			methodName := ""
-			
+
 			// Find the method name
 			for j := 0; j < int(child.ChildCount()); j++ {
 				nameNode := child.Child(j)
@@ -324,7 +324,7 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 					break
 				}
 			}
-			
+
 			if methodName != "" {
 				signature := p.extractFunctionSignature(child, content)
 				docstring := p.extractPythonDocstring(child, content)
@@ -332,7 +332,7 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 				isAsync := p.isAsyncFunction(child)
 				isStatic := p.hasDecorator(decorators, "staticmethod")
 				isClassMethod := p.hasDecorator(decorators, "classmethod")
-				
+
 				kind := "method"
 				if isAsync {
 					kind = "async_method"
@@ -343,13 +343,13 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 				if isClassMethod {
 					kind = "class_method"
 				}
-				
+
 				// Add decorator info to signature if present
 				fullSignature := signature
 				if len(decorators) > 0 {
 					fullSignature = strings.Join(decorators, "\n") + "\n" + signature
 				}
-				
+
 				method := ParsedSymbol{
 					Name:      methodName,
 					Kind:      kind,
@@ -358,7 +358,7 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 					Docstring: docstring,
 					Node:      child,
 				}
-				
+
 				methods = append(methods, method)
 			}
 		} else if child.Type() == "decorated_definition" {
@@ -366,7 +366,7 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 			funcDef := findChildByType(child, "function_definition")
 			if funcDef != nil {
 				methodName := ""
-				
+
 				// Find the method name
 				for j := 0; j < int(funcDef.ChildCount()); j++ {
 					nameNode := funcDef.Child(j)
@@ -375,7 +375,7 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 						break
 					}
 				}
-				
+
 				if methodName != "" {
 					signature := p.extractFunctionSignature(funcDef, content)
 					docstring := p.extractPythonDocstring(funcDef, content)
@@ -383,7 +383,7 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 					isAsync := p.isAsyncFunction(funcDef)
 					isStatic := p.hasDecorator(decorators, "staticmethod")
 					isClassMethod := p.hasDecorator(decorators, "classmethod")
-					
+
 					kind := "method"
 					if isAsync {
 						kind = "async_method"
@@ -394,13 +394,13 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 					if isClassMethod {
 						kind = "class_method"
 					}
-					
+
 					// Add decorator info to signature if present
 					fullSignature := signature
 					if len(decorators) > 0 {
 						fullSignature = strings.Join(decorators, "\n") + "\n" + signature
 					}
-					
+
 					method := ParsedSymbol{
 						Name:      methodName,
 						Kind:      kind,
@@ -409,26 +409,26 @@ func (p *PythonParser) extractClassMethods(classNode *sitter.Node, content []byt
 						Docstring: docstring,
 						Node:      child,
 					}
-					
+
 					methods = append(methods, method)
 				}
 			}
 		}
 	}
-	
+
 	return methods
 }
 
 // extractBaseClasses extracts the base classes from a class definition
 func (p *PythonParser) extractBaseClasses(classNode *sitter.Node, content []byte) []string {
 	var baseClasses []string
-	
+
 	// Find argument_list (base classes)
 	argList := findChildByType(classNode, "argument_list")
 	if argList == nil {
 		return baseClasses
 	}
-	
+
 	// Extract each base class
 	for i := 0; i < int(argList.ChildCount()); i++ {
 		child := argList.Child(i)
@@ -436,14 +436,14 @@ func (p *PythonParser) extractBaseClasses(classNode *sitter.Node, content []byte
 			baseClasses = append(baseClasses, child.Content(content))
 		}
 	}
-	
+
 	return baseClasses
 }
 
 // extractDecorators extracts decorators from a function or class
 func (p *PythonParser) extractDecorators(node *sitter.Node, content []byte) []string {
 	var decorators []string
-	
+
 	// Check if parent is decorated_definition
 	parent := node.Parent()
 	if parent != nil && parent.Type() == "decorated_definition" {
@@ -456,7 +456,7 @@ func (p *PythonParser) extractDecorators(node *sitter.Node, content []byte) []st
 			}
 		}
 	}
-	
+
 	// Also check if the node itself is decorated_definition
 	if node.Type() == "decorated_definition" {
 		for i := 0; i < int(node.ChildCount()); i++ {
@@ -467,7 +467,7 @@ func (p *PythonParser) extractDecorators(node *sitter.Node, content []byte) []st
 			}
 		}
 	}
-	
+
 	return decorators
 }
 
@@ -476,7 +476,7 @@ func (p *PythonParser) extractFunctionSignature(funcNode *sitter.Node, content [
 	// Get the first line of the function (def line)
 	funcText := funcNode.Content(content)
 	lines := strings.Split(funcText, "\n")
-	
+
 	// Find the def line (might span multiple lines)
 	signature := ""
 	for i, line := range lines {
@@ -490,7 +490,7 @@ func (p *PythonParser) extractFunctionSignature(funcNode *sitter.Node, content [
 			signature += " "
 		}
 	}
-	
+
 	return strings.TrimSpace(signature)
 }
 
@@ -501,7 +501,7 @@ func (p *PythonParser) extractPythonDocstring(node *sitter.Node, content []byte)
 	if block == nil {
 		return ""
 	}
-	
+
 	// Look for the first expression_statement with a string
 	for i := 0; i < int(block.ChildCount()); i++ {
 		child := block.Child(i)
@@ -519,7 +519,7 @@ func (p *PythonParser) extractPythonDocstring(node *sitter.Node, content []byte)
 			break
 		}
 	}
-	
+
 	return ""
 }
 
@@ -530,16 +530,16 @@ func (p *PythonParser) cleanDocstring(docstring string) string {
 	docstring = strings.TrimSuffix(docstring, `"""`)
 	docstring = strings.TrimPrefix(docstring, `'''`)
 	docstring = strings.TrimSuffix(docstring, `'''`)
-	
+
 	// Remove single quotes
 	docstring = strings.TrimPrefix(docstring, `"`)
 	docstring = strings.TrimSuffix(docstring, `"`)
 	docstring = strings.TrimPrefix(docstring, `'`)
 	docstring = strings.TrimSuffix(docstring, `'`)
-	
+
 	// Clean up whitespace
 	docstring = strings.TrimSpace(docstring)
-	
+
 	return docstring
 }
 
@@ -581,7 +581,7 @@ func (p *PythonParser) hasDecorator(decorators []string, name string) bool {
 func (p *PythonParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
 	// Query for call expressions
 	query := `(call function: [(identifier) (attribute)] @call.target)`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, "python")
 	if err != nil {
 		return err
@@ -590,7 +590,7 @@ func (p *PythonParser) extractCallRelationships(rootNode *sitter.Node, parsedFil
 	for _, match := range matches {
 		for _, capture := range match.Captures {
 			callTarget := capture.Node.Content(content)
-			
+
 			// Find the containing function/method for this call
 			caller := p.findContainingFunction(capture.Node, parsedFile)
 			if caller != "" {
@@ -599,7 +599,7 @@ func (p *PythonParser) extractCallRelationships(rootNode *sitter.Node, parsedFil
 					Source: caller,
 					Target: callTarget,
 				}
-				
+
 				parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
 			}
 		}
@@ -611,7 +611,7 @@ func (p *PythonParser) extractCallRelationships(rootNode *sitter.Node, parsedFil
 // findContainingFunction finds the name of the function/method containing a node
 func (p *PythonParser) findContainingFunction(node *sitter.Node, parsedFile *ParsedFile) string {
 	current := node.Parent()
-	
+
 	for current != nil {
 		// Check if this is a function definition
 		if current.Type() == "function_definition" {
@@ -630,6 +630,6 @@ func (p *PythonParser) findContainingFunction(node *sitter.Node, parsedFile *Par
 		}
 		current = current.Parent()
 	}
-	
+
 	return ""
 }

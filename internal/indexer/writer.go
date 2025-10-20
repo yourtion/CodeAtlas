@@ -13,16 +13,16 @@ import (
 
 // Writer handles database persistence operations for the indexer
 type Writer struct {
-	db               *models.DB
-	repoRepo         *models.RepositoryRepository
-	fileRepo         *models.FileRepository
-	symbolRepo       *models.SymbolRepository
-	astNodeRepo      *models.ASTNodeRepository
-	edgeRepo         *models.EdgeRepository
-	maxRetries       int
-	baseRetryDelay   time.Duration
-	maxRetryDelay    time.Duration
-	batchSize        int
+	db             *models.DB
+	repoRepo       *models.RepositoryRepository
+	fileRepo       *models.FileRepository
+	symbolRepo     *models.SymbolRepository
+	astNodeRepo    *models.ASTNodeRepository
+	edgeRepo       *models.EdgeRepository
+	maxRetries     int
+	baseRetryDelay time.Duration
+	maxRetryDelay  time.Duration
+	batchSize      int
 }
 
 // WriterConfig contains configuration options for the Writer
@@ -50,16 +50,16 @@ func NewWriter(db *models.DB, config *WriterConfig) *Writer {
 	}
 
 	return &Writer{
-		db:               db,
-		repoRepo:         models.NewRepositoryRepository(db),
-		fileRepo:         models.NewFileRepository(db),
-		symbolRepo:       models.NewSymbolRepository(db),
-		astNodeRepo:      models.NewASTNodeRepository(db),
-		edgeRepo:         models.NewEdgeRepository(db),
-		maxRetries:       config.MaxRetries,
-		baseRetryDelay:   config.BaseRetryDelay,
-		maxRetryDelay:    config.MaxRetryDelay,
-		batchSize:        config.BatchSize,
+		db:             db,
+		repoRepo:       models.NewRepositoryRepository(db),
+		fileRepo:       models.NewFileRepository(db),
+		symbolRepo:     models.NewSymbolRepository(db),
+		astNodeRepo:    models.NewASTNodeRepository(db),
+		edgeRepo:       models.NewEdgeRepository(db),
+		maxRetries:     config.MaxRetries,
+		baseRetryDelay: config.BaseRetryDelay,
+		maxRetryDelay:  config.MaxRetryDelay,
+		batchSize:      config.BatchSize,
 	}
 }
 
@@ -759,10 +759,10 @@ func (w *Writer) topologicalSortNodes(nodes []*models.ASTNode) []*models.ASTNode
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    (len(s) > len(substr) && 
-		     anySubstring(s, substr)))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) &&
+				anySubstring(s, substr)))
 }
 
 // anySubstring checks if substr exists in s

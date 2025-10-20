@@ -83,11 +83,11 @@ func DefaultEmbedderConfig() *EmbedderConfig {
 
 // OpenAIEmbedder implements the Embedder interface using OpenAI-compatible API
 type OpenAIEmbedder struct {
-	config       *EmbedderConfig
-	httpClient   *http.Client
-	vectorRepo   *models.VectorRepository
-	rateLimiter  *rateLimiter
-	mu           sync.Mutex
+	config      *EmbedderConfig
+	httpClient  *http.Client
+	vectorRepo  *models.VectorRepository
+	rateLimiter *rateLimiter
+	mu          sync.Mutex
 }
 
 // NewOpenAIEmbedder creates a new OpenAI-compatible embedder
@@ -436,7 +436,7 @@ func newRateLimiter(requestsPerSecond int) *rateLimiter {
 func (rl *rateLimiter) Wait(ctx context.Context) error {
 	for {
 		rl.mu.Lock()
-		
+
 		// Refill tokens based on time elapsed
 		now := time.Now()
 		elapsed := now.Sub(rl.lastRefill)

@@ -56,11 +56,11 @@ func TestFileScanner_Scan_BasicDiscovery(t *testing.T) {
 
 	// Create test files
 	testFiles := map[string]string{
-		"main.go":       "package main",
-		"utils.js":      "function test() {}",
-		"app.py":        "def main(): pass",
-		"README.md":     "# Test",
-		"config.json":   "{}",
+		"main.go":     "package main",
+		"utils.js":    "function test() {}",
+		"app.py":      "def main(): pass",
+		"README.md":   "# Test",
+		"config.json": "{}",
 	}
 
 	for path, content := range testFiles {
@@ -257,11 +257,11 @@ func TestFileScanner_Scan_IgnoreFilterIntegration(t *testing.T) {
 
 	// Create test files
 	testFiles := map[string]string{
-		"main.go":                "package main",
-		"src/utils.go":           "package src",
-		"node_modules/lib.js":    "module.exports = {}",
-		"vendor/dep.go":          "package vendor",
-		".git/config":            "config",
+		"main.go":             "package main",
+		"src/utils.go":        "package src",
+		"node_modules/lib.js": "module.exports = {}",
+		"vendor/dep.go":       "package vendor",
+		".git/config":         "config",
 	}
 
 	for path, content := range testFiles {
@@ -371,10 +371,10 @@ func TestFileScanner_Scan_LanguageFilter(t *testing.T) {
 
 	// Create test files in different languages
 	testFiles := map[string]string{
-		"main.go":    "package main",
-		"utils.js":   "function test() {}",
-		"app.py":     "def main(): pass",
-		"README.md":  "# Test",
+		"main.go":   "package main",
+		"utils.js":  "function test() {}",
+		"app.py":    "def main(): pass",
+		"README.md": "# Test",
 	}
 
 	for path, content := range testFiles {
@@ -408,10 +408,10 @@ func TestFileScanner_Scan_MultipleLanguageFilter(t *testing.T) {
 
 	// Create test files in different languages
 	testFiles := map[string]string{
-		"main.go":    "package main",
-		"utils.js":   "function test() {}",
-		"app.py":     "def main(): pass",
-		"README.md":  "# Test",
+		"main.go":   "package main",
+		"utils.js":  "function test() {}",
+		"app.py":    "def main(): pass",
+		"README.md": "# Test",
 	}
 
 	for path, content := range testFiles {

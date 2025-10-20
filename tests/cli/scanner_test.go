@@ -14,10 +14,10 @@ func TestScanRepository(t *testing.T) {
 
 	// Create some test files
 	testFiles := map[string]string{
-		"main.go":    "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
-		"README.md":  "# Test Repository\n\nThis is a test repository.",
-		"utils.js":   "function hello() {\n  return 'world';\n}",
-		".gitignore": "node_modules\n*.log",
+		"main.go":       "package main\n\nfunc main() {\n\tprintln(\"Hello, World!\")\n}",
+		"README.md":     "# Test Repository\n\nThis is a test repository.",
+		"utils.js":      "function hello() {\n  return 'world';\n}",
+		".gitignore":    "node_modules\n*.log",
 		"vendor/lib.go": "package vendor\n\nfunc Lib() {}",
 	}
 
@@ -25,12 +25,12 @@ func TestScanRepository(t *testing.T) {
 	for path, content := range testFiles {
 		fullPath := filepath.Join(tempDir, path)
 		dir := filepath.Dir(fullPath)
-		
+
 		// Create directory if it doesn't exist
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			t.Fatal(err)
 		}
-		
+
 		// Write file content
 		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
 			t.Fatal(err)
@@ -89,7 +89,7 @@ func TestScanRepository(t *testing.T) {
 func TestIsBinaryFile(t *testing.T) {
 	// Test binary file extensions
 	binaryFiles := []string{
-		"test.exe", "test.dll", "test.so", "test.jpg", 
+		"test.exe", "test.dll", "test.so", "test.jpg",
 		"test.png", "test.pdf", "test.zip", "test.db",
 	}
 
@@ -104,16 +104,16 @@ func TestIsBinaryFile(t *testing.T) {
 func TestDetermineLanguage(t *testing.T) {
 	// Test language detection
 	testCases := map[string]string{
-		"main.go":    "Go",
-		"index.js":   "JavaScript",
-		"app.ts":     "TypeScript",
-		"style.css":  "CSS",
-		"README.md":  "Markdown",
+		"main.go":     "Go",
+		"index.js":    "JavaScript",
+		"app.ts":      "TypeScript",
+		"style.css":   "CSS",
+		"README.md":   "Markdown",
 		"config.json": "JSON",
-		"test.py":    "Python",
-		"App.java":   "Java",
-		"main.cpp":   "C++",
-		"hello.rb":   "Ruby",
+		"test.py":     "Python",
+		"App.java":    "Java",
+		"main.cpp":    "C++",
+		"hello.rb":    "Ruby",
 		"unknown.xyz": "Unknown",
 	}
 

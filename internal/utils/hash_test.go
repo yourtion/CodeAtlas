@@ -50,12 +50,12 @@ func TestSHA256Checksum(t *testing.T) {
 
 func TestSHA256ChecksumConsistency(t *testing.T) {
 	content := []byte("test content for consistency")
-	
+
 	// Generate checksum multiple times
 	checksum1 := SHA256Checksum(content)
 	checksum2 := SHA256Checksum(content)
 	checksum3 := SHA256Checksum(content)
-	
+
 	if checksum1 != checksum2 || checksum2 != checksum3 {
 		t.Errorf("SHA256Checksum() is not consistent: %s, %s, %s", checksum1, checksum2, checksum3)
 	}
@@ -64,10 +64,10 @@ func TestSHA256ChecksumConsistency(t *testing.T) {
 func TestSHA256ChecksumUniqueness(t *testing.T) {
 	content1 := []byte("content1")
 	content2 := []byte("content2")
-	
+
 	checksum1 := SHA256Checksum(content1)
 	checksum2 := SHA256Checksum(content2)
-	
+
 	if checksum1 == checksum2 {
 		t.Errorf("SHA256Checksum() produced same hash for different content")
 	}
@@ -79,12 +79,12 @@ func TestGenerateUUID(t *testing.T) {
 	if uuid == "" {
 		t.Error("GenerateUUID() returned empty string")
 	}
-	
+
 	// Test UUID format (should be 36 characters with hyphens)
 	if len(uuid) != 36 {
 		t.Errorf("GenerateUUID() returned UUID with length %d, expected 36", len(uuid))
 	}
-	
+
 	// Check for hyphens in correct positions (8-4-4-4-12 format)
 	if uuid[8] != '-' || uuid[13] != '-' || uuid[18] != '-' || uuid[23] != '-' {
 		t.Errorf("GenerateUUID() returned invalid UUID format: %s", uuid)
@@ -95,7 +95,7 @@ func TestGenerateUUIDUniqueness(t *testing.T) {
 	// Generate multiple UUIDs and check they're unique
 	uuids := make(map[string]bool)
 	count := 1000
-	
+
 	for i := 0; i < count; i++ {
 		uuid := GenerateUUID()
 		if uuids[uuid] {
@@ -103,7 +103,7 @@ func TestGenerateUUIDUniqueness(t *testing.T) {
 		}
 		uuids[uuid] = true
 	}
-	
+
 	if len(uuids) != count {
 		t.Errorf("GenerateUUID() generated %d unique UUIDs, expected %d", len(uuids), count)
 	}
@@ -111,7 +111,7 @@ func TestGenerateUUIDUniqueness(t *testing.T) {
 
 func TestGenerateUUIDFormat(t *testing.T) {
 	uuid := GenerateUUID()
-	
+
 	// Verify each segment contains only hex characters
 	segments := []struct {
 		start int
@@ -123,7 +123,7 @@ func TestGenerateUUIDFormat(t *testing.T) {
 		{19, 23}, // 4 chars
 		{24, 36}, // 12 chars
 	}
-	
+
 	for _, seg := range segments {
 		for i := seg.start; i < seg.end; i++ {
 			c := uuid[i]

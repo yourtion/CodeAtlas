@@ -48,6 +48,9 @@ func (r *RepositoryRepository) Create(ctx context.Context, repo *Repository) err
 		if err != nil {
 			return fmt.Errorf("failed to marshal metadata: %w", err)
 		}
+	} else {
+		// Use empty JSON object if metadata is nil
+		metadataJSON = []byte("{}")
 	}
 
 	_, err = r.db.ExecContext(ctx, query,
@@ -230,6 +233,9 @@ func (r *RepositoryRepository) CreateOrUpdate(ctx context.Context, repo *Reposit
 		if err != nil {
 			return fmt.Errorf("failed to marshal metadata: %w", err)
 		}
+	} else {
+		// Use empty JSON object if metadata is nil
+		metadataJSON = []byte("{}")
 	}
 
 	_, err = r.db.ExecContext(ctx, query,

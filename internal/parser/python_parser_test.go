@@ -180,7 +180,7 @@ class Config:
 					imports++
 				}
 			}
-			
+
 			if imports != tt.wantImports {
 				t.Errorf("Got %d imports, want %d", imports, tt.wantImports)
 				for i, dep := range result.Dependencies {
@@ -377,7 +377,7 @@ class Config:
 	// Check we found all classes
 	expectedClasses := []string{"SimpleClass", "Person", "Employee", "Manager", "Config"}
 	foundClasses := make(map[string]bool)
-	
+
 	for _, sym := range result.Symbols {
 		if sym.Kind == "class" {
 			foundClasses[sym.Name] = true
@@ -396,13 +396,13 @@ class Config:
 			if len(sym.Children) == 0 {
 				t.Error("Person class should have methods")
 			}
-			
+
 			// Check for specific methods
 			methodNames := make(map[string]string)
 			for _, child := range sym.Children {
 				methodNames[child.Name] = child.Kind
 			}
-			
+
 			expectedMethods := map[string]string{
 				"__init__":      "method",
 				"greet":         "method",
@@ -410,7 +410,7 @@ class Config:
 				"class_method":  "class_method",
 				"async_method":  "async_method",
 			}
-			
+
 			for name, expectedKind := range expectedMethods {
 				kind, found := methodNames[name]
 				if !found {
@@ -509,7 +509,7 @@ from ..parent import other
 	// Check imports
 	expectedImports := []string{"os", "sys", "json", "typing", "pathlib"}
 	foundImports := make(map[string]bool)
-	
+
 	for _, dep := range result.Dependencies {
 		if dep.Type == "import" {
 			foundImports[dep.TargetModule] = true
@@ -615,7 +615,7 @@ class ClassWithDocstring:
 			if sym.Docstring != "This is a class docstring" {
 				t.Errorf("ClassWithDocstring docstring = %q", sym.Docstring)
 			}
-			
+
 			// Check method docstring
 			for _, method := range sym.Children {
 				if method.Name == "method_with_docstring" {
@@ -770,11 +770,11 @@ func TestPythonParser_ErrorHandling(t *testing.T) {
 			}
 
 			result, err := parser.Parse(file)
-			
+
 			if tt.wantErr && err == nil {
 				t.Error("Expected error but got none")
 			}
-			
+
 			if !tt.wantErr && err != nil {
 				t.Errorf("Unexpected error: %v", err)
 			}
@@ -789,9 +789,9 @@ func TestPythonParser_ErrorHandling(t *testing.T) {
 
 // Helper function
 func containsString(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		len(s) > len(substr)+1 && findSubstring(s, substr)))
+	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			len(s) > len(substr)+1 && findSubstring(s, substr)))
 }
 
 func findSubstring(s, substr string) bool {

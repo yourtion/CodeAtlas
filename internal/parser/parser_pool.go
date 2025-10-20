@@ -8,10 +8,10 @@ import (
 
 // ParserPool manages concurrent parsing with a worker pool pattern
 type ParserPool struct {
-	workers   int
-	tsParser  *TreeSitterParser
-	verbose   bool
-	logger    ProgressLogger
+	workers  int
+	tsParser *TreeSitterParser
+	verbose  bool
+	logger   ProgressLogger
 }
 
 // ProgressLogger defines the interface for progress tracking
@@ -37,7 +37,7 @@ func NewParserPool(workers int, tsParser *TreeSitterParser) *ParserPool {
 	if workers <= 0 {
 		workers = runtime.NumCPU()
 	}
-	
+
 	// Optimize worker count based on CPU cores
 	// For small file counts, fewer workers may be more efficient
 	// Cap at 16 workers to avoid excessive context switching
@@ -55,17 +55,17 @@ func NewParserPool(workers int, tsParser *TreeSitterParser) *ParserPool {
 // OptimalWorkerCount returns the optimal number of workers for a given file count
 func OptimalWorkerCount(fileCount int) int {
 	cpus := runtime.NumCPU()
-	
+
 	// For very small file counts, use fewer workers
 	if fileCount < 10 {
 		return min(2, cpus)
 	}
-	
+
 	// For small file counts, use half the CPUs
 	if fileCount < 50 {
 		return min(cpus/2, cpus)
 	}
-	
+
 	// For medium to large file counts, use all CPUs but cap at 16
 	return min(cpus, 16)
 }
@@ -124,7 +124,7 @@ func (p *ParserPool) Process(files []ScannedFile) ([]*ParsedFile, []error) {
 
 	for result := range results {
 		processed++
-		
+
 		if result.Error != nil {
 			errors = append(errors, result.Error)
 			// Get file path for error logging
@@ -135,7 +135,7 @@ func (p *ParserPool) Process(files []ScannedFile) ([]*ParsedFile, []error) {
 			if p.logger != nil {
 				p.logger.LogError(filePath, result.Error)
 			}
-			
+
 			// Even with errors, we might have partial results
 			if result.File != nil {
 				parsedFiles = append(parsedFiles, result.File)
@@ -181,7 +181,7 @@ func (p *ParserPool) worker(id int, jobs <-chan ParseJob, results chan<- ParseRe
 
 	for job := range jobs {
 		file := job.File
-		
+
 		// Select the appropriate parser based on language
 		var parsedFile *ParsedFile
 		var parseErr error

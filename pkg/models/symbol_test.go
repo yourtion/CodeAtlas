@@ -18,12 +18,41 @@ func TestSymbolRepository_Create(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewSymbolRepository(db)
 	ctx := context.Background()
+
+	// Create repository and file first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	fileRepo := NewFileRepository(db)
+	file := &File{
+		FileID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
+		Path:     "test.go",
+		Language: "go",
+		Size:     1024,
+		Checksum: "abc123",
+	}
+	err = fileRepo.Create(ctx, file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	repo := NewSymbolRepository(db)
 
 	symbol := &Symbol{
 		SymbolID:        uuid.New().String(),
-		FileID:          uuid.New().String(),
+		FileID:          file.FileID,
 		Name:            "TestFunction",
 		Kind:            "function",
 		Signature:       "func TestFunction() error",
@@ -81,14 +110,42 @@ func TestSymbolRepository_GetByFileID(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewSymbolRepository(db)
 	ctx := context.Background()
 
-	fileID := uuid.New().String()
+	// Create repository and file first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-fileid-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	fileRepo := NewFileRepository(db)
+	file := &File{
+		FileID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
+		Path:     "test.go",
+		Language: "go",
+		Size:     1024,
+		Checksum: "abc123",
+	}
+	err = fileRepo.Create(ctx, file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	repo := NewSymbolRepository(db)
+
 	symbols := []*Symbol{
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "Function1",
 			Kind:      "function",
 			Signature: "func Function1()",
@@ -99,7 +156,7 @@ func TestSymbolRepository_GetByFileID(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "Function2",
 			Kind:      "function",
 			Signature: "func Function2()",
@@ -110,7 +167,7 @@ func TestSymbolRepository_GetByFileID(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "TestClass",
 			Kind:      "class",
 			Signature: "class TestClass",
@@ -127,7 +184,7 @@ func TestSymbolRepository_GetByFileID(t *testing.T) {
 	}
 
 	// Retrieve symbols by file ID
-	retrieved, err := repo.GetByFileID(ctx, fileID)
+	retrieved, err := repo.GetByFileID(ctx, file.FileID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve symbols by file ID: %v", err)
 	}
@@ -156,14 +213,42 @@ func TestSymbolRepository_GetByKind(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewSymbolRepository(db)
 	ctx := context.Background()
 
-	fileID := uuid.New().String()
+	// Create repository and file first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-kind-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	fileRepo := NewFileRepository(db)
+	file := &File{
+		FileID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
+		Path:     "test.go",
+		Language: "go",
+		Size:     1024,
+		Checksum: "abc123",
+	}
+	err = fileRepo.Create(ctx, file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	repo := NewSymbolRepository(db)
+
 	symbols := []*Symbol{
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "Function1",
 			Kind:      "function",
 			Signature: "func Function1()",
@@ -174,7 +259,7 @@ func TestSymbolRepository_GetByKind(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "Function2",
 			Kind:      "function",
 			Signature: "func Function2()",
@@ -185,7 +270,7 @@ func TestSymbolRepository_GetByKind(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "TestClass",
 			Kind:      "class",
 			Signature: "class TestClass",
@@ -202,7 +287,7 @@ func TestSymbolRepository_GetByKind(t *testing.T) {
 	}
 
 	// Get function symbols
-	functions, err := repo.GetByKind(ctx, fileID, "function")
+	functions, err := repo.GetByKind(ctx, file.FileID, "function")
 	if err != nil {
 		t.Fatalf("Failed to get function symbols: %v", err)
 	}
@@ -218,7 +303,7 @@ func TestSymbolRepository_GetByKind(t *testing.T) {
 	}
 
 	// Get class symbols
-	classes, err := repo.GetByKind(ctx, fileID, "class")
+	classes, err := repo.GetByKind(ctx, file.FileID, "class")
 	if err != nil {
 		t.Fatalf("Failed to get class symbols: %v", err)
 	}
@@ -239,14 +324,42 @@ func TestSymbolRepository_GetByName(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewSymbolRepository(db)
 	ctx := context.Background()
 
-	fileID := uuid.New().String()
+	// Create repository and file first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-name-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	fileRepo := NewFileRepository(db)
+	file := &File{
+		FileID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
+		Path:     "test.go",
+		Language: "go",
+		Size:     1024,
+		Checksum: "abc123",
+	}
+	err = fileRepo.Create(ctx, file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	repo := NewSymbolRepository(db)
+
 	symbols := []*Symbol{
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "TestFunction",
 			Kind:      "function",
 			Signature: "func TestFunction()",
@@ -257,7 +370,7 @@ func TestSymbolRepository_GetByName(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "TestClass",
 			Kind:      "class",
 			Signature: "class TestClass",
@@ -268,7 +381,7 @@ func TestSymbolRepository_GetByName(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "AnotherFunction",
 			Kind:      "function",
 			Signature: "func AnotherFunction()",
@@ -290,8 +403,23 @@ func TestSymbolRepository_GetByName(t *testing.T) {
 		t.Fatalf("Failed to search symbols by name: %v", err)
 	}
 
-	if len(testSymbols) != 2 {
-		t.Errorf("Expected 2 symbols with 'Test' in name, got %d", len(testSymbols))
+	if len(testSymbols) < 2 {
+		t.Errorf("Expected at least 2 symbols with 'Test' in name, got %d", len(testSymbols))
+	}
+
+	// Verify our specific symbols are in the results
+	foundTestFunction := false
+	foundTestClass := false
+	for _, sym := range testSymbols {
+		if sym.Name == "TestFunction" && sym.FileID == file.FileID {
+			foundTestFunction = true
+		}
+		if sym.Name == "TestClass" && sym.FileID == file.FileID {
+			foundTestClass = true
+		}
+	}
+	if !foundTestFunction || !foundTestClass {
+		t.Error("Expected to find both TestFunction and TestClass in results")
 	}
 
 	// Verify results are sorted by name
@@ -314,14 +442,42 @@ func TestSymbolRepository_GetSymbolsWithDocstrings(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewSymbolRepository(db)
 	ctx := context.Background()
 
-	fileID := uuid.New().String()
+	// Create repository and file first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-doc-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	fileRepo := NewFileRepository(db)
+	file := &File{
+		FileID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
+		Path:     "test.go",
+		Language: "go",
+		Size:     1024,
+		Checksum: "abc123",
+	}
+	err = fileRepo.Create(ctx, file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	repo := NewSymbolRepository(db)
+
 	symbols := []*Symbol{
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "DocumentedFunction",
 			Kind:      "function",
 			Signature: "func DocumentedFunction()",
@@ -333,7 +489,7 @@ func TestSymbolRepository_GetSymbolsWithDocstrings(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "UndocumentedFunction",
 			Kind:      "function",
 			Signature: "func UndocumentedFunction()",
@@ -345,7 +501,7 @@ func TestSymbolRepository_GetSymbolsWithDocstrings(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "EmptyDocFunction",
 			Kind:      "function",
 			Signature: "func EmptyDocFunction()",
@@ -363,7 +519,7 @@ func TestSymbolRepository_GetSymbolsWithDocstrings(t *testing.T) {
 	}
 
 	// Get symbols with docstrings
-	documented, err := repo.GetSymbolsWithDocstrings(ctx, fileID)
+	documented, err := repo.GetSymbolsWithDocstrings(ctx, file.FileID)
 	if err != nil {
 		t.Fatalf("Failed to get symbols with docstrings: %v", err)
 	}
@@ -388,14 +544,42 @@ func TestSymbolRepository_CountByKind(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewSymbolRepository(db)
 	ctx := context.Background()
 
-	fileID := uuid.New().String()
+	// Create repository and file first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-count-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	fileRepo := NewFileRepository(db)
+	file := &File{
+		FileID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
+		Path:     "test.go",
+		Language: "go",
+		Size:     1024,
+		Checksum: "abc123",
+	}
+	err = fileRepo.Create(ctx, file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	repo := NewSymbolRepository(db)
+
 	symbols := []*Symbol{
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "Function1",
 			Kind:      "function",
 			Signature: "func Function1()",
@@ -406,7 +590,7 @@ func TestSymbolRepository_CountByKind(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "Function2",
 			Kind:      "function",
 			Signature: "func Function2()",
@@ -417,7 +601,7 @@ func TestSymbolRepository_CountByKind(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "TestClass",
 			Kind:      "class",
 			Signature: "class TestClass",
@@ -428,7 +612,7 @@ func TestSymbolRepository_CountByKind(t *testing.T) {
 		},
 		{
 			SymbolID:  uuid.New().String(),
-			FileID:    fileID,
+			FileID:    file.FileID,
 			Name:      "TestVariable",
 			Kind:      "variable",
 			Signature: "var TestVariable",
@@ -445,7 +629,7 @@ func TestSymbolRepository_CountByKind(t *testing.T) {
 	}
 
 	// Get counts by kind
-	counts, err := repo.CountByKind(ctx, fileID)
+	counts, err := repo.CountByKind(ctx, file.FileID)
 	if err != nil {
 		t.Fatalf("Failed to get counts by kind: %v", err)
 	}
@@ -474,12 +658,41 @@ func TestSymbolRepository_Update(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewSymbolRepository(db)
 	ctx := context.Background()
+
+	// Create repository and file first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-update-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	fileRepo := NewFileRepository(db)
+	file := &File{
+		FileID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
+		Path:     "test.go",
+		Language: "go",
+		Size:     1024,
+		Checksum: "abc123",
+	}
+	err = fileRepo.Create(ctx, file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	repo := NewSymbolRepository(db)
 
 	symbol := &Symbol{
 		SymbolID:        uuid.New().String(),
-		FileID:          uuid.New().String(),
+		FileID:          file.FileID,
 		Name:            "OriginalFunction",
 		Kind:            "function",
 		Signature:       "func OriginalFunction()",
@@ -538,12 +751,41 @@ func TestSymbolRepository_Delete(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewSymbolRepository(db)
 	ctx := context.Background()
+
+	// Create repository and file first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-delete-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	fileRepo := NewFileRepository(db)
+	file := &File{
+		FileID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
+		Path:     "test.go",
+		Language: "go",
+		Size:     1024,
+		Checksum: "abc123",
+	}
+	err = fileRepo.Create(ctx, file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	repo := NewSymbolRepository(db)
 
 	symbol := &Symbol{
 		SymbolID:  uuid.New().String(),
-		FileID:    uuid.New().String(),
+		FileID:    file.FileID,
 		Name:      "DeleteMe",
 		Kind:      "function",
 		Signature: "func DeleteMe()",

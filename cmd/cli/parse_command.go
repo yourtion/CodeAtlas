@@ -187,7 +187,7 @@ func (cmd *ParseCommand) Execute() error {
 			return fmt.Errorf("failed to create CPU profile: %w", err)
 		}
 		defer f.Close()
-		
+
 		if err := pprof.StartCPUProfile(f); err != nil {
 			return fmt.Errorf("failed to start CPU profile: %w", err)
 		}
@@ -203,7 +203,7 @@ func (cmd *ParseCommand) Execute() error {
 				return
 			}
 			defer f.Close()
-			
+
 			runtime.GC() // Get up-to-date statistics
 			if err := pprof.WriteHeapProfile(f); err != nil {
 				fmt.Fprintf(os.Stderr, "Failed to write memory profile: %v\n", err)
@@ -254,7 +254,7 @@ func (cmd *ParseCommand) Execute() error {
 	// Create parser pool
 	pool := parser.NewParserPool(workers, tsParser)
 	pool.SetVerbose(cmd.Verbose)
-	
+
 	if cmd.Verbose {
 		pool.SetProgressLogger(&parser.DefaultProgressLogger{})
 	}
@@ -280,7 +280,7 @@ func (cmd *ParseCommand) Execute() error {
 
 	for i, parsedFile := range parsedFiles {
 		logger.Debug("[%d/%d] Mapping file: %s", i+1, len(parsedFiles), parsedFile.Path)
-		
+
 		schemaFile, edges, err := mapper.MapToSchema(parsedFile)
 		if err != nil {
 			mappingErrors = append(mappingErrors, schema.ParseError{
@@ -294,7 +294,7 @@ func (cmd *ParseCommand) Execute() error {
 
 		schemaFiles = append(schemaFiles, *schemaFile)
 		allEdges = append(allEdges, edges...)
-		
+
 		logger.Debug("Mapped %d symbols and %d edges from %s", len(schemaFile.Symbols), len(edges), parsedFile.Path)
 	}
 
@@ -322,8 +322,8 @@ func (cmd *ParseCommand) Execute() error {
 		}
 	}
 	allErrors = append(allErrors, mappingErrors...)
-	
-	logger.Debug("Total errors collected: %d (%d parse errors, %d mapping errors)", 
+
+	logger.Debug("Total errors collected: %d (%d parse errors, %d mapping errors)",
 		len(allErrors), len(parseErrors), len(mappingErrors))
 
 	// Create output
@@ -355,7 +355,7 @@ func (cmd *ParseCommand) Execute() error {
 	// Use streaming JSON encoder for better memory efficiency
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
-	
+
 	if err := encoder.Encode(output); err != nil {
 		return fmt.Errorf("failed to write output: %w", err)
 	}
@@ -363,7 +363,7 @@ func (cmd *ParseCommand) Execute() error {
 	if cmd.Output != "" {
 		logger.Info("Output written to %s", cmd.Output)
 	}
-	
+
 	// Clear large data structures to help GC
 	schemaFiles = nil
 	allEdges = nil
@@ -404,7 +404,7 @@ func (cmd *ParseCommand) scanSingleFile(logger *utils.Logger) ([]parser.ScannedF
 
 	// Detect language
 	language := parser.DetermineLanguage(cmd.File)
-	
+
 	// Check if language is supported
 	if language != "Go" && language != "JavaScript" && language != "TypeScript" && language != "Python" {
 		return nil, fmt.Errorf("unsupported language: %s", language)
@@ -443,7 +443,7 @@ func (cmd *ParseCommand) scanDirectory(logger *utils.Logger) ([]parser.ScannedFi
 	if !cmd.NoIgnore {
 		// Collect .gitignore paths
 		var gitignorePaths []string
-		
+
 		// Check for .gitignore in root
 		gitignorePath := filepath.Join(cmd.Path, ".gitignore")
 		if _, err := os.Stat(gitignorePath); err == nil {
@@ -465,7 +465,7 @@ func (cmd *ParseCommand) scanDirectory(logger *utils.Logger) ([]parser.ScannedFi
 			return nil, fmt.Errorf("failed to create ignore filter: %w", err)
 		}
 
-		logger.Info("Ignore filter created with %d .gitignore files and %d custom patterns", 
+		logger.Info("Ignore filter created with %d .gitignore files and %d custom patterns",
 			len(gitignorePaths), len(cmd.IgnorePattern))
 	} else {
 		logger.Info("Ignore rules disabled, parsing all files")
@@ -500,7 +500,7 @@ func (cmd *ParseCommand) printSummary(metadata schema.ParseMetadata, output sche
 	fmt.Printf("  Successfully parsed: %d\n", metadata.SuccessCount)
 	fmt.Printf("  Failed: %d\n", metadata.FailureCount)
 	fmt.Printf("  Success rate: %.1f%%\n", float64(metadata.SuccessCount)/float64(metadata.TotalFiles)*100)
-	
+
 	// Count symbols by type
 	symbolCounts := make(map[schema.SymbolKind]int)
 	totalSymbols := 0
@@ -510,7 +510,7 @@ func (cmd *ParseCommand) printSummary(metadata schema.ParseMetadata, output sche
 			totalSymbols++
 		}
 	}
-	
+
 	if totalSymbols > 0 {
 		fmt.Printf("\nSymbols extracted:\n")
 		fmt.Printf("  Total: %d\n", totalSymbols)
@@ -518,14 +518,14 @@ func (cmd *ParseCommand) printSummary(metadata schema.ParseMetadata, output sche
 			fmt.Printf("  %s: %d\n", kind, count)
 		}
 	}
-	
+
 	// Count relationships by type
 	edgeCounts := make(map[schema.EdgeType]int)
 	totalEdges := len(output.Relationships)
 	for _, edge := range output.Relationships {
 		edgeCounts[edge.EdgeType]++
 	}
-	
+
 	if totalEdges > 0 {
 		fmt.Printf("\nRelationships extracted:\n")
 		fmt.Printf("  Total: %d\n", totalEdges)
@@ -533,19 +533,19 @@ func (cmd *ParseCommand) printSummary(metadata schema.ParseMetadata, output sche
 			fmt.Printf("  %s: %d\n", edgeType, count)
 		}
 	}
-	
+
 	// Error breakdown
 	if len(metadata.Errors) > 0 {
 		errorCounts := make(map[schema.ErrorType]int)
 		for _, err := range metadata.Errors {
 			errorCounts[err.Type]++
 		}
-		
+
 		fmt.Printf("\nError breakdown:\n")
 		for errType, count := range errorCounts {
 			fmt.Printf("  %s: %d\n", errType, count)
 		}
-		
+
 		fmt.Println("\nError details (showing first 10):")
 		for i, err := range metadata.Errors {
 			if i >= 10 {

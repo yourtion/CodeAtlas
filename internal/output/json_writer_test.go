@@ -261,7 +261,7 @@ func TestCreateOutput_EmptyFileID(t *testing.T) {
 
 func TestWriteToFile(t *testing.T) {
 	output := createTestOutput()
-	
+
 	// Create temp directory
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "output.json")
@@ -294,7 +294,7 @@ func TestWriteToFile(t *testing.T) {
 
 func TestWriteToFile_Streaming(t *testing.T) {
 	output := createTestOutput()
-	
+
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "output_streaming.json")
 
@@ -317,7 +317,7 @@ func TestWriteToFile_Streaming(t *testing.T) {
 
 func TestWriteToFile_InvalidPath(t *testing.T) {
 	output := createTestOutput()
-	
+
 	// Try to write to invalid path
 	err := WriteToFile(output, "/invalid/path/output.json", true, false)
 	if err == nil {
@@ -334,7 +334,7 @@ func TestWriteToStdout(t *testing.T) {
 	os.Stdout = w
 
 	err := WriteToStdout(output, true, false)
-	
+
 	w.Close()
 	os.Stdout = oldStdout
 
@@ -362,7 +362,7 @@ func TestWriteToStdout_Streaming(t *testing.T) {
 	os.Stdout = w
 
 	err := WriteToStdout(output, true, true)
-	
+
 	w.Close()
 	os.Stdout = oldStdout
 
@@ -687,7 +687,7 @@ func TestWriteStreaming_ErrorHandling(t *testing.T) {
 	// Test with a writer that fails
 	failWriter := &failingWriter{failAfter: 10}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	output := createTestOutput()
 	err := writer.WriteOutput(output)
 	if err == nil {
@@ -699,7 +699,7 @@ func TestWriteComplete_EncodingError(t *testing.T) {
 	// Test with a writer that fails during encoding
 	failWriter := &failingWriter{failAfter: 0}
 	writer := NewJSONWriter(failWriter, true)
-	
+
 	output := createTestOutput()
 	err := writer.WriteOutput(output)
 	if err == nil {
@@ -763,7 +763,7 @@ func TestWriteMetadata_WithoutIndent(t *testing.T) {
 
 func TestWriteToFile_CreateError(t *testing.T) {
 	output := createTestOutput()
-	
+
 	// Try to write to a directory (should fail)
 	tmpDir := t.TempDir()
 	err := WriteToFile(output, tmpDir, true, false)
@@ -797,7 +797,7 @@ func TestOutputVersion(t *testing.T) {
 
 func TestCreateOutput_NilInputs(t *testing.T) {
 	output := CreateOutput(nil, nil, nil)
-	
+
 	if output == nil {
 		t.Fatal("CreateOutput returned nil")
 	}
@@ -902,7 +902,7 @@ func TestWriteOutput_AllSymbolKinds(t *testing.T) {
 
 func TestWriteOutput_AllErrorTypes(t *testing.T) {
 	output := &schema.ParseOutput{
-		Files: []schema.File{},
+		Files:         []schema.File{},
 		Relationships: []schema.DependencyEdge{},
 		Metadata: schema.ParseMetadata{
 			Version:      "1.0.0",
@@ -941,7 +941,7 @@ func TestWriteOutput_AllErrorTypes(t *testing.T) {
 
 func TestWriteStreaming_WriteErrors(t *testing.T) {
 	output := createTestOutput()
-	
+
 	// Test error on opening brace
 	failWriter1 := &failingWriter{failAfter: 0}
 	writer1 := NewStreamingJSONWriter(failWriter1, true)
@@ -949,7 +949,7 @@ func TestWriteStreaming_WriteErrors(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error when writing opening brace fails")
 	}
-	
+
 	// Test error on files array
 	failWriter2 := &failingWriter{failAfter: 5}
 	writer2 := NewStreamingJSONWriter(failWriter2, true)
@@ -966,10 +966,10 @@ func TestWriteFilesStreaming_MarshalError(t *testing.T) {
 	files := []schema.File{
 		{FileID: "file1", Path: "test.go", Language: "go"},
 	}
-	
+
 	var buf bytes.Buffer
 	writer := NewStreamingJSONWriter(&buf, true)
-	
+
 	// This should succeed normally
 	err := writer.writeFilesStreaming(files)
 	if err != nil {
@@ -982,10 +982,10 @@ func TestWriteRelationshipsStreaming_MarshalError(t *testing.T) {
 	relationships := []schema.DependencyEdge{
 		{EdgeID: "edge1", SourceID: "s1", TargetID: "t1", EdgeType: schema.EdgeCall},
 	}
-	
+
 	var buf bytes.Buffer
 	writer := NewStreamingJSONWriter(&buf, true)
-	
+
 	// This should succeed normally
 	err := writer.writeRelationshipsStreaming(relationships)
 	if err != nil {
@@ -1002,10 +1002,10 @@ func TestWriteMetadata_MarshalError(t *testing.T) {
 		SuccessCount: 1,
 		FailureCount: 0,
 	}
-	
+
 	var buf bytes.Buffer
 	writer := NewJSONWriter(&buf, true)
-	
+
 	// This should succeed normally
 	err := writer.writeMetadata(metadata)
 	if err != nil {
@@ -1025,11 +1025,11 @@ func TestWriteStreaming_ClosingBraceError(t *testing.T) {
 			FailureCount: 0,
 		},
 	}
-	
+
 	// Fail after writing most of the content
 	failWriter := &failingWriter{failAfter: 100}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.WriteOutput(output)
 	if err == nil {
 		t.Error("Expected error when writing closing brace fails")
@@ -1040,11 +1040,11 @@ func TestWriteFilesStreaming_WriteError(t *testing.T) {
 	files := []schema.File{
 		{FileID: "file1", Path: "test.go", Language: "go"},
 	}
-	
+
 	// Fail during file writing
 	failWriter := &failingWriter{failAfter: 20}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.writeFilesStreaming(files)
 	if err == nil {
 		t.Error("Expected error when writing files fails")
@@ -1055,11 +1055,11 @@ func TestWriteRelationshipsStreaming_WriteError(t *testing.T) {
 	relationships := []schema.DependencyEdge{
 		{EdgeID: "edge1", SourceID: "s1", TargetID: "t1", EdgeType: schema.EdgeCall},
 	}
-	
+
 	// Fail during relationship writing
 	failWriter := &failingWriter{failAfter: 30}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.writeRelationshipsStreaming(relationships)
 	if err == nil {
 		t.Error("Expected error when writing relationships fails")
@@ -1074,11 +1074,11 @@ func TestWriteMetadata_WriteError(t *testing.T) {
 		SuccessCount: 1,
 		FailureCount: 0,
 	}
-	
+
 	// Fail during metadata writing
 	failWriter := &failingWriter{failAfter: 5}
 	writer := NewJSONWriter(failWriter, true)
-	
+
 	err := writer.writeMetadata(metadata)
 	if err == nil {
 		t.Error("Expected error when writing metadata fails")
@@ -1333,7 +1333,7 @@ func TestWriteStreaming_ErrorInRelationships(t *testing.T) {
 	// Fail after files array but during relationships
 	failWriter := &failingWriter{failAfter: 50}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.WriteOutput(output)
 	if err == nil {
 		t.Error("Expected error when writing relationships fails")
@@ -1356,7 +1356,7 @@ func TestWriteStreaming_ErrorInMetadata(t *testing.T) {
 	// Fail during metadata writing
 	failWriter := &failingWriter{failAfter: 60}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.WriteOutput(output)
 	if err == nil {
 		t.Error("Expected error when writing metadata fails")
@@ -1373,7 +1373,7 @@ func TestWriteFilesStreaming_ErrorInMiddle(t *testing.T) {
 	// Fail in the middle of writing files
 	failWriter := &failingWriter{failAfter: 100}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.writeFilesStreaming(files)
 	if err == nil {
 		t.Error("Expected error when writing files fails in middle")
@@ -1390,7 +1390,7 @@ func TestWriteRelationshipsStreaming_ErrorInMiddle(t *testing.T) {
 	// Fail in the middle of writing relationships
 	failWriter := &failingWriter{failAfter: 150}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.writeRelationshipsStreaming(relationships)
 	if err == nil {
 		t.Error("Expected error when writing relationships fails in middle")
@@ -1406,7 +1406,7 @@ func TestWriteFilesStreaming_CommaHandling(t *testing.T) {
 
 	var buf bytes.Buffer
 	writer := NewStreamingJSONWriter(&buf, true)
-	
+
 	err := writer.writeFilesStreaming(files)
 	if err != nil {
 		t.Fatalf("writeFilesStreaming failed: %v", err)
@@ -1429,7 +1429,7 @@ func TestWriteRelationshipsStreaming_CommaHandling(t *testing.T) {
 
 	var buf bytes.Buffer
 	writer := NewStreamingJSONWriter(&buf, true)
-	
+
 	err := writer.writeRelationshipsStreaming(relationships)
 	if err != nil {
 		t.Fatalf("writeRelationshipsStreaming failed: %v", err)
@@ -1466,7 +1466,7 @@ func TestWriteStreaming_CompleteFlow(t *testing.T) {
 
 	var buf bytes.Buffer
 	writer := NewStreamingJSONWriter(&buf, true)
-	
+
 	err := writer.WriteOutput(output)
 	if err != nil {
 		t.Fatalf("WriteOutput failed: %v", err)
@@ -1499,7 +1499,7 @@ func TestWriteFilesStreaming_LastElementNoComma(t *testing.T) {
 
 	var buf bytes.Buffer
 	writer := NewStreamingJSONWriter(&buf, true)
-	
+
 	err := writer.writeFilesStreaming(files)
 	if err != nil {
 		t.Fatalf("writeFilesStreaming failed: %v", err)
@@ -1532,7 +1532,7 @@ func TestWriteRelationshipsStreaming_LastElementNoComma(t *testing.T) {
 
 	var buf bytes.Buffer
 	writer := NewStreamingJSONWriter(&buf, true)
-	
+
 	err := writer.writeRelationshipsStreaming(relationships)
 	if err != nil {
 		t.Fatalf("writeRelationshipsStreaming failed: %v", err)
@@ -1564,7 +1564,7 @@ func TestWriteStreaming_WithoutIndent_AllComponents(t *testing.T) {
 
 	var buf bytes.Buffer
 	writer := NewStreamingJSONWriter(&buf, false)
-	
+
 	err := writer.WriteOutput(output)
 	if err != nil {
 		t.Fatalf("WriteOutput without indent failed: %v", err)
@@ -1585,7 +1585,7 @@ func TestWriteFilesStreaming_ErrorOnArrayStart(t *testing.T) {
 	// Fail immediately
 	failWriter := &failingWriter{failAfter: 0}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.writeFilesStreaming(files)
 	if err == nil {
 		t.Error("Expected error when writing array start fails")
@@ -1600,7 +1600,7 @@ func TestWriteRelationshipsStreaming_ErrorOnArrayStart(t *testing.T) {
 	// Fail immediately
 	failWriter := &failingWriter{failAfter: 0}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.writeRelationshipsStreaming(relationships)
 	if err == nil {
 		t.Error("Expected error when writing array start fails")
@@ -1615,7 +1615,7 @@ func TestWriteFilesStreaming_ErrorOnArrayEnd(t *testing.T) {
 	// Fail at the end - use a smaller threshold
 	failWriter := &failingWriter{failAfter: 80}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.writeFilesStreaming(files)
 	if err == nil {
 		t.Error("Expected error when writing array end fails")
@@ -1630,7 +1630,7 @@ func TestWriteRelationshipsStreaming_ErrorOnArrayEnd(t *testing.T) {
 	// Fail at the end - use a smaller threshold
 	failWriter := &failingWriter{failAfter: 80}
 	writer := NewStreamingJSONWriter(failWriter, true)
-	
+
 	err := writer.writeRelationshipsStreaming(relationships)
 	if err == nil {
 		t.Error("Expected error when writing array end fails")
@@ -1649,11 +1649,9 @@ func TestWriteMetadata_ErrorOnKey(t *testing.T) {
 	// Fail immediately
 	failWriter := &failingWriter{failAfter: 0}
 	writer := NewJSONWriter(failWriter, true)
-	
+
 	err := writer.writeMetadata(metadata)
 	if err == nil {
 		t.Error("Expected error when writing metadata key fails")
 	}
 }
-
-

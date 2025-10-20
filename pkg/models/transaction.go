@@ -121,17 +121,17 @@ func isRetryableError(err error) bool {
 
 	// Check for PostgreSQL-specific retryable errors
 	errStr := err.Error()
-	
+
 	// Serialization failure
 	if contains(errStr, "serialization failure") {
 		return true
 	}
-	
+
 	// Deadlock detected
 	if contains(errStr, "deadlock detected") {
 		return true
 	}
-	
+
 	// Connection errors that might be temporary
 	if contains(errStr, "connection refused") || contains(errStr, "connection reset") {
 		return true
@@ -142,12 +142,12 @@ func isRetryableError(err error) bool {
 
 // contains checks if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		   (s == substr || 
-		    (len(s) > len(substr) && 
-		     (s[:len(substr)] == substr || 
-		      s[len(s)-len(substr):] == substr || 
-		      containsSubstring(s, substr))))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			(len(s) > len(substr) &&
+				(s[:len(substr)] == substr ||
+					s[len(s)-len(substr):] == substr ||
+					containsSubstring(s, substr))))
 }
 
 func containsSubstring(s, substr string) bool {

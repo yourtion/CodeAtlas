@@ -9,9 +9,9 @@ import (
 
 func TestSchemaValidator_Validate(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       *schema.ParseOutput
-		expectValid bool
+		name         string
+		input        *schema.ParseOutput
+		expectValid  bool
 		expectErrors []ValidationErrorType
 	}{
 		{
@@ -39,10 +39,10 @@ func TestSchemaValidator_Validate(t *testing.T) {
 						Checksum: "abc123",
 						Symbols: []schema.Symbol{
 							{
-								SymbolID: "symbol-1",
-								FileID:   "file-1",
-								Name:     "TestFunc",
-								Kind:     schema.SymbolFunction,
+								SymbolID:  "symbol-1",
+								FileID:    "file-1",
+								Name:      "TestFunc",
+								Kind:      schema.SymbolFunction,
 								Signature: "func TestFunc()",
 								Span: schema.Span{
 									StartLine: 1,
@@ -132,9 +132,9 @@ func TestSchemaValidator_Validate(t *testing.T) {
 
 func TestSchemaValidator_ValidateFile(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       *schema.File
-		expectValid bool
+		name         string
+		input        *schema.File
+		expectValid  bool
 		expectErrors []ValidationErrorType
 	}{
 		{
@@ -209,12 +209,12 @@ func TestSchemaValidator_ValidateFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			validator := NewSchemaValidator()
-			
+
 			// For duplicate ID test, add the file first
 			if tt.name == "duplicate file IDs" {
 				validator.fileIDs["file-1"] = true
 			}
-			
+
 			result := validator.ValidateFile(tt.input)
 
 			if result.Valid != tt.expectValid {
@@ -243,9 +243,9 @@ func TestSchemaValidator_ValidateFile(t *testing.T) {
 
 func TestSchemaValidator_ValidateSymbol(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       *schema.Symbol
-		expectValid bool
+		name         string
+		input        *schema.Symbol
+		expectValid  bool
 		expectErrors []ValidationErrorType
 	}{
 		{
@@ -336,9 +336,9 @@ func TestSchemaValidator_ValidateSymbol(t *testing.T) {
 
 func TestSchemaValidator_ValidateASTNode(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       *schema.ASTNode
-		expectValid bool
+		name         string
+		input        *schema.ASTNode
+		expectValid  bool
 		expectErrors []ValidationErrorType
 	}{
 		{
@@ -364,7 +364,7 @@ func TestSchemaValidator_ValidateASTNode(t *testing.T) {
 			expectErrors: nil,
 		},
 		{
-			name: "missing required fields",
+			name:  "missing required fields",
 			input: &schema.ASTNode{
 				// Missing NodeID, FileID, Type
 			},
@@ -421,10 +421,10 @@ func TestSchemaValidator_ValidateASTNode(t *testing.T) {
 
 func TestSchemaValidator_ValidateEdge(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       *schema.DependencyEdge
+		name         string
+		input        *schema.DependencyEdge
 		setupSymbols []string // Symbol IDs to pre-register
-		expectValid bool
+		expectValid  bool
 		expectErrors []ValidationErrorType
 	}{
 		{
@@ -461,7 +461,7 @@ func TestSchemaValidator_ValidateEdge(t *testing.T) {
 			expectErrors: nil,
 		},
 		{
-			name: "missing required fields",
+			name:  "missing required fields",
 			input: &schema.DependencyEdge{
 				// Missing EdgeID, SourceID, EdgeType, SourceFile
 			},
@@ -538,12 +538,12 @@ func TestSchemaValidator_ValidateEdge(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			validator := NewSchemaValidator()
-			
+
 			// Setup symbols for referential integrity checks
 			for _, symbolID := range tt.setupSymbols {
 				validator.symbolIDs[symbolID] = true
 			}
-			
+
 			result := validator.ValidateEdge(tt.input)
 
 			if result.Valid != tt.expectValid {

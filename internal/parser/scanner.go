@@ -28,7 +28,7 @@ type ScannedFile struct {
 type FileScanner struct {
 	rootPath  string
 	filter    *IgnoreFilter
-	maxSize   int64 // Maximum file size in bytes (0 = no limit)
+	maxSize   int64    // Maximum file size in bytes (0 = no limit)
 	languages []string // Language filter (empty = all languages)
 }
 
@@ -54,7 +54,7 @@ func (s *FileScanner) SetLanguageFilter(languages []string) {
 // Scan walks the directory tree and returns all matching files
 func (s *FileScanner) Scan() ([]ScannedFile, error) {
 	var files []ScannedFile
-	
+
 	// Ensure root path exists
 	if _, err := os.Stat(s.rootPath); err != nil {
 		return nil, fmt.Errorf("root path does not exist: %w", err)
@@ -106,7 +106,7 @@ func (s *FileScanner) Scan() ([]ScannedFile, error) {
 
 		// Detect language
 		language := determineLanguage(path)
-		
+
 		// Apply language filter if specified
 		if len(s.languages) > 0 {
 			matched := false
@@ -162,10 +162,10 @@ func ScanRepository(repoPath string) ([]FileInfo, error) {
 		// Skip directories
 		if d.IsDir() {
 			// Skip hidden directories and common build directories
-			if strings.HasPrefix(d.Name(), ".") || 
-			   d.Name() == "node_modules" || 
-			   d.Name() == "vendor" || 
-			   d.Name() == "target" {
+			if strings.HasPrefix(d.Name(), ".") ||
+				d.Name() == "node_modules" ||
+				d.Name() == "vendor" ||
+				d.Name() == "target" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -237,7 +237,7 @@ func isLargeFile(path string) bool {
 	if err != nil {
 		return true
 	}
-	
+
 	// Skip files larger than 1MB
 	return info.Size() > 1024*1024
 }
@@ -250,42 +250,42 @@ func DetermineLanguage(path string) string {
 // determineLanguage determines the programming language based on file extension
 func determineLanguage(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
-	
+
 	languageMap := map[string]string{
-		".go":   "Go",
-		".js":   "JavaScript",
-		".ts":   "TypeScript",
-		".jsx":  "JavaScript",
-		".tsx":  "TypeScript",
-		".py":   "Python",
-		".java": "Java",
-		".cpp":  "C++",
-		".cc":   "C++",
-		".cxx":  "C++",
-		".c":    "C",
-		".h":    "C",
-		".hpp":  "C++",
-		".rs":   "Rust",
-		".php":  "PHP",
-		".rb":   "Ruby",
+		".go":    "Go",
+		".js":    "JavaScript",
+		".ts":    "TypeScript",
+		".jsx":   "JavaScript",
+		".tsx":   "TypeScript",
+		".py":    "Python",
+		".java":  "Java",
+		".cpp":   "C++",
+		".cc":    "C++",
+		".cxx":   "C++",
+		".c":     "C",
+		".h":     "C",
+		".hpp":   "C++",
+		".rs":    "Rust",
+		".php":   "PHP",
+		".rb":    "Ruby",
 		".swift": "Swift",
-		".kt":   "Kotlin",
-		".sql":  "SQL",
-		".html": "HTML",
-		".css":  "CSS",
-		".scss": "SCSS",
-		".sass": "Sass",
-		".md":   "Markdown",
-		".txt":  "Text",
-		".json": "JSON",
-		".xml":  "XML",
-		".yaml": "YAML",
-		".yml":  "YAML",
+		".kt":    "Kotlin",
+		".sql":   "SQL",
+		".html":  "HTML",
+		".css":   "CSS",
+		".scss":  "SCSS",
+		".sass":  "Sass",
+		".md":    "Markdown",
+		".txt":   "Text",
+		".json":  "JSON",
+		".xml":   "XML",
+		".yaml":  "YAML",
+		".yml":   "YAML",
 	}
 
 	if lang, exists := languageMap[ext]; exists {
 		return lang
 	}
-	
+
 	return "Unknown"
 }
