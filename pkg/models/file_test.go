@@ -19,12 +19,27 @@ func TestFileRepository_Create(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewFileRepository(db)
 	ctx := context.Background()
+
+	// Create repository first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	repo := NewFileRepository(db)
 
 	file := &File{
 		FileID:   uuid.New().String(),
-		RepoID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
 		Path:     "test/file.go",
 		Language: "go",
 		Size:     1024,
@@ -71,13 +86,27 @@ func TestFileRepository_GetByPath(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewFileRepository(db)
 	ctx := context.Background()
 
+	// Create repository first
+	repoRepo := NewRepositoryRepository(db)
 	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-path-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	repo := NewFileRepository(db)
+
 	file := &File{
 		FileID:   uuid.New().String(),
-		RepoID:   repoID,
+		RepoID:   repository.RepoID,
 		Path:     "test/unique_path.go",
 		Language: "go",
 		Size:     512,
@@ -90,7 +119,7 @@ func TestFileRepository_GetByPath(t *testing.T) {
 	}
 
 	// Retrieve by path
-	retrieved, err := repo.GetByPath(ctx, repoID, file.Path)
+	retrieved, err := repo.GetByPath(ctx, repository.RepoID, file.Path)
 	if err != nil {
 		t.Fatalf("Failed to retrieve file by path: %v", err)
 	}
@@ -115,14 +144,28 @@ func TestFileRepository_BatchCreate(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewFileRepository(db)
 	ctx := context.Background()
 
+	// Create repository first
+	repoRepo := NewRepositoryRepository(db)
 	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-batch-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	repo := NewFileRepository(db)
+
 	files := []*File{
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repoID,
+			RepoID:   repository.RepoID,
 			Path:     "batch/file1.go",
 			Language: "go",
 			Size:     100,
@@ -130,7 +173,7 @@ func TestFileRepository_BatchCreate(t *testing.T) {
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repoID,
+			RepoID:   repository.RepoID,
 			Path:     "batch/file2.go",
 			Language: "go",
 			Size:     200,
@@ -138,7 +181,7 @@ func TestFileRepository_BatchCreate(t *testing.T) {
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repoID,
+			RepoID:   repository.RepoID,
 			Path:     "batch/file3.py",
 			Language: "python",
 			Size:     300,
@@ -152,7 +195,7 @@ func TestFileRepository_BatchCreate(t *testing.T) {
 	}
 
 	// Verify all files were created
-	retrievedFiles, err := repo.GetByRepoID(ctx, repoID)
+	retrievedFiles, err := repo.GetByRepoID(ctx, repository.RepoID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve files by repo ID: %v", err)
 	}
@@ -181,12 +224,27 @@ func TestFileRepository_Update(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewFileRepository(db)
 	ctx := context.Background()
+
+	// Create repository first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-update-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	repo := NewFileRepository(db)
 
 	file := &File{
 		FileID:   uuid.New().String(),
-		RepoID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
 		Path:     "test/update.go",
 		Language: "go",
 		Size:     1000,
@@ -239,14 +297,28 @@ func TestFileRepository_GetFilesByLanguage(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewFileRepository(db)
 	ctx := context.Background()
 
+	// Create repository first
+	repoRepo := NewRepositoryRepository(db)
 	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-lang-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	repo := NewFileRepository(db)
+
 	files := []*File{
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repoID,
+			RepoID:   repository.RepoID,
 			Path:     "lang/file1.go",
 			Language: "go",
 			Size:     100,
@@ -254,7 +326,7 @@ func TestFileRepository_GetFilesByLanguage(t *testing.T) {
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repoID,
+			RepoID:   repository.RepoID,
 			Path:     "lang/file2.go",
 			Language: "go",
 			Size:     200,
@@ -262,7 +334,7 @@ func TestFileRepository_GetFilesByLanguage(t *testing.T) {
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repoID,
+			RepoID:   repository.RepoID,
 			Path:     "lang/file3.py",
 			Language: "python",
 			Size:     300,
@@ -276,7 +348,7 @@ func TestFileRepository_GetFilesByLanguage(t *testing.T) {
 	}
 
 	// Get Go files
-	goFiles, err := repo.GetFilesByLanguage(ctx, repoID, "go")
+	goFiles, err := repo.GetFilesByLanguage(ctx, repository.RepoID, "go")
 	if err != nil {
 		t.Fatalf("Failed to get Go files: %v", err)
 	}
@@ -292,7 +364,7 @@ func TestFileRepository_GetFilesByLanguage(t *testing.T) {
 	}
 
 	// Get Python files
-	pythonFiles, err := repo.GetFilesByLanguage(ctx, repoID, "python")
+	pythonFiles, err := repo.GetFilesByLanguage(ctx, repository.RepoID, "python")
 	if err != nil {
 		t.Fatalf("Failed to get Python files: %v", err)
 	}
@@ -313,13 +385,26 @@ func TestFileRepository_Count(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewFileRepository(db)
 	ctx := context.Background()
 
+	// Create repository first
+	repoRepo := NewRepositoryRepository(db)
 	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-count-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	repo := NewFileRepository(db)
 
 	// Initial count should be 0
-	count, err := repo.Count(ctx, repoID)
+	count, err := repo.Count(ctx, repository.RepoID)
 	if err != nil {
 		t.Fatalf("Failed to get count: %v", err)
 	}
@@ -331,7 +416,7 @@ func TestFileRepository_Count(t *testing.T) {
 	files := []*File{
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repoID,
+			RepoID:   repository.RepoID,
 			Path:     "count/file1.go",
 			Language: "go",
 			Size:     100,
@@ -339,7 +424,7 @@ func TestFileRepository_Count(t *testing.T) {
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repoID,
+			RepoID:   repository.RepoID,
 			Path:     "count/file2.go",
 			Language: "go",
 			Size:     200,
@@ -353,7 +438,7 @@ func TestFileRepository_Count(t *testing.T) {
 	}
 
 	// Count should now be 2
-	count, err = repo.Count(ctx, repoID)
+	count, err = repo.Count(ctx, repository.RepoID)
 	if err != nil {
 		t.Fatalf("Failed to get count: %v", err)
 	}
@@ -373,12 +458,27 @@ func TestFileRepository_Delete(t *testing.T) {
 	}
 	defer db.Close()
 
-	repo := NewFileRepository(db)
 	ctx := context.Background()
+
+	// Create repository first
+	repoRepo := NewRepositoryRepository(db)
+	repoID := uuid.New().String()
+	repository := &Repository{
+		RepoID: repoID,
+		Name:   "test-repo-delete-" + repoID[:8],
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err = repoRepo.Create(ctx, repository)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+
+	repo := NewFileRepository(db)
 
 	file := &File{
 		FileID:   uuid.New().String(),
-		RepoID:   uuid.New().String(),
+		RepoID:   repository.RepoID,
 		Path:     "test/delete.go",
 		Language: "go",
 		Size:     500,

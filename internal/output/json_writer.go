@@ -57,11 +57,11 @@ func (w *JSONWriter) writeComplete(output *schema.ParseOutput) error {
 	if w.indent {
 		encoder.SetIndent("", "  ")
 	}
-	
+
 	if err := encoder.Encode(output); err != nil {
 		return fmt.Errorf("failed to encode JSON: %w", err)
 	}
-	
+
 	return nil
 }
 

@@ -34,7 +34,7 @@ func ExampleOpenAIEmbedder_GenerateEmbedding() {
 	// Generate embedding for code content
 	ctx := context.Background()
 	content := "func calculateSum(a, b int) int { return a + b }"
-	
+
 	embedding, err := embedder.GenerateEmbedding(ctx, content)
 	if err != nil {
 		log.Fatalf("Failed to generate embedding: %v", err)
@@ -88,7 +88,7 @@ func ExampleOpenAIEmbedder_BatchEmbed() {
 func ExampleOpenAIEmbedder_EmbedSymbols() {
 	// Note: This example requires a running embedding service and database
 	// For demonstration purposes, we show the configuration and usage pattern
-	
+
 	// Create embedder configuration
 	config := &indexer.EmbedderConfig{
 		Backend:              "openai",
@@ -128,7 +128,7 @@ func ExampleOpenAIEmbedder_EmbedSymbols() {
 	fmt.Printf("Configured embedder with model: %s\n", config.Model)
 	fmt.Printf("Expected dimensions: %d\n", config.Dimensions)
 	fmt.Printf("Symbols to embed: %d\n", len(symbols))
-	
+
 	// Output:
 	// Configured embedder with model: text-embedding-qwen3-embedding-0.6b
 	// Expected dimensions: 1024

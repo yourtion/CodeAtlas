@@ -90,7 +90,7 @@ func (f *IgnoreFilter) parseGitignoreFile(path string) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -136,7 +136,7 @@ func (f *IgnoreFilter) addPattern(pattern string) {
 func (f *IgnoreFilter) ShouldIgnore(path string, isDir bool) bool {
 	// Normalize path separators
 	path = filepath.ToSlash(path)
-	
+
 	ignored := false
 
 	// Apply rules in order (later rules can override earlier ones)
@@ -211,13 +211,13 @@ func (f *IgnoreFilter) matchesPattern(path, pattern string, isDir bool) bool {
 			if matched {
 				return true
 			}
-			
+
 			// Also check full directory path
 			matched, _ = filepath.Match(pattern, dir)
 			if matched {
 				return true
 			}
-			
+
 			dir = filepath.Dir(dir)
 		}
 	}
@@ -229,7 +229,7 @@ func (f *IgnoreFilter) matchesPattern(path, pattern string, isDir bool) bool {
 func (f *IgnoreFilter) matchDoubleStarPattern(path, pattern string) bool {
 	// Split pattern by **
 	parts := strings.Split(pattern, "**")
-	
+
 	if len(parts) == 1 {
 		// No ** in pattern, use regular matching
 		matched, _ := filepath.Match(pattern, path)
@@ -239,14 +239,14 @@ func (f *IgnoreFilter) matchDoubleStarPattern(path, pattern string) bool {
 	// For patterns like **/temp/**, we need to check if "temp" appears as a directory component
 	prefix := strings.TrimSuffix(parts[0], "/")
 	suffix := strings.TrimPrefix(parts[len(parts)-1], "/")
-	
+
 	// If pattern is just "**", it matches everything
 	if len(parts) == 2 && prefix == "" && suffix == "" {
 		return true
 	}
 
 	pathParts := strings.Split(path, "/")
-	
+
 	// Check if path starts with the prefix (if any)
 	if prefix != "" {
 		if !strings.HasPrefix(path, prefix) {
@@ -261,7 +261,7 @@ func (f *IgnoreFilter) matchDoubleStarPattern(path, pattern string) bool {
 		if middle == "" {
 			continue
 		}
-		
+
 		// Check if this middle part appears as a path component
 		found := false
 		for _, part := range pathParts {

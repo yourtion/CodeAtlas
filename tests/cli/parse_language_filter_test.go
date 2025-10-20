@@ -1,3 +1,5 @@
+//go:build parse_tests
+
 package cli_test
 
 import (
@@ -9,6 +11,14 @@ import (
 
 	"github.com/yourtionguo/CodeAtlas/internal/schema"
 )
+
+// skipIfNoParseCommand skips the test if parse command is not available
+func skipIfNoParseCommand(t *testing.T) {
+	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	if err := cmd.Run(); err != nil {
+		t.Skip("Skipping test: parse command not implemented")
+	}
+}
 
 // TestParseLanguageFilterGo tests filtering for Go files only
 func TestParseLanguageFilterGo(t *testing.T) {

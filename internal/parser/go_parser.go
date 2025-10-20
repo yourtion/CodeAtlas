@@ -88,14 +88,14 @@ func (p *GoParser) Parse(file ScannedFile) (*ParsedFile, error) {
 
 	// Parse with Tree-sitter
 	rootNode, parseErr := p.tsParser.Parse(content, "go")
-	
+
 	parsedFile := &ParsedFile{
 		Path:     file.Path,
 		Language: "go",
 		Content:  content,
 		RootNode: rootNode,
 	}
-	
+
 	// If we have no root node at all, return error immediately
 	if rootNode == nil {
 		return parsedFile, &DetailedParseError{
@@ -168,14 +168,14 @@ func (p *GoParser) extractPackage(rootNode *sitter.Node, parsedFile *ParsedFile)
 				pkgChild := child.Child(j)
 				if pkgChild.Type() == "package_identifier" {
 					packageName := pkgChild.Content(parsedFile.Content)
-					
+
 					symbol := ParsedSymbol{
 						Name: packageName,
 						Kind: "package",
 						Span: nodeToSpan(pkgChild),
 						Node: pkgChild,
 					}
-					
+
 					parsedFile.Symbols = append(parsedFile.Symbols, symbol)
 					return nil
 				}
@@ -189,7 +189,7 @@ func (p *GoParser) extractPackage(rootNode *sitter.Node, parsedFile *ParsedFile)
 // extractImports extracts import statements
 func (p *GoParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
 	query := `(import_spec path: (interpreted_string_literal) @import.path)`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, "go")
 	if err != nil {
 		return err
@@ -198,13 +198,13 @@ func (p *GoParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 	for _, match := range matches {
 		for _, capture := range match.Captures {
 			importPath := strings.Trim(capture.Node.Content(content), "\"")
-			
+
 			dependency := ParsedDependency{
 				Type:         "import",
 				Target:       importPath,
 				TargetModule: importPath,
 			}
-			
+
 			parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
 		}
 	}
@@ -215,7 +215,7 @@ func (p *GoParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 // extractFunctions extracts function declarations
 func (p *GoParser) extractFunctions(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
 	query := `(function_declaration name: (identifier) @func.name) @func.def`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, "go")
 	if err != nil {
 		return err
@@ -224,7 +224,7 @@ func (p *GoParser) extractFunctions(rootNode *sitter.Node, parsedFile *ParsedFil
 	for _, match := range matches {
 		var funcNode *sitter.Node
 		var funcName string
-		
+
 		// Use Index to identify captures: 0=func.name, 1=func.def
 		for _, capture := range match.Captures {
 			if capture.Index == 0 {
@@ -233,11 +233,11 @@ func (p *GoParser) extractFunctions(rootNode *sitter.Node, parsedFile *ParsedFil
 				funcNode = capture.Node
 			}
 		}
-		
+
 		if funcNode != nil && funcName != "" {
 			signature := p.extractFunctionSignature(funcNode, content)
 			docstring := p.extractDocstring(funcNode, content)
-			
+
 			symbol := ParsedSymbol{
 				Name:      funcName,
 				Kind:      "function",
@@ -246,7 +246,7 @@ func (p *GoParser) extractFunctions(rootNode *sitter.Node, parsedFile *ParsedFil
 				Docstring: docstring,
 				Node:      funcNode,
 			}
-			
+
 			parsedFile.Symbols = append(parsedFile.Symbols, symbol)
 		}
 	}
@@ -259,7 +259,7 @@ func (p *GoParser) extractMethods(rootNode *sitter.Node, parsedFile *ParsedFile,
 	query := `(method_declaration 
 		receiver: (parameter_list) @method.receiver 
 		name: (field_identifier) @method.name) @method.def`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, "go")
 	if err != nil {
 		return err
@@ -269,7 +269,7 @@ func (p *GoParser) extractMethods(rootNode *sitter.Node, parsedFile *ParsedFile,
 		var methodNode *sitter.Node
 		var methodName string
 		var receiver string
-		
+
 		// Use Index to identify captures: 0=receiver, 1=name, 2=def
 		for _, capture := range match.Captures {
 			if capture.Index == 0 {
@@ -280,11 +280,11 @@ func (p *GoParser) extractMethods(rootNode *sitter.Node, parsedFile *ParsedFile,
 				methodNode = capture.Node
 			}
 		}
-		
+
 		if methodNode != nil && methodName != "" {
 			signature := p.extractMethodSignature(methodNode, receiver, content)
 			docstring := p.extractDocstring(methodNode, content)
-			
+
 			symbol := ParsedSymbol{
 				Name:      methodName,
 				Kind:      "method",
@@ -293,7 +293,7 @@ func (p *GoParser) extractMethods(rootNode *sitter.Node, parsedFile *ParsedFile,
 				Docstring: docstring,
 				Node:      methodNode,
 			}
-			
+
 			parsedFile.Symbols = append(parsedFile.Symbols, symbol)
 		}
 	}
@@ -307,7 +307,7 @@ func (p *GoParser) extractStructs(rootNode *sitter.Node, parsedFile *ParsedFile,
 		(type_spec 
 			name: (type_identifier) @struct.name 
 			type: (struct_type) @struct.body)) @struct.def`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, "go")
 	if err != nil {
 		return err
@@ -317,7 +317,7 @@ func (p *GoParser) extractStructs(rootNode *sitter.Node, parsedFile *ParsedFile,
 		var structNode *sitter.Node
 		var structName string
 		var structBody *sitter.Node
-		
+
 		// Use Index to identify captures: 0=name, 1=body, 2=def
 		for _, capture := range match.Captures {
 			if capture.Index == 0 {
@@ -328,11 +328,11 @@ func (p *GoParser) extractStructs(rootNode *sitter.Node, parsedFile *ParsedFile,
 				structNode = capture.Node
 			}
 		}
-		
+
 		if structNode != nil && structName != "" {
 			fields := p.extractStructFields(structBody, content)
 			docstring := p.extractDocstring(structNode, content)
-			
+
 			symbol := ParsedSymbol{
 				Name:      structName,
 				Kind:      "struct",
@@ -342,7 +342,7 @@ func (p *GoParser) extractStructs(rootNode *sitter.Node, parsedFile *ParsedFile,
 				Node:      structNode,
 				Children:  fields,
 			}
-			
+
 			parsedFile.Symbols = append(parsedFile.Symbols, symbol)
 		}
 	}
@@ -356,7 +356,7 @@ func (p *GoParser) extractInterfaces(rootNode *sitter.Node, parsedFile *ParsedFi
 		(type_spec 
 			name: (type_identifier) @interface.name 
 			type: (interface_type) @interface.body)) @interface.def`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, "go")
 	if err != nil {
 		return err
@@ -366,7 +366,7 @@ func (p *GoParser) extractInterfaces(rootNode *sitter.Node, parsedFile *ParsedFi
 		var interfaceNode *sitter.Node
 		var interfaceName string
 		var interfaceBody *sitter.Node
-		
+
 		// Use Index to identify captures: 0=name, 1=body, 2=def
 		for _, capture := range match.Captures {
 			if capture.Index == 0 {
@@ -377,11 +377,11 @@ func (p *GoParser) extractInterfaces(rootNode *sitter.Node, parsedFile *ParsedFi
 				interfaceNode = capture.Node
 			}
 		}
-		
+
 		if interfaceNode != nil && interfaceName != "" {
 			methods := p.extractInterfaceMethods(interfaceBody, content)
 			docstring := p.extractDocstring(interfaceNode, content)
-			
+
 			symbol := ParsedSymbol{
 				Name:      interfaceName,
 				Kind:      "interface",
@@ -391,7 +391,7 @@ func (p *GoParser) extractInterfaces(rootNode *sitter.Node, parsedFile *ParsedFi
 				Node:      interfaceNode,
 				Children:  methods,
 			}
-			
+
 			parsedFile.Symbols = append(parsedFile.Symbols, symbol)
 		}
 	}
@@ -404,7 +404,7 @@ func (p *GoParser) extractTypes(rootNode *sitter.Node, parsedFile *ParsedFile, c
 	query := `(type_declaration 
 		(type_spec 
 			name: (type_identifier) @type.name)) @type.def`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, "go")
 	if err != nil {
 		return err
@@ -413,7 +413,7 @@ func (p *GoParser) extractTypes(rootNode *sitter.Node, parsedFile *ParsedFile, c
 	for _, match := range matches {
 		var typeNode *sitter.Node
 		var typeName string
-		
+
 		// Use Index to identify captures: 0=name, 1=def
 		for _, capture := range match.Captures {
 			if capture.Index == 0 {
@@ -422,7 +422,7 @@ func (p *GoParser) extractTypes(rootNode *sitter.Node, parsedFile *ParsedFile, c
 				typeNode = capture.Node
 			}
 		}
-		
+
 		if typeNode != nil && typeName != "" {
 			// Skip if already processed as struct or interface
 			typeSpec := findChildByType(typeNode, "type_spec")
@@ -435,10 +435,10 @@ func (p *GoParser) extractTypes(rootNode *sitter.Node, parsedFile *ParsedFile, c
 					continue // Already processed
 				}
 			}
-			
+
 			docstring := p.extractDocstring(typeNode, content)
 			signature := strings.TrimSpace(typeNode.Content(content))
-			
+
 			symbol := ParsedSymbol{
 				Name:      typeName,
 				Kind:      "type",
@@ -447,7 +447,7 @@ func (p *GoParser) extractTypes(rootNode *sitter.Node, parsedFile *ParsedFile, c
 				Docstring: docstring,
 				Node:      typeNode,
 			}
-			
+
 			parsedFile.Symbols = append(parsedFile.Symbols, symbol)
 		}
 	}
@@ -475,7 +475,7 @@ func (p *GoParser) extractStructFields(structBody *sitter.Node, content []byte) 
 	}
 
 	var fields []ParsedSymbol
-	
+
 	// Iterate through children to find field declarations
 	for i := 0; i < int(structBody.ChildCount()); i++ {
 		child := structBody.Child(i)
@@ -485,7 +485,7 @@ func (p *GoParser) extractStructFields(structBody *sitter.Node, content []byte) 
 				if fieldDecl.Type() == "field_declaration" {
 					fieldName := ""
 					fieldType := ""
-					
+
 					// Extract field name and type
 					for k := 0; k < int(fieldDecl.ChildCount()); k++ {
 						fieldChild := fieldDecl.Child(k)
@@ -495,7 +495,7 @@ func (p *GoParser) extractStructFields(structBody *sitter.Node, content []byte) 
 							fieldType = fieldChild.Content(content)
 						}
 					}
-					
+
 					if fieldName != "" {
 						field := ParsedSymbol{
 							Name:      fieldName,
@@ -510,7 +510,7 @@ func (p *GoParser) extractStructFields(structBody *sitter.Node, content []byte) 
 			}
 		}
 	}
-	
+
 	return fields
 }
 
@@ -521,13 +521,13 @@ func (p *GoParser) extractInterfaceMethods(interfaceBody *sitter.Node, content [
 	}
 
 	var methods []ParsedSymbol
-	
+
 	// Iterate through children to find method elements
 	for i := 0; i < int(interfaceBody.ChildCount()); i++ {
 		child := interfaceBody.Child(i)
 		if child.Type() == "method_elem" || child.Type() == "method_spec" {
 			methodName := ""
-			
+
 			// Find method name (first field_identifier child)
 			for j := 0; j < int(child.ChildCount()); j++ {
 				methodChild := child.Child(j)
@@ -536,7 +536,7 @@ func (p *GoParser) extractInterfaceMethods(interfaceBody *sitter.Node, content [
 					break
 				}
 			}
-			
+
 			if methodName != "" {
 				signature := strings.TrimSpace(child.Content(content))
 				method := ParsedSymbol{
@@ -550,7 +550,7 @@ func (p *GoParser) extractInterfaceMethods(interfaceBody *sitter.Node, content [
 			}
 		}
 	}
-	
+
 	return methods
 }
 
@@ -567,7 +567,7 @@ func (p *GoParser) extractDocstring(node *sitter.Node, content []byte) string {
 	}
 
 	var comments []string
-	
+
 	// Find the index of the current node
 	nodeIndex := -1
 	for i := 0; i < int(parent.ChildCount()); i++ {
@@ -602,7 +602,7 @@ func (p *GoParser) extractDocstring(node *sitter.Node, content []byte) string {
 func (p *GoParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
 	// Query for call expressions
 	query := `(call_expression function: [(identifier) (selector_expression)] @call.target)`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, "go")
 	if err != nil {
 		return err
@@ -611,7 +611,7 @@ func (p *GoParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *P
 	for _, match := range matches {
 		for _, capture := range match.Captures {
 			callTarget := capture.Node.Content(content)
-			
+
 			// Find the containing function/method for this call
 			caller := p.findContainingFunction(capture.Node, parsedFile)
 			if caller != "" {
@@ -620,7 +620,7 @@ func (p *GoParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *P
 					Source: caller,
 					Target: callTarget,
 				}
-				
+
 				parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
 			}
 		}
@@ -632,7 +632,7 @@ func (p *GoParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *P
 // findContainingFunction finds the name of the function/method containing a node
 func (p *GoParser) findContainingFunction(node *sitter.Node, parsedFile *ParsedFile) string {
 	current := node.Parent()
-	
+
 	for current != nil {
 		// Check if this is a function or method declaration
 		if current.Type() == "function_declaration" || current.Type() == "method_declaration" {
@@ -645,7 +645,7 @@ func (p *GoParser) findContainingFunction(node *sitter.Node, parsedFile *ParsedF
 		}
 		current = current.Parent()
 	}
-	
+
 	return ""
 }
 

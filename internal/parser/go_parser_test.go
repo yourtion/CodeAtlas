@@ -97,9 +97,9 @@ func (p *Person) GetName() string {
 func broken( {
 	return
 }`,
-			wantSymbols: 2, // package + broken function (partial parse)
+			wantSymbols:   2, // package + broken function (partial parse)
 			wantFunctions: 1, // The broken function is still extracted
-			wantError:   true,
+			wantError:     true,
 		},
 	}
 
@@ -120,7 +120,7 @@ func broken( {
 			}
 
 			parsedFile, err := goParser.Parse(scannedFile)
-			
+
 			if tt.wantError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -208,7 +208,7 @@ func Add(a, b int) int {
 	// Should have 2 functions
 	funcCount := 0
 	var helloFunc, addFunc *ParsedSymbol
-	
+
 	for i := range parsedFile.Symbols {
 		sym := &parsedFile.Symbols[i]
 		if sym.Kind == "function" {
@@ -455,7 +455,7 @@ func (p *Person) SetName(name string) {
 	// Count methods
 	methodCount := 0
 	var getNameMethod, setNameMethod *ParsedSymbol
-	
+
 	for i := range parsedFile.Symbols {
 		sym := &parsedFile.Symbols[i]
 		if sym.Kind == "method" {
@@ -544,8 +544,8 @@ func main() {
 	}
 
 	expectedImports := map[string]bool{
-		"fmt":                   false,
-		"strings":               false,
+		"fmt":                    false,
+		"strings":                false,
 		"github.com/example/pkg": false,
 	}
 

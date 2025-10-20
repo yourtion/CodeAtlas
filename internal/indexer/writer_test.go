@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yourtionguo/CodeAtlas/internal/schema"
-	"github.com/yourtionguo/CodeAtlas/pkg/models"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/yourtionguo/CodeAtlas/internal/schema"
+	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
 func TestNewWriter(t *testing.T) {
@@ -166,7 +166,7 @@ func TestWriteSymbols(t *testing.T) {
 	// Create test repository and file
 	repoID := uuid.New().String()
 	fileID := uuid.New().String()
-	
+
 	repo := &models.Repository{
 		RepoID: repoID,
 		Name:   "test-repo",
@@ -235,7 +235,7 @@ func TestWriteASTNodes(t *testing.T) {
 	// Create test repository and file
 	repoID := uuid.New().String()
 	fileID := uuid.New().String()
-	
+
 	repo := &models.Repository{
 		RepoID: repoID,
 		Name:   "test-repo",
@@ -258,13 +258,13 @@ func TestWriteASTNodes(t *testing.T) {
 	// Create test AST nodes with parent-child relationships
 	parentID := uuid.New().String()
 	childID := uuid.New().String()
-	
+
 	nodes := []schema.ASTNode{
 		{
-			NodeID: childID, // Child node first to test sorting
-			FileID: fileID,
-			Type:   "identifier",
-			Span:   schema.Span{StartLine: 2, EndLine: 2, StartByte: 10, EndByte: 20},
+			NodeID:   childID, // Child node first to test sorting
+			FileID:   fileID,
+			Type:     "identifier",
+			Span:     schema.Span{StartLine: 2, EndLine: 2, StartByte: 10, EndByte: 20},
 			ParentID: parentID,
 			Text:     "main",
 		},
@@ -287,12 +287,12 @@ func TestWriteASTNodes(t *testing.T) {
 
 	// Verify nodes were created and parent-child relationship is preserved
 	astNodeRepo := models.NewASTNodeRepository(db)
-	
+
 	parentNode, err := astNodeRepo.GetByID(ctx, parentID)
 	require.NoError(t, err)
 	assert.Equal(t, "function_declaration", parentNode.Type)
 	assert.Nil(t, parentNode.ParentID)
-	
+
 	childNode, err := astNodeRepo.GetByID(ctx, childID)
 	require.NoError(t, err)
 	assert.Equal(t, "identifier", childNode.Type)
@@ -312,7 +312,7 @@ func TestWriteEdges(t *testing.T) {
 	fileID := uuid.New().String()
 	sourceSymbolID := uuid.New().String()
 	targetSymbolID := uuid.New().String()
-	
+
 	repo := &models.Repository{
 		RepoID: repoID,
 		Name:   "test-repo",
@@ -386,7 +386,7 @@ func TestWriteEdges(t *testing.T) {
 		assert.Equal(t, edge.SourceID, retrieved.SourceID)
 		assert.Equal(t, string(edge.EdgeType), retrieved.EdgeType)
 		assert.Equal(t, edge.SourceFile, retrieved.SourceFile)
-		
+
 		if edge.TargetID != "" {
 			assert.NotNil(t, retrieved.TargetID)
 			assert.Equal(t, edge.TargetID, *retrieved.TargetID)
@@ -403,7 +403,7 @@ func TestTopologicalSortNodes(t *testing.T) {
 	parentID := "parent"
 	childID := "child"
 	grandchildID := "grandchild"
-	
+
 	nodes := []*models.ASTNode{
 		{
 			NodeID:   grandchildID,
@@ -419,7 +419,7 @@ func TestTopologicalSortNodes(t *testing.T) {
 	}
 
 	sorted := writer.topologicalSortNodes(nodes)
-	
+
 	// Verify correct order: parent -> child -> grandchild
 	assert.Len(t, sorted, 3)
 	assert.Equal(t, parentID, sorted[0].NodeID)

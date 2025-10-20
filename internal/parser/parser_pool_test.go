@@ -10,9 +10,9 @@ import (
 
 // MockProgressLogger for testing
 type MockProgressLogger struct {
-	mu             sync.Mutex
-	progressCalls  []ProgressCall
-	errorCalls     []ErrorCall
+	mu            sync.Mutex
+	progressCalls []ProgressCall
+	errorCalls    []ErrorCall
 }
 
 type ProgressCall struct {
@@ -94,19 +94,19 @@ func TestNewParserPool(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := NewParserPool(tt.workers, tsParser)
-			
+
 			if pool == nil {
 				t.Fatal("Expected non-nil parser pool")
 			}
-			
+
 			if pool.workers < 1 {
 				t.Errorf("Expected at least 1 worker, got %d", pool.workers)
 			}
-			
+
 			if tt.workers > 16 && pool.workers != 16 {
 				t.Errorf("Expected workers to be capped at 16, got %d", pool.workers)
 			}
-			
+
 			if pool.tsParser == nil {
 				t.Error("Expected non-nil Tree-sitter parser")
 			}
@@ -123,7 +123,7 @@ func TestParserPoolProcess(t *testing.T) {
 
 	// Create temporary test files
 	tempDir := t.TempDir()
-	
+
 	// Create test Go file
 	goFile := filepath.Join(tempDir, "test.go")
 	goContent := `package main
@@ -178,11 +178,11 @@ func main() {
 	}
 
 	tests := []struct {
-		name            string
-		workers         int
-		files           []ScannedFile
-		expectedFiles   int
-		expectedErrors  int
+		name           string
+		workers        int
+		files          []ScannedFile
+		expectedFiles  int
+		expectedErrors int
 	}{
 		{
 			name:           "single worker",
@@ -210,17 +210,17 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := NewParserPool(tt.workers, tsParser)
-			
+
 			parsedFiles, errors := pool.Process(tt.files)
-			
+
 			if len(parsedFiles) != tt.expectedFiles {
 				t.Errorf("Expected %d parsed files, got %d", tt.expectedFiles, len(parsedFiles))
 			}
-			
+
 			if len(errors) != tt.expectedErrors {
 				t.Errorf("Expected %d errors, got %d", tt.expectedErrors, len(errors))
 			}
-			
+
 			// Verify each parsed file has content
 			for _, pf := range parsedFiles {
 				if pf.Path == "" {
@@ -293,17 +293,17 @@ func TestParserPoolProgressTracking(t *testing.T) {
 
 	// Create temporary test files
 	tempDir := t.TempDir()
-	
+
 	var files []ScannedFile
 	for i := 0; i < 5; i++ {
 		filename := fmt.Sprintf("test%d.go", i)
 		filepath := filepath.Join(tempDir, filename)
 		content := fmt.Sprintf("package main\nfunc test%d() {}\n", i)
-		
+
 		if err := os.WriteFile(filepath, []byte(content), 0644); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
-		
+
 		files = append(files, ScannedFile{
 			Path:     filename,
 			AbsPath:  filepath,
@@ -354,17 +354,17 @@ func TestParserPoolConcurrency(t *testing.T) {
 
 	// Create temporary test files
 	tempDir := t.TempDir()
-	
+
 	var files []ScannedFile
 	for i := 0; i < 20; i++ {
 		filename := fmt.Sprintf("test%d.go", i)
 		filepath := filepath.Join(tempDir, filename)
 		content := fmt.Sprintf("package main\n\nfunc test%d() {\n\tprintln(\"test\")\n}\n", i)
-		
+
 		if err := os.WriteFile(filepath, []byte(content), 0644); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
-		
+
 		files = append(files, ScannedFile{
 			Path:     filename,
 			AbsPath:  filepath,
@@ -375,21 +375,21 @@ func TestParserPoolConcurrency(t *testing.T) {
 
 	// Test with different worker counts
 	workerCounts := []int{1, 2, 4, 8}
-	
+
 	for _, workers := range workerCounts {
 		t.Run(fmt.Sprintf("workers=%d", workers), func(t *testing.T) {
 			pool := NewParserPool(workers, tsParser)
-			
+
 			parsedFiles, errors := pool.Process(files)
-			
+
 			if len(parsedFiles) != 20 {
 				t.Errorf("Expected 20 parsed files, got %d", len(parsedFiles))
 			}
-			
+
 			if len(errors) != 0 {
 				t.Errorf("Expected 0 errors, got %d", len(errors))
 			}
-			
+
 			// Verify all files were processed (no duplicates or missing)
 			fileMap := make(map[string]bool)
 			for _, pf := range parsedFiles {
@@ -398,7 +398,7 @@ func TestParserPoolConcurrency(t *testing.T) {
 				}
 				fileMap[pf.Path] = true
 			}
-			
+
 			if len(fileMap) != 20 {
 				t.Errorf("Expected 20 unique files, got %d", len(fileMap))
 			}
@@ -415,7 +415,7 @@ func TestParserPoolMixedLanguages(t *testing.T) {
 
 	// Create temporary test files
 	tempDir := t.TempDir()
-	
+
 	testFiles := []struct {
 		name     string
 		language string
@@ -459,7 +459,7 @@ func TestParserPoolMixedLanguages(t *testing.T) {
 		if err := os.WriteFile(filepath, []byte(tf.content), 0644); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
 		}
-		
+
 		files = append(files, ScannedFile{
 			Path:     tf.name,
 			AbsPath:  filepath,
@@ -505,7 +505,7 @@ func TestParserPoolVerboseMode(t *testing.T) {
 	}
 
 	pool := NewParserPool(2, tsParser)
-	
+
 	// Test default verbose mode (should be false)
 	if pool.verbose {
 		t.Error("Expected verbose to be false by default")
@@ -526,7 +526,7 @@ func TestParserPoolVerboseMode(t *testing.T) {
 // TestDefaultProgressLogger tests the default progress logger
 func TestDefaultProgressLogger(t *testing.T) {
 	logger := &DefaultProgressLogger{}
-	
+
 	// These should not panic
 	logger.LogProgress(1, 10, "test.go")
 	logger.LogError("test.go", fmt.Errorf("test error"))
@@ -542,7 +542,7 @@ func TestParserPoolWorkerCreationError(t *testing.T) {
 	}
 
 	pool := NewParserPool(1, tsParser)
-	
+
 	// Create a simple test file
 	tempDir := t.TempDir()
 	goFile := filepath.Join(tempDir, "test.go")
@@ -564,7 +564,7 @@ func main() {}
 
 	// Process should work normally
 	parsedFiles, errors := pool.Process(files)
-	
+
 	if len(parsedFiles) != 1 {
 		t.Errorf("Expected 1 parsed file, got %d", len(parsedFiles))
 	}
@@ -601,12 +601,12 @@ func TestParserPoolProcessWithNilResult(t *testing.T) {
 	if len(errors) == 0 {
 		t.Error("Expected at least one error")
 	}
-	
+
 	// Should have no parsed files
 	if len(parsedFiles) != 0 {
 		t.Errorf("Expected 0 parsed files, got %d", len(parsedFiles))
 	}
-	
+
 	// Error should be logged even without verbose mode
 	errorCalls := mockLogger.GetErrorCalls()
 	if len(errorCalls) == 0 {

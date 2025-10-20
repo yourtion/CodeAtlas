@@ -724,7 +724,7 @@ func (p *JSParser) isGeneratorFunction(funcNode *sitter.Node, content []byte) bo
 func (p *JSParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte, language string) error {
 	// Query for call expressions
 	query := `(call_expression function: [(identifier) (member_expression)] @call.target)`
-	
+
 	matches, err := p.tsParser.Query(rootNode, query, language)
 	if err != nil {
 		return err
@@ -733,7 +733,7 @@ func (p *JSParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *P
 	for _, match := range matches {
 		for _, capture := range match.Captures {
 			callTarget := capture.Node.Content(content)
-			
+
 			// Find the containing function for this call
 			caller := p.findContainingFunction(capture.Node, parsedFile)
 			if caller != "" {
@@ -742,7 +742,7 @@ func (p *JSParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *P
 					Source: caller,
 					Target: callTarget,
 				}
-				
+
 				parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
 			}
 		}
@@ -754,14 +754,14 @@ func (p *JSParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *P
 // findContainingFunction finds the name of the function/method containing a node
 func (p *JSParser) findContainingFunction(node *sitter.Node, parsedFile *ParsedFile) string {
 	current := node.Parent()
-	
+
 	for current != nil {
 		// Check if this is a function, arrow function, or method
 		nodeType := current.Type()
-		if nodeType == "function_declaration" || 
-		   nodeType == "function_expression" || 
-		   nodeType == "arrow_function" || 
-		   nodeType == "method_definition" {
+		if nodeType == "function_declaration" ||
+			nodeType == "function_expression" ||
+			nodeType == "arrow_function" ||
+			nodeType == "method_definition" {
 			// Find the matching symbol in our parsed symbols
 			for _, symbol := range parsedFile.Symbols {
 				if symbol.Node == current {
@@ -777,6 +777,6 @@ func (p *JSParser) findContainingFunction(node *sitter.Node, parsedFile *ParsedF
 		}
 		current = current.Parent()
 	}
-	
+
 	return ""
 }

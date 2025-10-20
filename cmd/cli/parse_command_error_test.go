@@ -153,7 +153,7 @@ func main() {
 
 	// Execute parse command
 	err := cmd.Execute()
-	
+
 	// We expect the command to succeed even with errors (graceful degradation)
 	if err != nil {
 		t.Logf("Parse command returned error (expected for invalid syntax): %v", err)

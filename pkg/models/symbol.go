@@ -210,12 +210,11 @@ func (r *SymbolRepository) BatchCreate(ctx context.Context, symbols []*Symbol) e
 		INSERT INTO symbols (symbol_id, file_id, name, kind, signature, start_line, end_line,
 			start_byte, end_byte, docstring, semantic_summary, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		ON CONFLICT (file_id, name, start_line) 
+		ON CONFLICT (file_id, name, start_line, start_byte) 
 		DO UPDATE SET 
 			kind = EXCLUDED.kind,
 			signature = EXCLUDED.signature,
 			end_line = EXCLUDED.end_line,
-			start_byte = EXCLUDED.start_byte,
 			end_byte = EXCLUDED.end_byte,
 			docstring = EXCLUDED.docstring,
 			semantic_summary = EXCLUDED.semantic_summary
@@ -252,12 +251,11 @@ func (r *SymbolRepository) BatchCreateTx(ctx context.Context, tx *sql.Tx, symbol
 		INSERT INTO symbols (symbol_id, file_id, name, kind, signature, start_line, end_line,
 			start_byte, end_byte, docstring, semantic_summary, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		ON CONFLICT (file_id, name, start_line) 
+		ON CONFLICT (file_id, name, start_line, start_byte) 
 		DO UPDATE SET 
 			kind = EXCLUDED.kind,
 			signature = EXCLUDED.signature,
 			end_line = EXCLUDED.end_line,
-			start_byte = EXCLUDED.start_byte,
 			end_byte = EXCLUDED.end_byte,
 			docstring = EXCLUDED.docstring,
 			semantic_summary = EXCLUDED.semantic_summary

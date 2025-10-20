@@ -73,7 +73,7 @@ func main() {}`,
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node, err := parser.Parse([]byte(tt.content), "go")
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -111,8 +111,8 @@ func TestParse_JavaScript(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "arrow function",
-			content: `const add = (a, b) => a + b;`,
+			name:        "arrow function",
+			content:     `const add = (a, b) => a + b;`,
 			language:    "js",
 			expectError: false,
 		},
@@ -137,7 +137,7 @@ func TestParse_JavaScript(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node, err := parser.Parse([]byte(tt.content), tt.language)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -196,7 +196,7 @@ func TestParse_TypeScript(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node, err := parser.Parse([]byte(tt.content), tt.language)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error but got none")
@@ -258,7 +258,7 @@ func TestParse_Python(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node, err := parser.Parse([]byte(tt.content), tt.language)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error but got none")

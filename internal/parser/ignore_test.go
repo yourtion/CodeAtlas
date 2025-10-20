@@ -47,7 +47,7 @@ func TestNewIgnoreFilter_GitignoreFile(t *testing.T) {
 	// Create temporary directory with .gitignore
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	
+
 	gitignoreContent := `# Comment
 *.log
 build/
@@ -122,7 +122,7 @@ func TestNewIgnoreFilter_CustomPatterns(t *testing.T) {
 func TestNewIgnoreFilter_NegationPatterns(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	
+
 	gitignoreContent := `*.log
 !important.log
 !critical/*.log
@@ -143,7 +143,7 @@ func TestNewIgnoreFilter_NegationPatterns(t *testing.T) {
 		expected bool
 	}{
 		{"debug.log", false, true},
-		{"important.log", false, false}, // Negated
+		{"important.log", false, false},      // Negated
 		{"critical/error.log", false, false}, // Negated
 		{"other/error.log", false, true},
 	}
@@ -159,7 +159,7 @@ func TestNewIgnoreFilter_NegationPatterns(t *testing.T) {
 func TestNewIgnoreFilter_DirectorySpecificRules(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	
+
 	gitignoreContent := `logs/
 *.log
 `
@@ -196,7 +196,7 @@ func TestNewIgnoreFilter_DirectorySpecificRules(t *testing.T) {
 func TestNewIgnoreFilter_NestedGitignore(t *testing.T) {
 	// Create temporary directory structure
 	tmpDir := t.TempDir()
-	
+
 	// Root .gitignore
 	rootGitignore := filepath.Join(tmpDir, ".gitignore")
 	rootContent := `*.log
@@ -213,7 +213,7 @@ build/
 	if err != nil {
 		t.Fatalf("Failed to create subdir: %v", err)
 	}
-	
+
 	subGitignore := filepath.Join(subDir, ".gitignore")
 	subContent := `!important.log
 *.tmp
@@ -251,7 +251,7 @@ build/
 func TestNewIgnoreFilter_Precedence(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	
+
 	gitignoreContent := `*.log
 !important.log
 `
@@ -297,7 +297,7 @@ func TestNewIgnoreFilter_InvalidGitignoreFile(t *testing.T) {
 func TestShouldIgnore_WildcardPatterns(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")
-	
+
 	gitignoreContent := `*.log
 test_*.go
 **/temp/**

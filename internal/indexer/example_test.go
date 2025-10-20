@@ -111,7 +111,7 @@ func ExampleSchemaValidator_invalidInput() {
 
 	fmt.Printf("Valid: %v\n", result.Valid)
 	fmt.Printf("Error count: %d\n", len(result.Errors))
-	
+
 	// Show first few errors as examples
 	for i, err := range result.Errors {
 		if i >= 3 { // Limit output for example
