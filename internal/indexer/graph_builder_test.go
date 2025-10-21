@@ -9,6 +9,10 @@ import (
 )
 
 func TestNewGraphBuilder(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	db, err := models.NewDB()
 	if err != nil {
 		t.Skipf("Skipping test: database not available: %v", err)
@@ -57,6 +61,10 @@ func TestNewGraphBuilder(t *testing.T) {
 }
 
 func TestGraphBuilder_InitGraph(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	db, err := models.NewDB()
 	if err != nil {
 		t.Skipf("Skipping test: database not available: %v", err)
@@ -84,6 +92,10 @@ func TestGraphBuilder_InitGraph(t *testing.T) {
 }
 
 func TestGraphBuilder_CreateNodes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	db, err := models.NewDB()
 	if err != nil {
 		t.Skipf("Skipping test: database not available: %v", err)
@@ -200,6 +212,10 @@ func TestGraphBuilder_CreateNodes(t *testing.T) {
 }
 
 func TestGraphBuilder_CreateEdges(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	db, err := models.NewDB()
 	if err != nil {
 		t.Skipf("Skipping test: database not available: %v", err)
@@ -335,6 +351,10 @@ func TestGraphBuilder_CreateEdges(t *testing.T) {
 }
 
 func TestGraphBuilder_UpdateNodeProperties(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	db, err := models.NewDB()
 	if err != nil {
 		t.Skipf("Skipping test: database not available: %v", err)
@@ -555,6 +575,10 @@ func TestEscapeCypherString(t *testing.T) {
 }
 
 func TestGraphBuilder_DeleteNode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	db, err := models.NewDB()
 	if err != nil {
 		t.Skipf("Skipping test: database not available: %v", err)
@@ -605,6 +629,10 @@ func TestGraphBuilder_DeleteNode(t *testing.T) {
 }
 
 func TestGraphBuilder_DeleteEdge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	db, err := models.NewDB()
 	if err != nil {
 		t.Skipf("Skipping test: database not available: %v", err)

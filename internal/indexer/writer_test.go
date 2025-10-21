@@ -261,12 +261,13 @@ func TestWriteASTNodes(t *testing.T) {
 
 	nodes := []schema.ASTNode{
 		{
-			NodeID:   childID, // Child node first to test sorting
-			FileID:   fileID,
-			Type:     "identifier",
-			Span:     schema.Span{StartLine: 2, EndLine: 2, StartByte: 10, EndByte: 20},
-			ParentID: parentID,
-			Text:     "main",
+			NodeID:     childID, // Child node first to test sorting
+			FileID:     fileID,
+			Type:       "identifier",
+			Span:       schema.Span{StartLine: 2, EndLine: 2, StartByte: 10, EndByte: 20},
+			ParentID:   parentID,
+			Text:       "main",
+			Attributes: map[string]string{},
 		},
 		{
 			NodeID: parentID, // Parent node second
@@ -517,10 +518,4 @@ func (e *mockError) Error() string {
 	return e.msg
 }
 
-// setupTestDB creates a test database connection
-func setupTestDB(t *testing.T) (*models.DB, func()) {
-	// This would typically connect to a test database
-	// For now, we'll skip actual database tests and focus on unit logic
-	t.Skip("Database tests require test database setup")
-	return nil, func() {}
-}
+// Note: setupTestDB is defined in indexer_test.go and shared across test files

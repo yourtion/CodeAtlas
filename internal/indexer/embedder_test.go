@@ -115,7 +115,8 @@ func TestOpenAIEmbedder_BatchEmbed(t *testing.T) {
 		for i := 0; i < numInputs; i++ {
 			embedding := make([]float32, 768)
 			for j := range embedding {
-				embedding[j] = float32(i*1000+j) * 0.001
+				// Use simpler values to avoid floating-point precision issues
+				embedding[j] = float32(j) / 1000.0
 			}
 			resp.Data = append(resp.Data, struct {
 				Object    string    `json:"object"`
@@ -205,7 +206,8 @@ func TestOpenAIEmbedder_EmbedSymbols(t *testing.T) {
 		for i := 0; i < numInputs; i++ {
 			embedding := make([]float32, 768)
 			for j := range embedding {
-				embedding[j] = float32(i*1000+j) * 0.001
+				// Use simpler values to avoid floating-point precision issues
+				embedding[j] = float32(j) / 1000.0
 			}
 			resp.Data = append(resp.Data, struct {
 				Object    string    `json:"object"`
