@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -31,16 +33,52 @@ func NewVectorRepository(db *DB) *VectorRepository {
 	return &VectorRepository{db: db}
 }
 
+// formatVectorForPgvector converts []float32 to pgvector format string [0.1,0.2,0.3]
+func formatVectorForPgvector(embedding []float32) string {
+	if len(embedding) == 0 {
+		return "[]"
+	}
+	parts := make([]string, len(embedding))
+	for i, v := range embedding {
+		parts[i] = strconv.FormatFloat(float64(v), 'f', -1, 32)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
+}
+
+// parseVectorFromPgvector parses pgvector format string [0.1,0.2,0.3] to []float32
+func parseVectorFromPgvector(vectorStr string) ([]float32, error) {
+	// Remove brackets
+	vectorStr = strings.TrimPrefix(vectorStr, "[")
+	vectorStr = strings.TrimSuffix(vectorStr, "]")
+	
+	if vectorStr == "" {
+		return []float32{}, nil
+	}
+	
+	parts := strings.Split(vectorStr, ",")
+	result := make([]float32, len(parts))
+	
+	for i, part := range parts {
+		val, err := strconv.ParseFloat(strings.TrimSpace(part), 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse vector element %d: %w", i, err)
+		}
+		result[i] = float32(val)
+	}
+	
+	return result, nil
+}
+
 // Create inserts a new vector record
 func (r *VectorRepository) Create(ctx context.Context, vector *Vector) error {
 	query := `
 		INSERT INTO vectors (vector_id, entity_id, entity_type, embedding, content, model, chunk_index, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8)
 	`
 	vector.CreatedAt = time.Now()
 
 	_, err := r.db.ExecContext(ctx, query,
-		vector.VectorID, vector.EntityID, vector.EntityType, pq.Array(vector.Embedding),
+		vector.VectorID, vector.EntityID, vector.EntityType, formatVectorForPgvector(vector.Embedding),
 		vector.Content, vector.Model, vector.ChunkIndex, vector.CreatedAt)
 	return err
 }
@@ -48,13 +86,13 @@ func (r *VectorRepository) Create(ctx context.Context, vector *Vector) error {
 // GetByID retrieves a vector by its ID
 func (r *VectorRepository) GetByID(ctx context.Context, vectorID string) (*Vector, error) {
 	query := `
-		SELECT vector_id, entity_id, entity_type, embedding, content, model, chunk_index, created_at
+		SELECT vector_id, entity_id, entity_type, embedding::text, content, model, chunk_index, created_at
 		FROM vectors WHERE vector_id = $1
 	`
 	var vector Vector
-	var embedding pq.Float32Array
+	var embeddingStr string
 	err := r.db.QueryRowContext(ctx, query, vectorID).Scan(
-		&vector.VectorID, &vector.EntityID, &vector.EntityType, &embedding,
+		&vector.VectorID, &vector.EntityID, &vector.EntityType, &embeddingStr,
 		&vector.Content, &vector.Model, &vector.ChunkIndex, &vector.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -62,14 +100,19 @@ func (r *VectorRepository) GetByID(ctx context.Context, vectorID string) (*Vecto
 		}
 		return nil, err
 	}
-	vector.Embedding = []float32(embedding)
+	
+	embedding, err := parseVectorFromPgvector(embeddingStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse embedding: %w", err)
+	}
+	vector.Embedding = embedding
 	return &vector, nil
 }
 
 // GetByEntityID retrieves all vectors for an entity
 func (r *VectorRepository) GetByEntityID(ctx context.Context, entityID, entityType string) ([]*Vector, error) {
 	query := `
-		SELECT vector_id, entity_id, entity_type, embedding, content, model, chunk_index, created_at
+		SELECT vector_id, entity_id, entity_type, embedding::text, content, model, chunk_index, created_at
 		FROM vectors WHERE entity_id = $1 AND entity_type = $2 ORDER BY chunk_index
 	`
 	rows, err := r.db.QueryContext(ctx, query, entityID, entityType)
@@ -81,14 +124,19 @@ func (r *VectorRepository) GetByEntityID(ctx context.Context, entityID, entityTy
 	var vectors []*Vector
 	for rows.Next() {
 		var vector Vector
-		var embedding pq.Float32Array
+		var embeddingStr string
 		err := rows.Scan(
-			&vector.VectorID, &vector.EntityID, &vector.EntityType, &embedding,
+			&vector.VectorID, &vector.EntityID, &vector.EntityType, &embeddingStr,
 			&vector.Content, &vector.Model, &vector.ChunkIndex, &vector.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
-		vector.Embedding = []float32(embedding)
+		
+		embedding, err := parseVectorFromPgvector(embeddingStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse embedding for vector %s: %w", vector.VectorID, err)
+		}
+		vector.Embedding = embedding
 		vectors = append(vectors, &vector)
 	}
 	return vectors, rows.Err()
@@ -97,7 +145,7 @@ func (r *VectorRepository) GetByEntityID(ctx context.Context, entityID, entityTy
 // GetByEntityType retrieves vectors filtered by entity type
 func (r *VectorRepository) GetByEntityType(ctx context.Context, entityType string, limit int) ([]*Vector, error) {
 	query := `
-		SELECT vector_id, entity_id, entity_type, embedding, content, model, chunk_index, created_at
+		SELECT vector_id, entity_id, entity_type, embedding::text, content, model, chunk_index, created_at
 		FROM vectors WHERE entity_type = $1 ORDER BY created_at DESC LIMIT $2
 	`
 	rows, err := r.db.QueryContext(ctx, query, entityType, limit)
@@ -109,14 +157,19 @@ func (r *VectorRepository) GetByEntityType(ctx context.Context, entityType strin
 	var vectors []*Vector
 	for rows.Next() {
 		var vector Vector
-		var embedding pq.Float32Array
+		var embeddingStr string
 		err := rows.Scan(
-			&vector.VectorID, &vector.EntityID, &vector.EntityType, &embedding,
+			&vector.VectorID, &vector.EntityID, &vector.EntityType, &embeddingStr,
 			&vector.Content, &vector.Model, &vector.ChunkIndex, &vector.CreatedAt)
 		if err != nil {
 			return nil, err
 		}
-		vector.Embedding = []float32(embedding)
+		
+		embedding, err := parseVectorFromPgvector(embeddingStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse embedding for vector %s: %w", vector.VectorID, err)
+		}
+		vector.Embedding = embedding
 		vectors = append(vectors, &vector)
 	}
 	return vectors, rows.Err()
@@ -126,11 +179,11 @@ func (r *VectorRepository) GetByEntityType(ctx context.Context, entityType strin
 func (r *VectorRepository) Update(ctx context.Context, vector *Vector) error {
 	query := `
 		UPDATE vectors 
-		SET embedding = $3, content = $4, model = $5, chunk_index = $6
+		SET embedding = $3::vector, content = $4, model = $5, chunk_index = $6
 		WHERE vector_id = $1 AND entity_id = $2
 	`
 	result, err := r.db.ExecContext(ctx, query,
-		vector.VectorID, vector.EntityID, pq.Array(vector.Embedding),
+		vector.VectorID, vector.EntityID, formatVectorForPgvector(vector.Embedding),
 		vector.Content, vector.Model, vector.ChunkIndex)
 	if err != nil {
 		return err
@@ -172,7 +225,7 @@ func (r *VectorRepository) BatchCreate(ctx context.Context, vectors []*Vector) e
 
 	query := `
 		INSERT INTO vectors (vector_id, entity_id, entity_type, embedding, content, model, chunk_index, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8)
 		ON CONFLICT (entity_id, entity_type, chunk_index) 
 		DO UPDATE SET 
 			embedding = EXCLUDED.embedding,
@@ -190,7 +243,7 @@ func (r *VectorRepository) BatchCreate(ctx context.Context, vectors []*Vector) e
 	for _, vector := range vectors {
 		vector.CreatedAt = now
 		_, err := stmt.ExecContext(ctx,
-			vector.VectorID, vector.EntityID, vector.EntityType, pq.Array(vector.Embedding),
+			vector.VectorID, vector.EntityID, vector.EntityType, formatVectorForPgvector(vector.Embedding),
 			vector.Content, vector.Model, vector.ChunkIndex, vector.CreatedAt)
 		if err != nil {
 			return fmt.Errorf("failed to insert vector %s: %w", vector.VectorID, err)
@@ -208,7 +261,7 @@ func (r *VectorRepository) BatchCreateTx(ctx context.Context, tx *sql.Tx, vector
 
 	query := `
 		INSERT INTO vectors (vector_id, entity_id, entity_type, embedding, content, model, chunk_index, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8)
 		ON CONFLICT (entity_id, entity_type, chunk_index) 
 		DO UPDATE SET 
 			embedding = EXCLUDED.embedding,
@@ -226,7 +279,7 @@ func (r *VectorRepository) BatchCreateTx(ctx context.Context, tx *sql.Tx, vector
 	for _, vector := range vectors {
 		vector.CreatedAt = now
 		_, err := stmt.ExecContext(ctx,
-			vector.VectorID, vector.EntityID, vector.EntityType, pq.Array(vector.Embedding),
+			vector.VectorID, vector.EntityID, vector.EntityType, formatVectorForPgvector(vector.Embedding),
 			vector.Content, vector.Model, vector.ChunkIndex, vector.CreatedAt)
 		if err != nil {
 			return fmt.Errorf("failed to insert vector %s: %w", vector.VectorID, err)
@@ -260,7 +313,7 @@ func (r *VectorRepository) SimilaritySearch(ctx context.Context, queryEmbedding 
 		LIMIT $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, pq.Array(queryEmbedding), entityType, limit)
+	rows, err := r.db.QueryContext(ctx, query, formatVectorForPgvector(queryEmbedding), entityType, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +348,7 @@ func (r *VectorRepository) SimilaritySearchWithFilters(ctx context.Context, quer
 		WHERE 1=1
 	`
 
-	args := []interface{}{pq.Array(queryEmbedding)}
+	args := []interface{}{formatVectorForPgvector(queryEmbedding)}
 	argIndex := 2
 
 	if filters.EntityType != "" {

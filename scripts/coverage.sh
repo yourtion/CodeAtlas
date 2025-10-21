@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 # Configuration
 COVERAGE_FILE="coverage.out"
 COVERAGE_HTML="coverage.html"
-COVERAGE_THRESHOLD=50  # Minimum coverage percentage
+COVERAGE_THRESHOLD=80  # Minimum coverage percentage
 
 # Function to print colored output
 print_info() {

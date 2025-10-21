@@ -28,45 +28,136 @@ build-init-db:
 
 # Test targets
 .PHONY: test
-test:
-	go test ./...
+test: test-unit
 
+# Unit tests only (no external dependencies - fast)
+.PHONY: test-unit
+test-unit:
+	@echo "Running unit tests (no external dependencies)..."
+	go test -short ./... -v
+
+# Integration tests only (requires database and external services)
+.PHONY: test-integration
+test-integration:
+	@echo "Running integration tests (requires database)..."
+	@echo "Make sure database is running: make docker-up"
+	go test ./pkg/models/... ./internal/indexer/... -v -run Integration || \
+	go test ./pkg/models/... ./internal/indexer/... -v
+
+# Integration tests with build tags
+.PHONY: test-integration-tagged
+test-integration-tagged:
+	@echo "Running integration tests with build tags..."
+	go test -tags=integration ./... -v
+
+# CLI integration tests (requires built binary)
+.PHONY: test-cli-integration
+test-cli-integration: build-cli
+	@echo "Running CLI integration tests..."
+	go test -tags=parse_tests ./tests/cli/... -v
+
+# All tests (unit + integration)
+.PHONY: test-all
+test-all:
+	@echo "Running all tests (unit + integration)..."
+	@echo "Make sure database is running: make docker-up"
+	go test ./... -v
+
+# Specific test suites
 .PHONY: test-cli
 test-cli:
-	go test ./tests/cli/... -v
+	@echo "Running CLI unit tests..."
+	go test ./cmd/cli/... ./tests/cli/... -short -v
 
 .PHONY: test-api
 test-api:
-	go test ./tests/api/... -v
+	@echo "Running API unit tests..."
+	go test ./cmd/api/... ./internal/api/... ./tests/api/... -short -v
 
 .PHONY: test-models
 test-models:
-	go test ./tests/models/... -v
+	@echo "Running model tests (requires database)..."
+	go test ./pkg/models/... -v
+
+.PHONY: test-parser
+test-parser:
+	@echo "Running parser unit tests..."
+	go test ./internal/parser/... -short -v
+
+.PHONY: test-indexer
+test-indexer:
+	@echo "Running indexer tests (requires database)..."
+	go test ./internal/indexer/... -v
 
 # Coverage targets
 .PHONY: test-coverage
-test-coverage:
-	go test ./... -coverprofile=coverage.out -covermode=atomic
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
+test-coverage: test-coverage-unit
 
+# Unit test coverage only (fast, no external dependencies)
+.PHONY: test-coverage-unit
+test-coverage-unit:
+	@echo "Generating unit test coverage report..."
+	go test -short ./... -coverprofile=coverage_unit.out -covermode=atomic
+	go tool cover -html=coverage_unit.out -o coverage_unit.html
+	@echo "Unit test coverage: $$(go tool cover -func=coverage_unit.out | tail -1 | awk '{print $$3}')"
+	@echo "Coverage report generated: coverage_unit.html"
+
+# Integration test coverage (requires database)
+.PHONY: test-coverage-integration
+test-coverage-integration:
+	@echo "Generating integration test coverage report..."
+	@echo "Make sure database is running: make docker-up"
+	go test ./pkg/models/... ./internal/indexer/... -coverprofile=coverage_integration.out -covermode=atomic
+	go tool cover -html=coverage_integration.out -o coverage_integration.html
+	@echo "Integration test coverage: $$(go tool cover -func=coverage_integration.out | tail -1 | awk '{print $$3}')"
+	@echo "Coverage report generated: coverage_integration.html"
+
+# Combined coverage (unit + integration)
+.PHONY: test-coverage-all
+test-coverage-all:
+	@echo "Generating combined test coverage report..."
+	@echo "Make sure database is running: make docker-up"
+	go test ./... -coverprofile=coverage_all.out -covermode=atomic
+	go tool cover -html=coverage_all.out -o coverage_all.html
+	@echo "Total coverage: $$(go tool cover -func=coverage_all.out | tail -1 | awk '{print $$3}')"
+	@echo "Coverage report generated: coverage_all.html"
+
+# Show coverage statistics
 .PHONY: test-coverage-func
 test-coverage-func:
-	go test ./... -coverprofile=coverage.out -covermode=atomic
-	go tool cover -func=coverage.out
+	@if [ -f coverage_unit.out ]; then \
+		echo "=== Unit Test Coverage ==="; \
+		go tool cover -func=coverage_unit.out | tail -20; \
+	fi
+	@if [ -f coverage_integration.out ]; then \
+		echo "\n=== Integration Test Coverage ==="; \
+		go tool cover -func=coverage_integration.out | tail -20; \
+	fi
+	@if [ -f coverage_all.out ]; then \
+		echo "\n=== Total Coverage ==="; \
+		go tool cover -func=coverage_all.out | tail -20; \
+	fi
 
+# Generate HTML report from existing coverage data
 .PHONY: test-coverage-report
 test-coverage-report:
-	@if [ ! -f coverage.out ]; then \
-		echo "No coverage data found. Run 'make test-coverage' first."; \
-		exit 1; \
+	@if [ -f coverage_unit.out ]; then \
+		go tool cover -html=coverage_unit.out -o coverage_unit.html; \
+		echo "Unit coverage report: coverage_unit.html"; \
 	fi
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
+	@if [ -f coverage_integration.out ]; then \
+		go tool cover -html=coverage_integration.out -o coverage_integration.html; \
+		echo "Integration coverage report: coverage_integration.html"; \
+	fi
+	@if [ -f coverage_all.out ]; then \
+		go tool cover -html=coverage_all.out -o coverage_all.html; \
+		echo "Total coverage report: coverage_all.html"; \
+	fi
 
+# Clean coverage files
 .PHONY: test-coverage-clean
 test-coverage-clean:
-	rm -f coverage.out coverage.html
+	rm -f coverage*.out coverage*.html
 
 # Run targets
 .PHONY: run-api
@@ -136,31 +227,60 @@ install:
 help:
 	@echo "Makefile for CodeAtlas"
 	@echo ""
-	@echo "Usage:"
-	@echo "  make build                - Build all binaries"
-	@echo "  make build-api            - Build API server"
-	@echo "  make build-cli            - Build CLI tool"
-	@echo "  make build-init-db        - Build database initialization tool"
-	@echo "  make test                 - Run all tests"
-	@echo "  make test-cli             - Run CLI tests"
-	@echo "  make test-api             - Run API tests"
-	@echo "  make test-models          - Run database model tests"
-	@echo "  make test-coverage        - Run tests with coverage and generate HTML report"
-	@echo "  make test-coverage-func   - Run tests with coverage and show function-level stats"
-	@echo "  make test-coverage-report - Generate HTML report from existing coverage data"
-	@echo "  make test-coverage-clean  - Remove coverage files"
-	@echo "  make run-api              - Build and run API server"
-	@echo "  make run-cli              - Build and run CLI tool"
-	@echo "  make init-db              - Initialize database schema"
-	@echo "  make init-db-stats        - Initialize database and show statistics"
-	@echo "  make init-db-with-index   - Initialize database with vector index"
-	@echo "  make clean                - Clean build artifacts and coverage files"
-	@echo "  make docker-up            - Start Docker services"
-	@echo "  make docker-down          - Stop Docker services"
-	@echo "  make devcontainer-build   - Build devcontainer images"
-	@echo "  make devcontainer-up      - Start devcontainer environment"
-	@echo "  make devcontainer-down    - Stop devcontainer environment"
-	@echo "  make devcontainer-logs    - View devcontainer logs"
-	@echo "  make devcontainer-clean   - Stop and remove devcontainer volumes"
-	@echo "  make install              - Install dependencies"
-	@echo "  make help                 - Show this help message"
+	@echo "Build Commands:"
+	@echo "  make build                     - Build all binaries"
+	@echo "  make build-api                 - Build API server"
+	@echo "  make build-cli                 - Build CLI tool"
+	@echo "  make build-init-db             - Build database initialization tool"
+	@echo ""
+	@echo "Test Commands:"
+	@echo "  make test                      - Run unit tests (default, fast)"
+	@echo "  make test-unit                 - Run unit tests only (no external dependencies)"
+	@echo "  make test-integration          - Run integration tests (requires database)"
+	@echo "  make test-integration-tagged   - Run integration tests with build tags"
+	@echo "  make test-cli-integration      - Run CLI integration tests (requires built binary)"
+	@echo "  make test-all                  - Run all tests (unit + integration)"
+	@echo "  make test-cli                  - Run CLI unit tests"
+	@echo "  make test-api                  - Run API unit tests"
+	@echo "  make test-models               - Run model tests (requires database)"
+	@echo "  make test-parser               - Run parser unit tests"
+	@echo "  make test-indexer              - Run indexer tests (requires database)"
+	@echo ""
+	@echo "Coverage Commands:"
+	@echo "  make test-coverage             - Generate unit test coverage report (default)"
+	@echo "  make test-coverage-unit        - Generate unit test coverage report"
+	@echo "  make test-coverage-integration - Generate integration test coverage report"
+	@echo "  make test-coverage-all         - Generate combined coverage report (unit + integration)"
+	@echo "  make test-coverage-func        - Show function-level coverage statistics"
+	@echo "  make test-coverage-report      - Generate HTML reports from existing coverage data"
+	@echo "  make test-coverage-clean       - Remove all coverage files"
+	@echo ""
+	@echo "Run Commands:"
+	@echo "  make run-api                   - Build and run API server"
+	@echo "  make run-cli                   - Build and run CLI tool"
+	@echo ""
+	@echo "Database Commands:"
+	@echo "  make init-db                   - Initialize database schema"
+	@echo "  make init-db-stats             - Initialize database and show statistics"
+	@echo "  make init-db-with-index        - Initialize database with vector index"
+	@echo ""
+	@echo "Docker Commands:"
+	@echo "  make docker-up                 - Start Docker services"
+	@echo "  make docker-down               - Stop Docker services"
+	@echo ""
+	@echo "DevContainer Commands:"
+	@echo "  make devcontainer-build        - Build devcontainer images"
+	@echo "  make devcontainer-up           - Start devcontainer environment"
+	@echo "  make devcontainer-down         - Stop devcontainer environment"
+	@echo "  make devcontainer-logs         - View devcontainer logs"
+	@echo "  make devcontainer-clean        - Stop and remove devcontainer volumes"
+	@echo ""
+	@echo "Other Commands:"
+	@echo "  make clean                     - Clean build artifacts and coverage files"
+	@echo "  make install                   - Install dependencies"
+	@echo "  make help                      - Show this help message"
+	@echo ""
+	@echo "Test Workflow:"
+	@echo "  1. Fast unit tests:            make test-unit"
+	@echo "  2. With database:              make docker-up && make test-all"
+	@echo "  3. Coverage report:            make test-coverage-all"
