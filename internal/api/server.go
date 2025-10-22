@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/yourtionguo/CodeAtlas/internal/api/handlers"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
@@ -14,6 +15,8 @@ type Server struct {
 	db             *models.DB
 	repoRepository *models.RepositoryRepository
 	fileRepository *models.FileRepository
+	indexHandler   *handlers.IndexHandler
+	repoHandler    *handlers.RepositoryHandler
 }
 
 // NewServer creates a new API server
@@ -22,6 +25,8 @@ func NewServer(db *models.DB) *Server {
 		db:             db,
 		repoRepository: models.NewRepositoryRepository(db),
 		fileRepository: models.NewFileRepository(db),
+		indexHandler:   handlers.NewIndexHandler(db),
+		repoHandler:    handlers.NewRepositoryHandler(db),
 	}
 }
 
@@ -30,15 +35,23 @@ func (s *Server) RegisterRoutes(r *gin.Engine) {
 	// Health check endpoint
 	r.GET("/health", s.healthCheck)
 
-	// Repository endpoints
-	r.POST("/api/v1/repositories", s.createRepository)
-	r.GET("/api/v1/repositories/:id", s.getRepository)
+	// API v1 routes
+	v1 := r.Group("/api/v1")
+	{
+		// Index endpoint
+		v1.POST("/index", s.indexHandler.Index)
 
-	// File endpoints
-	r.POST("/api/v1/files", s.createFile)
+		// Repository endpoints
+		v1.GET("/repositories", s.repoHandler.GetAll)
+		v1.GET("/repositories/:id", s.repoHandler.GetByID)
+		v1.POST("/repositories", s.createRepository)
 
-	// Commit endpoints
-	r.POST("/api/v1/commits", s.createCommit)
+		// File endpoints
+		v1.POST("/files", s.createFile)
+
+		// Commit endpoints
+		v1.POST("/commits", s.createCommit)
+	}
 }
 
 // healthCheck handles health check requests
