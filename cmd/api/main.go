@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/yourtionguo/CodeAtlas/internal/api"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
@@ -43,18 +44,59 @@ func main() {
 			stats.RepositoryCount, stats.FileCount, stats.SymbolCount, stats.EdgeCount)
 	}
 
+	// Load server configuration from environment
+	config := loadServerConfig()
+	log.Printf("Server configuration - Auth: %v, CORS Origins: %v", config.EnableAuth, config.CORSOrigins)
+
 	// Create API server
-	server := api.NewServer(db)
+	server := api.NewServer(db, config)
 
-	// Create Gin router
-	r := gin.Default()
+	// Setup router with middleware
+	r := server.SetupRouter()
 
-	// Register routes
-	server.RegisterRoutes(r)
+	// Get port from environment or use default
+	port := os.Getenv("API_PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	// Start server
-	log.Println("Starting CodeAtlas API server on :8080")
-	if err := r.Run(":8080"); err != nil {
+	log.Printf("Starting CodeAtlas API server on :%s", port)
+	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
+}
+
+// loadServerConfig loads server configuration from environment variables
+func loadServerConfig() *api.ServerConfig {
+	config := &api.ServerConfig{
+		EnableAuth:  false,
+		AuthTokens:  []string{},
+		CORSOrigins: []string{"*"},
+	}
+
+	// Check if authentication is enabled
+	if os.Getenv("ENABLE_AUTH") == "true" {
+		config.EnableAuth = true
+
+		// Load auth tokens from environment
+		tokensEnv := os.Getenv("AUTH_TOKENS")
+		if tokensEnv != "" {
+			config.AuthTokens = strings.Split(tokensEnv, ",")
+			for i := range config.AuthTokens {
+				config.AuthTokens[i] = strings.TrimSpace(config.AuthTokens[i])
+			}
+		}
+	}
+
+	// Load CORS origins from environment
+	originsEnv := os.Getenv("CORS_ORIGINS")
+	if originsEnv != "" {
+		config.CORSOrigins = strings.Split(originsEnv, ",")
+		for i := range config.CORSOrigins {
+			config.CORSOrigins[i] = strings.TrimSpace(config.CORSOrigins[i])
+		}
+	}
+
+	return config
 }
