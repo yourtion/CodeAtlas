@@ -153,6 +153,30 @@ pnpm install
 pnpm dev
 ```
 
+### API 文档
+
+完整的 API 文档和使用指南：
+
+- **[API 文档总览](./docs/api/README.md)** - API 文档索引
+- **[快速开始](./docs/api/quick-start.md)** - 快速上手指南
+- **[API 参考](./docs/api/api-reference.md)** - 完整的端点文档
+- **[中间件配置](./docs/api/middleware-and-configuration.md)** - 认证、CORS、日志配置
+- **[HTTP 示例](./example.http)** - 可直接使用的 HTTP 请求示例
+
+**快速测试：**
+
+```bash
+# 健康检查
+curl http://localhost:8080/health
+
+# 列出仓库
+curl http://localhost:8080/api/v1/repositories
+
+# 带认证的请求
+curl -H "Authorization: Bearer your-token" \
+  http://localhost:8080/api/v1/repositories
+```
+
 ### CLI 工具使用
 
 #### Parse 命令 - 代码解析

@@ -1,0 +1,351 @@
+### CodeAtlas API Examples
+### Use this file with REST Client extension in VS Code or IntelliJ HTTP Client
+
+### Variables
+@baseUrl = http://localhost:8080
+@token = your-token-here
+@repoId = 7f6d4381-6463-4dc4-b5e3-22e9778fcb87
+@symbolId = replace-with-actual-symbol-id
+@fileId = replace-with-actual-file-id
+
+###############################################################################
+### Health Check
+###############################################################################
+
+### Health Check (No Auth Required)
+GET {{baseUrl}}/health
+
+###############################################################################
+### Repositories
+###############################################################################
+
+### List All Repositories
+GET {{baseUrl}}/api/v1/repositories
+Authorization: Bearer {{token}}
+
+###
+
+### Get Repository by ID
+GET {{baseUrl}}/api/v1/repositories/{{repoId}}
+Authorization: Bearer {{token}}
+
+###
+
+### Create Repository
+POST {{baseUrl}}/api/v1/repositories
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "my-awesome-project",
+  "url": "https://github.com/user/my-awesome-project",
+  "branch": "main"
+}
+
+###############################################################################
+### Index
+###############################################################################
+
+### Index Code (Minimal Example)
+POST {{baseUrl}}/api/v1/index
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "repo_name": "example-project",
+  "repo_url": "https://github.com/user/example",
+  "branch": "main",
+  "parse_output": {
+    "files": [
+      {
+        "path": "src/main.go",
+        "language": "go",
+        "size": 1024,
+        "checksum": "sha256:abc123",
+        "symbols": [
+          {
+            "name": "main",
+            "kind": "function",
+            "signature": "func main()",
+            "start_line": 10,
+            "end_line": 20,
+            "docstring": "Main entry point of the application"
+          }
+        ],
+        "edges": []
+      }
+    ]
+  }
+}
+
+###
+
+### Index Code (Full Example with Options)
+POST {{baseUrl}}/api/v1/index
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "repo_name": "codeatlas",
+  "repo_url": "https://github.com/yourtionguo/CodeAtlas",
+  "branch": "main",
+  "commit_hash": "abc123def456",
+  "parse_output": {
+    "files": [
+      {
+        "path": "internal/api/middleware/auth.go",
+        "language": "go",
+        "size": 2048,
+        "checksum": "sha256:def456",
+        "symbols": [
+          {
+            "name": "Auth",
+            "kind": "function",
+            "signature": "func Auth(config *AuthConfig) gin.HandlerFunc",
+            "start_line": 25,
+            "end_line": 78,
+            "docstring": "Auth returns an authentication middleware",
+            "semantic_summary": "Validates Bearer tokens and returns 401 for invalid requests"
+          },
+          {
+            "name": "AuthConfig",
+            "kind": "type",
+            "signature": "type AuthConfig struct",
+            "start_line": 10,
+            "end_line": 13,
+            "docstring": "AuthConfig holds authentication configuration"
+          }
+        ],
+        "edges": [
+          {
+            "source_symbol": "Auth",
+            "target_symbol": "gin.HandlerFunc",
+            "edge_type": "reference"
+          }
+        ]
+      },
+      {
+        "path": "internal/api/server.go",
+        "language": "go",
+        "size": 3072,
+        "checksum": "sha256:ghi789",
+        "symbols": [
+          {
+            "name": "SetupRouter",
+            "kind": "function",
+            "signature": "func (s *Server) SetupRouter() *gin.Engine",
+            "start_line": 45,
+            "end_line": 65,
+            "docstring": "SetupRouter creates and configures the Gin router"
+          }
+        ],
+        "edges": [
+          {
+            "source_symbol": "SetupRouter",
+            "target_symbol": "Auth",
+            "edge_type": "call"
+          }
+        ]
+      }
+    ]
+  },
+  "options": {
+    "incremental": false,
+    "skip_vectors": false,
+    "batch_size": 100,
+    "worker_count": 4,
+    "embedding_model": "text-embedding-ada-002"
+  }
+}
+
+###
+
+### Index Code (Incremental Update)
+POST {{baseUrl}}/api/v1/index
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "repo_id": "{{repoId}}",
+  "repo_name": "example-project",
+  "branch": "main",
+  "commit_hash": "new-commit-hash",
+  "parse_output": {
+    "files": [
+      {
+        "path": "src/updated.go",
+        "language": "go",
+        "size": 512,
+        "checksum": "sha256:updated123",
+        "symbols": [
+          {
+            "name": "newFunction",
+            "kind": "function",
+            "signature": "func newFunction() error",
+            "start_line": 5,
+            "end_line": 15
+          }
+        ],
+        "edges": []
+      }
+    ]
+  },
+  "options": {
+    "incremental": true,
+    "skip_vectors": false
+  }
+}
+
+###############################################################################
+### Search
+###############################################################################
+
+### Semantic Search (Note: embedding vector required)
+POST {{baseUrl}}/api/v1/search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "authentication middleware",
+  "embedding": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+  "limit": 10
+}
+
+###
+
+### Search with Filters
+POST {{baseUrl}}/api/v1/search
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "database connection",
+  "embedding": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+  "repo_id": "{{repoId}}",
+  "language": "go",
+  "kind": ["function", "class"],
+  "limit": 5
+}
+
+###############################################################################
+### Relationships
+###############################################################################
+
+### Get Symbol Callers
+GET {{baseUrl}}/api/v1/symbols/{{symbolId}}/callers
+Authorization: Bearer {{token}}
+
+###
+
+### Get Symbol Callees
+GET {{baseUrl}}/api/v1/symbols/{{symbolId}}/callees
+Authorization: Bearer {{token}}
+
+###
+
+### Get Symbol Dependencies
+GET {{baseUrl}}/api/v1/symbols/{{symbolId}}/dependencies
+Authorization: Bearer {{token}}
+
+###
+
+### Get File Symbols
+GET {{baseUrl}}/api/v1/files/{{fileId}}/symbols
+Authorization: Bearer {{token}}
+
+###############################################################################
+### Files
+###############################################################################
+
+### Create File
+POST {{baseUrl}}/api/v1/files
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "repository_id": "{{repoId}}",
+  "path": "src/utils/helper.go",
+  "language": "go",
+  "size": 512
+}
+
+###############################################################################
+### Commits
+###############################################################################
+
+### Create Commit (Not Implemented)
+POST {{baseUrl}}/api/v1/commits
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "repository_id": 1,
+  "hash": "abc123def456789",
+  "author": "John Doe",
+  "email": "john@example.com",
+  "message": "Add new feature",
+  "timestamp": "2025-10-22T10:00:00Z"
+}
+
+###############################################################################
+### Error Cases
+###############################################################################
+
+### Unauthorized Request (No Token)
+GET {{baseUrl}}/api/v1/repositories
+
+###
+
+### Invalid Token
+GET {{baseUrl}}/api/v1/repositories
+Authorization: Bearer invalid-token-here
+
+###
+
+### Invalid Request Body
+POST {{baseUrl}}/api/v1/index
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "repo_name": "test"
+}
+
+###
+
+### Not Found
+GET {{baseUrl}}/api/v1/repositories/non-existent-id
+Authorization: Bearer {{token}}
+
+###############################################################################
+### CORS Preflight
+###############################################################################
+
+### Preflight Request
+OPTIONS {{baseUrl}}/api/v1/repositories
+Origin: http://localhost:3000
+Access-Control-Request-Method: GET
+Access-Control-Request-Headers: Authorization
+
+###############################################################################
+### Development Helpers
+###############################################################################
+
+### Quick Health Check Loop (for monitoring)
+# @name healthCheck
+GET {{baseUrl}}/health
+
+###
+
+### Get All Repos and Extract First ID
+# @name getAllRepos
+GET {{baseUrl}}/api/v1/repositories
+Authorization: Bearer {{token}}
+
+###
+
+### Use extracted repo ID from previous request
+# Requires REST Client extension variable extraction
+# @repoId = {{getAllRepos.response.body.repositories[0].repo_id}}
+GET {{baseUrl}}/api/v1/repositories/{{repoId}}
+Authorization: Bearer {{token}}
