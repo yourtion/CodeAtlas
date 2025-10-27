@@ -20,7 +20,7 @@ build-api:
 
 .PHONY: build-cli
 build-cli:
-	go build -o ${CLI_BINARY} cmd/cli/main.go
+	go build -o ${CLI_BINARY} cmd/cli/*.go
 
 .PHONY: build-init-db
 build-init-db:

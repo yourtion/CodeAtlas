@@ -39,6 +39,9 @@ func main() {
 		Usage:   "CodeAtlas CLI tool for code repository analysis",
 		Version: Version,
 		Commands: []*cli.Command{
+			createParseCommand(),
+			createIndexCommand(),
+			createSearchCommand(),
 			{
 				Name:  "upload",
 				Usage: "Upload repository to CodeAtlas server",
