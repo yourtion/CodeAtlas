@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 )
 
 // SchemaManager handles database schema initialization and validation
@@ -245,29 +244,4 @@ type DatabaseStats struct {
 	EdgeCount       int64
 	VectorCount     int64
 	DatabaseSize    string
-}
-
-// WaitForDatabase waits for the database to be ready with retries
-func WaitForDatabase(maxRetries int, retryDelay time.Duration) (*DB, error) {
-	var db *DB
-	var err error
-
-	for i := 0; i < maxRetries; i++ {
-		db, err = NewDB()
-		if err == nil {
-			// Test the connection
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			if err := db.PingContext(ctx); err == nil {
-				log.Println("Database connection established")
-				return db, nil
-			}
-		}
-
-		log.Printf("Database not ready (attempt %d/%d): %v", i+1, maxRetries, err)
-		time.Sleep(retryDelay)
-	}
-
-	return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", maxRetries, err)
 }
