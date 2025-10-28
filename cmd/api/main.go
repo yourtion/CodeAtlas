@@ -2,19 +2,26 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/yourtionguo/CodeAtlas/internal/api"
+	"github.com/yourtionguo/CodeAtlas/internal/config"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
 func main() {
+	// Load configuration
+	log.Println("Loading configuration...")
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		log.Fatal("Failed to load configuration:", err)
+	}
+
 	// Wait for database to be ready with retries
 	log.Println("Connecting to database...")
-	db, err := models.WaitForDatabase(30, 2*time.Second)
+	db, err := models.NewDBWithConfig(&cfg.Database)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
@@ -44,59 +51,24 @@ func main() {
 			stats.RepositoryCount, stats.FileCount, stats.SymbolCount, stats.EdgeCount)
 	}
 
-	// Load server configuration from environment
-	config := loadServerConfig()
-	log.Printf("Server configuration - Auth: %v, CORS Origins: %v", config.EnableAuth, config.CORSOrigins)
+	// Create server configuration from loaded config
+	serverConfig := &api.ServerConfig{
+		EnableAuth:  cfg.API.EnableAuth,
+		AuthTokens:  cfg.API.AuthTokens,
+		CORSOrigins: cfg.API.CORSOrigins,
+	}
+	log.Printf("Server configuration - Auth: %v, CORS Origins: %v", serverConfig.EnableAuth, serverConfig.CORSOrigins)
 
 	// Create API server
-	server := api.NewServer(db, config)
+	server := api.NewServer(db, serverConfig)
 
 	// Setup router with middleware
 	r := server.SetupRouter()
 
-	// Get port from environment or use default
-	port := os.Getenv("API_PORT")
-	if port == "" {
-		port = "8080"
-	}
-
 	// Start server
-	log.Printf("Starting CodeAtlas API server on :%s", port)
-	if err := r.Run(":" + port); err != nil {
+	address := cfg.API.Address()
+	log.Printf("Starting CodeAtlas API server on %s", address)
+	if err := r.Run(fmt.Sprintf(":%d", cfg.API.Port)); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
-}
-
-// loadServerConfig loads server configuration from environment variables
-func loadServerConfig() *api.ServerConfig {
-	config := &api.ServerConfig{
-		EnableAuth:  false,
-		AuthTokens:  []string{},
-		CORSOrigins: []string{"*"},
-	}
-
-	// Check if authentication is enabled
-	if os.Getenv("ENABLE_AUTH") == "true" {
-		config.EnableAuth = true
-
-		// Load auth tokens from environment
-		tokensEnv := os.Getenv("AUTH_TOKENS")
-		if tokensEnv != "" {
-			config.AuthTokens = strings.Split(tokensEnv, ",")
-			for i := range config.AuthTokens {
-				config.AuthTokens[i] = strings.TrimSpace(config.AuthTokens[i])
-			}
-		}
-	}
-
-	// Load CORS origins from environment
-	originsEnv := os.Getenv("CORS_ORIGINS")
-	if originsEnv != "" {
-		config.CORSOrigins = strings.Split(originsEnv, ",")
-		for i := range config.CORSOrigins {
-			config.CORSOrigins[i] = strings.TrimSpace(config.CORSOrigins[i])
-		}
-	}
-
-	return config
 }

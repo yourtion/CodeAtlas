@@ -153,6 +153,39 @@ pnpm install
 pnpm dev
 ```
 
+### 配置管理
+
+CodeAtlas 使用环境变量进行配置，提供合理的默认值，开箱即用。
+
+**快速配置：**
+
+```bash
+# 复制示例配置文件
+cp .env.example .env
+
+# 编辑配置（可选）
+vim .env
+
+# 使用配置启动
+source .env
+make run-api
+```
+
+**主要配置项：**
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `DB_HOST` | `localhost` | 数据库主机 |
+| `DB_PORT` | `5432` | 数据库端口 |
+| `API_PORT` | `8080` | API 服务端口 |
+| `INDEXER_BATCH_SIZE` | `100` | 索引批处理大小 |
+| `INDEXER_WORKER_COUNT` | `4` | 并发工作线程数 |
+| `EMBEDDING_MODEL` | `text-embedding-qwen3-embedding-0.6b` | 向量模型 |
+
+**完整配置文档：**
+- **[配置指南](./docs/configuration.md)** - 完整的配置选项说明
+- **[.env.example](./.env.example)** - 配置文件示例
+
 ### API 文档
 
 完整的 API 文档和使用指南：
