@@ -19,6 +19,25 @@ type Indexer struct {
 	embedder     Embedder
 	config       *IndexerConfig
 	db           *models.DB
+	logger       IndexerLogger
+}
+
+// IndexerLogger defines the logging interface for the indexer
+type IndexerLogger interface {
+	Info(msg string, args ...interface{})
+	Warn(msg string, args ...interface{})
+	Error(msg string, args ...interface{})
+	Debug(msg string, args ...interface{})
+	InfoWithFields(msg string, fields ...LogField)
+	WarnWithFields(msg string, fields ...LogField)
+	ErrorWithFields(msg string, err error, fields ...LogField)
+	DebugWithFields(msg string, fields ...LogField)
+}
+
+// LogField represents a structured logging field
+type LogField struct {
+	Key   string
+	Value interface{}
 }
 
 // IndexerConfig contains configuration options for the indexer
@@ -57,8 +76,17 @@ func DefaultIndexerConfig() *IndexerConfig {
 
 // NewIndexer creates a new indexer instance
 func NewIndexer(db *models.DB, config *IndexerConfig) *Indexer {
+	return NewIndexerWithLogger(db, config, &noOpLogger{})
+}
+
+// NewIndexerWithLogger creates a new indexer instance with a custom logger
+func NewIndexerWithLogger(db *models.DB, config *IndexerConfig, logger IndexerLogger) *Indexer {
 	if config == nil {
 		config = DefaultIndexerConfig()
+	}
+
+	if logger == nil {
+		logger = &noOpLogger{}
 	}
 
 	// Create validator
@@ -99,8 +127,21 @@ func NewIndexer(db *models.DB, config *IndexerConfig) *Indexer {
 		embedder:     embedder,
 		config:       config,
 		db:           db,
+		logger:       logger,
 	}
 }
+
+// noOpLogger is a no-op logger implementation
+type noOpLogger struct{}
+
+func (l *noOpLogger) Info(msg string, args ...interface{})                          {}
+func (l *noOpLogger) Warn(msg string, args ...interface{})                          {}
+func (l *noOpLogger) Error(msg string, args ...interface{})                         {}
+func (l *noOpLogger) Debug(msg string, args ...interface{})                         {}
+func (l *noOpLogger) InfoWithFields(msg string, fields ...LogField)                 {}
+func (l *noOpLogger) WarnWithFields(msg string, fields ...LogField)                 {}
+func (l *noOpLogger) ErrorWithFields(msg string, err error, fields ...LogField)     {}
+func (l *noOpLogger) DebugWithFields(msg string, fields ...LogField)                {}
 
 // IndexResult contains the results of an indexing operation
 type IndexResult struct {
@@ -125,12 +166,24 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		Summary: make(map[string]interface{}),
 	}
 
+	idx.logger.InfoWithFields("starting indexing operation",
+		LogField{Key: "repo_id", Value: idx.config.RepoID},
+		LogField{Key: "repo_name", Value: idx.config.RepoName},
+		LogField{Key: "files_count", Value: len(input.Files)},
+		LogField{Key: "relationships_count", Value: len(input.Relationships)},
+	)
+
 	// Collect errors throughout the process
 	errorCollector := NewErrorCollector()
 
 	// Step 1: Validate input
+	idx.logger.Debug("validating input")
 	validationResult := idx.validator.Validate(input)
 	if validationResult.HasErrors() {
+		idx.logger.ErrorWithFields("validation failed", nil,
+			LogField{Key: "error_count", Value: validationResult.ErrorCount()},
+			LogField{Key: "repo_id", Value: idx.config.RepoID},
+		)
 		for _, valErr := range validationResult.Errors {
 			errorCollector.Add(NewValidationError(
 				valErr.Message,
@@ -144,9 +197,16 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		result.Duration = time.Since(startTime)
 		return result, fmt.Errorf("validation failed with %d errors", validationResult.ErrorCount())
 	}
+	idx.logger.InfoWithFields("validation completed successfully",
+		LogField{Key: "repo_id", Value: idx.config.RepoID},
+	)
 
 	// Step 2: Write repository metadata
+	idx.logger.Debug("writing repository metadata")
 	if err := idx.writeRepository(ctx); err != nil {
+		idx.logger.ErrorWithFields("failed to write repository metadata", err,
+			LogField{Key: "repo_id", Value: idx.config.RepoID},
+		)
 		errorCollector.Add(NewDatabaseError(
 			"failed to write repository metadata",
 			idx.config.RepoID,
@@ -159,16 +219,32 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		result.Duration = time.Since(startTime)
 		return result, err
 	}
+	idx.logger.InfoWithFields("repository metadata written",
+		LogField{Key: "repo_id", Value: idx.config.RepoID},
+	)
 
 	// Step 3: Process files (with incremental support)
 	filesToProcess := input.Files
 	if idx.config.Incremental {
+		idx.logger.Debug("filtering changed files for incremental indexing")
 		filesToProcess = idx.filterChangedFiles(ctx, input.Files)
+		idx.logger.InfoWithFields("incremental filtering completed",
+			LogField{Key: "total_files", Value: len(input.Files)},
+			LogField{Key: "changed_files", Value: len(filesToProcess)},
+			LogField{Key: "skipped_files", Value: len(input.Files) - len(filesToProcess)},
+		)
 	}
 
 	// Step 4: Write data to database
+	idx.logger.InfoWithFields("writing data to database",
+		LogField{Key: "files_to_process", Value: len(filesToProcess)},
+		LogField{Key: "relationships", Value: len(input.Relationships)},
+	)
 	writeResult, err := idx.writeData(ctx, filesToProcess, input.Relationships)
 	if err != nil {
+		idx.logger.ErrorWithFields("failed to write data", err,
+			LogField{Key: "repo_id", Value: idx.config.RepoID},
+		)
 		errorCollector.Add(NewDatabaseError(
 			"failed to write data",
 			"",
@@ -182,8 +258,22 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 	result.NodesCreated = writeResult.NodesCreated
 	result.EdgesCreated = writeResult.EdgesCreated
 
+	idx.logger.InfoWithFields("data written to database",
+		LogField{Key: "files_processed", Value: writeResult.FilesProcessed},
+		LogField{Key: "symbols_created", Value: writeResult.SymbolsCreated},
+		LogField{Key: "nodes_created", Value: writeResult.NodesCreated},
+		LogField{Key: "edges_created", Value: writeResult.EdgesCreated},
+		LogField{Key: "write_errors", Value: len(writeResult.Errors)},
+	)
+
 	// Collect write errors
 	for _, writeErr := range writeResult.Errors {
+		idx.logger.WarnWithFields("write error occurred",
+			LogField{Key: "entity_type", Value: writeErr.EntityType},
+			LogField{Key: "entity_id", Value: writeErr.EntityID},
+			LogField{Key: "message", Value: writeErr.Message},
+			LogField{Key: "retryable", Value: writeErr.Retryable},
+		)
 		errorCollector.Add(NewDatabaseError(
 			writeErr.Message,
 			writeErr.EntityID,
@@ -195,12 +285,24 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 
 	// Step 5: Build graph (async, non-blocking)
 	if idx.graphBuilder != nil {
+		idx.logger.Info("building knowledge graph")
 		graphResult := idx.buildGraph(ctx, filesToProcess, input.Relationships)
 		result.Summary["graph_nodes_created"] = graphResult.NodesCreated
 		result.Summary["graph_edges_created"] = graphResult.EdgesCreated
 
+		idx.logger.InfoWithFields("knowledge graph built",
+			LogField{Key: "nodes_created", Value: graphResult.NodesCreated},
+			LogField{Key: "edges_created", Value: graphResult.EdgesCreated},
+			LogField{Key: "graph_errors", Value: len(graphResult.Errors)},
+		)
+
 		// Collect graph errors (non-fatal)
 		for _, graphErr := range graphResult.Errors {
+			idx.logger.WarnWithFields("graph error occurred",
+				LogField{Key: "entity_type", Value: graphErr.EntityType},
+				LogField{Key: "entity_id", Value: graphErr.EntityID},
+				LogField{Key: "message", Value: graphErr.Message},
+			)
 			errorCollector.Add(NewGraphError(
 				graphErr.Message,
 				graphErr.EntityID,
@@ -212,11 +314,21 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 
 	// Step 6: Generate embeddings (async, optional)
 	if idx.embedder != nil && !idx.config.SkipVectors {
+		idx.logger.Info("generating vector embeddings")
 		embedResult := idx.generateEmbeddings(ctx, filesToProcess)
 		result.VectorsCreated = embedResult.VectorsCreated
 
+		idx.logger.InfoWithFields("vector embeddings generated",
+			LogField{Key: "vectors_created", Value: embedResult.VectorsCreated},
+			LogField{Key: "embedding_errors", Value: len(embedResult.Errors)},
+		)
+
 		// Collect embedding errors (non-fatal)
 		for _, embedErr := range embedResult.Errors {
+			idx.logger.WarnWithFields("embedding error occurred",
+				LogField{Key: "entity_id", Value: embedErr.EntityID},
+				LogField{Key: "message", Value: embedErr.Message},
+			)
 			errorCollector.Add(NewEmbeddingError(
 				embedErr.Message,
 				embedErr.EntityID,
@@ -236,17 +348,40 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		nonRetryable := errorCollector.FilterNonRetryable()
 		if len(nonRetryable) > 0 {
 			result.Status = "partial_success"
+			idx.logger.WarnWithFields("indexing completed with errors",
+				LogField{Key: "status", Value: result.Status},
+				LogField{Key: "total_errors", Value: errorCollector.Count()},
+				LogField{Key: "non_retryable_errors", Value: len(nonRetryable)},
+			)
 		} else {
 			result.Status = "success_with_warnings"
+			idx.logger.InfoWithFields("indexing completed with warnings",
+				LogField{Key: "status", Value: result.Status},
+				LogField{Key: "total_warnings", Value: errorCollector.Count()},
+			)
 		}
 	} else {
 		result.Status = "success"
+		idx.logger.InfoWithFields("indexing completed successfully",
+			LogField{Key: "status", Value: result.Status},
+		)
 	}
 
 	// Add summary statistics
 	result.Summary["total_errors"] = errorCollector.Count()
 	result.Summary["error_types"] = errorCollector.Summary()
 	result.Summary["validation_errors"] = validationResult.ErrorCount()
+
+	idx.logger.InfoWithFields("indexing operation completed",
+		LogField{Key: "repo_id", Value: idx.config.RepoID},
+		LogField{Key: "status", Value: result.Status},
+		LogField{Key: "duration", Value: result.Duration},
+		LogField{Key: "files_processed", Value: result.FilesProcessed},
+		LogField{Key: "symbols_created", Value: result.SymbolsCreated},
+		LogField{Key: "edges_created", Value: result.EdgesCreated},
+		LogField{Key: "vectors_created", Value: result.VectorsCreated},
+		LogField{Key: "total_errors", Value: errorCollector.Count()},
+	)
 
 	return result, nil
 }

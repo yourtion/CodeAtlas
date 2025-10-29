@@ -3,52 +3,93 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"time"
 
 	"github.com/yourtionguo/CodeAtlas/internal/api"
 	"github.com/yourtionguo/CodeAtlas/internal/config"
+	"github.com/yourtionguo/CodeAtlas/internal/utils"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
 func main() {
+	// Check for verbose flag
+	verbose := false
+	for _, arg := range os.Args {
+		if arg == "-v" || arg == "--verbose" {
+			verbose = true
+			break
+		}
+	}
+
+	// Create logger
+	logger := utils.NewLogger(verbose)
+
 	// Load configuration
-	log.Println("Loading configuration...")
+	logger.Info("Loading configuration...")
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Fatal("Failed to load configuration:", err)
+		logger.Error("Failed to load configuration: %v", err)
+		os.Exit(1)
 	}
+	logger.InfoWithFields("Configuration loaded",
+		utils.Field{Key: "api_port", Value: cfg.API.Port},
+		utils.Field{Key: "api_host", Value: cfg.API.Host},
+		utils.Field{Key: "db_host", Value: cfg.Database.Host},
+		utils.Field{Key: "db_port", Value: cfg.Database.Port},
+		utils.Field{Key: "db_name", Value: cfg.Database.Database},
+	)
 
 	// Wait for database to be ready with retries
-	log.Println("Connecting to database...")
+	logger.Info("Connecting to database...")
 	db, err := models.NewDBWithConfig(&cfg.Database)
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		logger.ErrorWithFields("Failed to connect to database", err,
+			utils.Field{Key: "db_host", Value: cfg.Database.Host},
+			utils.Field{Key: "db_port", Value: cfg.Database.Port},
+			utils.Field{Key: "db_name", Value: cfg.Database.Database},
+		)
+		os.Exit(1)
 	}
 	defer db.Close()
+	logger.InfoWithFields("Database connection established",
+		utils.Field{Key: "db_host", Value: cfg.Database.Host},
+		utils.Field{Key: "db_name", Value: cfg.Database.Database},
+	)
 
 	// Initialize database schema
-	log.Println("Initializing database schema...")
+	logger.Info("Initializing database schema...")
 	sm := models.NewSchemaManager(db)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := sm.InitializeSchema(ctx); err != nil {
-		log.Fatal("Failed to initialize database schema:", err)
+		logger.ErrorWithFields("Failed to initialize database schema", err)
+		os.Exit(1)
 	}
+	logger.Info("Database schema initialized successfully")
 
 	// Run health check
+	logger.Debug("Running database health check...")
 	if err := sm.HealthCheck(ctx); err != nil {
-		log.Fatal("Database health check failed:", err)
+		logger.ErrorWithFields("Database health check failed", err)
+		os.Exit(1)
 	}
+	logger.Info("Database health check passed")
 
 	// Log database statistics
 	stats, err := sm.GetDatabaseStats(ctx)
 	if err != nil {
-		log.Printf("Warning: failed to get database stats: %v", err)
+		logger.WarnWithFields("Failed to get database stats",
+			utils.Field{Key: "error", Value: err.Error()},
+		)
 	} else {
-		log.Printf("Database ready - Repos: %d, Files: %d, Symbols: %d, Edges: %d",
-			stats.RepositoryCount, stats.FileCount, stats.SymbolCount, stats.EdgeCount)
+		logger.InfoWithFields("Database statistics",
+			utils.Field{Key: "repositories", Value: stats.RepositoryCount},
+			utils.Field{Key: "files", Value: stats.FileCount},
+			utils.Field{Key: "symbols", Value: stats.SymbolCount},
+			utils.Field{Key: "edges", Value: stats.EdgeCount},
+		)
 	}
 
 	// Create server configuration from loaded config
@@ -57,7 +98,11 @@ func main() {
 		AuthTokens:  cfg.API.AuthTokens,
 		CORSOrigins: cfg.API.CORSOrigins,
 	}
-	log.Printf("Server configuration - Auth: %v, CORS Origins: %v", serverConfig.EnableAuth, serverConfig.CORSOrigins)
+	logger.InfoWithFields("Server configuration",
+		utils.Field{Key: "auth_enabled", Value: serverConfig.EnableAuth},
+		utils.Field{Key: "cors_origins", Value: serverConfig.CORSOrigins},
+		utils.Field{Key: "auth_tokens_count", Value: len(serverConfig.AuthTokens)},
+	)
 
 	// Create API server
 	server := api.NewServer(db, serverConfig)
@@ -67,8 +112,16 @@ func main() {
 
 	// Start server
 	address := cfg.API.Address()
-	log.Printf("Starting CodeAtlas API server on %s", address)
+	logger.InfoWithFields("Starting CodeAtlas API server",
+		utils.Field{Key: "address", Value: address},
+		utils.Field{Key: "port", Value: cfg.API.Port},
+		utils.Field{Key: "host", Value: cfg.API.Host},
+	)
+
 	if err := r.Run(fmt.Sprintf(":%d", cfg.API.Port)); err != nil {
-		log.Fatal("Failed to start server:", err)
+		logger.ErrorWithFields("Failed to start server", err,
+			utils.Field{Key: "address", Value: address},
+		)
+		os.Exit(1)
 	}
 }

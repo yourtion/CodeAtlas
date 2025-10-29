@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
+	"time"
 )
 
 // Logger provides structured logging with different levels
@@ -13,6 +15,12 @@ type Logger struct {
 	warnLog *log.Logger
 	errLog  *log.Logger
 	dbgLog  *log.Logger
+}
+
+// Field represents a structured logging field
+type Field struct {
+	Key   string
+	Value interface{}
 }
 
 // NewLogger creates a new Logger instance
@@ -86,4 +94,66 @@ func (l *Logger) Debugf(format string, args ...interface{}) {
 		return
 	}
 	l.dbgLog.Println(fmt.Sprintf(format, args...))
+}
+
+// InfoWithFields logs an informational message with structured fields
+func (l *Logger) InfoWithFields(msg string, fields ...Field) {
+	l.infoLog.Println(l.formatWithFields(msg, fields...))
+}
+
+// WarnWithFields logs a warning message with structured fields
+func (l *Logger) WarnWithFields(msg string, fields ...Field) {
+	l.warnLog.Println(l.formatWithFields(msg, fields...))
+}
+
+// ErrorWithFields logs an error message with structured fields
+func (l *Logger) ErrorWithFields(msg string, err error, fields ...Field) {
+	if err != nil {
+		fields = append(fields, Field{Key: "error", Value: err.Error()})
+	}
+	l.errLog.Println(l.formatWithFields(msg, fields...))
+}
+
+// DebugWithFields logs a debug message with structured fields (only if verbose mode is enabled)
+func (l *Logger) DebugWithFields(msg string, fields ...Field) {
+	if !l.verbose {
+		return
+	}
+	l.dbgLog.Println(l.formatWithFields(msg, fields...))
+}
+
+// formatWithFields formats a message with structured fields
+func (l *Logger) formatWithFields(msg string, fields ...Field) string {
+	if len(fields) == 0 {
+		return msg
+	}
+
+	var parts []string
+	parts = append(parts, msg)
+
+	for _, field := range fields {
+		parts = append(parts, fmt.Sprintf("%s=%v", field.Key, l.formatValue(field.Value)))
+	}
+
+	return strings.Join(parts, " ")
+}
+
+// formatValue formats a field value for logging
+func (l *Logger) formatValue(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		// Quote strings if they contain spaces
+		if strings.Contains(v, " ") {
+			return fmt.Sprintf("%q", v)
+		}
+		return v
+	case time.Duration:
+		return v.String()
+	case time.Time:
+		return v.Format(time.RFC3339)
+	case error:
+		return fmt.Sprintf("%q", v.Error())
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }

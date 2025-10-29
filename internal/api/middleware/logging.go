@@ -33,26 +33,33 @@ func Logging() gin.HandlerFunc {
 		// Get request method
 		method := c.Request.Method
 
-		// Build log message
-		logMsg := fmt.Sprintf("method=%s path=%s status=%d latency_ms=%d client_ip=%s",
-			method, path, statusCode, latency.Milliseconds(), clientIP)
+		// Build structured log fields
+		fields := []utils.Field{
+			{Key: "method", Value: method},
+			{Key: "path", Value: path},
+			{Key: "status", Value: statusCode},
+			{Key: "latency", Value: latency},
+			{Key: "client_ip", Value: clientIP},
+		}
 
 		if query != "" {
-			logMsg += fmt.Sprintf(" query=%s", query)
+			fields = append(fields, utils.Field{Key: "query", Value: query})
 		}
 
 		// Get error if any
+		var errMsg error
 		if len(c.Errors) > 0 {
-			logMsg += fmt.Sprintf(" errors=%s", c.Errors.String())
+			errMsg = c.Errors.Last()
+			fields = append(fields, utils.Field{Key: "error_count", Value: len(c.Errors)})
 		}
 
 		// Log based on status code
 		if statusCode >= 500 {
-			logger.Error("%s", logMsg)
+			logger.ErrorWithFields("HTTP request failed", errMsg, fields...)
 		} else if statusCode >= 400 {
-			logger.Warn("%s", logMsg)
+			logger.WarnWithFields("HTTP request client error", fields...)
 		} else {
-			logger.Info("%s", logMsg)
+			logger.InfoWithFields("HTTP request", fields...)
 		}
 	}
 }
