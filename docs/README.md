@@ -15,8 +15,32 @@ The `parse` command analyzes source code and outputs structured JSON AST represe
 - **[Environment Variables](./cli/parse-environment-variables.md)** - Configuration via environment variables
 - **[Example Output](./examples/parse-output-example.json)** - Sample JSON output
 
-#### Upload Command
-Documentation coming soon.
+#### Index Command
+The `index` command indexes parsed code into the knowledge graph for semantic search and relationship queries.
+
+- **[Complete Documentation](./indexer/cli-index-command.md)** - Full CLI reference
+- **[Quick Start Guide](./indexer/quick-start.md)** - Get started in minutes
+- **[Troubleshooting Guide](./indexer/troubleshooting.md)** - Common issues and solutions
+
+### Knowledge Graph Indexer
+
+The indexer transforms parsed code into a queryable knowledge base with semantic search and graph traversal.
+
+- **[Overview](./indexer/README.md)** - Introduction and features
+- **[Quick Start](./indexer/quick-start.md)** - Get up and running quickly
+- **[Architecture](./indexer/architecture.md)** - System design and components
+- **[API Reference](./indexer/api-reference.md)** - Complete API documentation
+- **[Configuration](./indexer/configuration.md)** - All configuration options
+- **[Troubleshooting](./indexer/troubleshooting.md)** - Common issues and solutions
+
+### API Server
+
+The API server provides HTTP endpoints for indexing and querying code.
+
+- **[API Documentation](./api/README.md)** - Complete API guide
+- **[Quick Start](./api/quick-start.md)** - Get started with the API
+- **[API Reference](./api/api-reference.md)** - Endpoint documentation
+- **[Search and Relationships](./api/search-and-relationships.md)** - Advanced queries
 
 ### Testing
 
