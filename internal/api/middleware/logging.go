@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"

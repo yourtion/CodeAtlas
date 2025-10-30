@@ -13,13 +13,16 @@ import (
 
 // Indexer orchestrates the indexing pipeline
 type Indexer struct {
-	validator    Validator
-	writer       *Writer
-	graphBuilder *GraphBuilder
-	embedder     Embedder
-	config       *IndexerConfig
-	db           *models.DB
-	logger       IndexerLogger
+	validator       Validator
+	writer          *Writer
+	graphBuilder    *GraphBuilder
+	embedder        Embedder
+	config          *IndexerConfig
+	db              *models.DB
+	logger          IndexerLogger
+	streamProcessor *StreamProcessor
+	workerPool      *WorkerPool
+	batchOptimizer  *BatchOptimizer
 }
 
 // IndexerLogger defines the logging interface for the indexer
@@ -120,14 +123,25 @@ func NewIndexerWithLogger(db *models.DB, config *IndexerConfig, logger IndexerLo
 		embedder = NewOpenAIEmbedder(embedderConfig, vectorRepo)
 	}
 
+	// Create stream processor for memory management
+	streamConfig := DefaultStreamConfig()
+	streamConfig.BatchSize = config.BatchSize
+	streamConfig.MaxGoroutines = config.WorkerCount * 2
+	streamProcessor := NewStreamProcessor(streamConfig)
+
+	// Create batch optimizer
+	batchOptimizer := NewBatchOptimizer(DefaultBatchOptimizerConfig())
+
 	return &Indexer{
-		validator:    validator,
-		writer:       writer,
-		graphBuilder: graphBuilder,
-		embedder:     embedder,
-		config:       config,
-		db:           db,
-		logger:       logger,
+		validator:       validator,
+		writer:          writer,
+		graphBuilder:    graphBuilder,
+		embedder:        embedder,
+		config:          config,
+		db:              db,
+		logger:          logger,
+		streamProcessor: streamProcessor,
+		batchOptimizer:  batchOptimizer,
 	}
 }
 
@@ -576,7 +590,7 @@ func (idx *Indexer) filterChangedFiles(ctx context.Context, files []schema.File)
 	return changedFiles
 }
 
-// writeData writes files, symbols, nodes, and edges to database
+// writeData writes files, symbols, nodes, and edges to database with streaming and optimization
 func (idx *Indexer) writeData(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) (*WriteResult, error) {
 	result := &WriteResult{}
 
@@ -584,7 +598,17 @@ func (idx *Indexer) writeData(ctx context.Context, files []schema.File, edges []
 		return idx.writeDataWithTransaction(ctx, files, edges)
 	}
 
-	// Write files
+	// Optimize database for bulk inserts
+	if err := idx.db.OptimizeForBulkInserts(ctx); err != nil {
+		idx.logger.WarnWithFields("failed to optimize database for bulk inserts", LogField{Key: "error", Value: err})
+	}
+	defer func() {
+		if err := idx.db.ResetOptimizations(ctx); err != nil {
+			idx.logger.WarnWithFields("failed to reset database optimizations", LogField{Key: "error", Value: err})
+		}
+	}()
+
+	// Write files with streaming
 	filesResult, err := idx.writer.WriteFiles(ctx, idx.config.RepoID, files)
 	if err != nil {
 		return result, err
@@ -600,16 +624,17 @@ func (idx *Indexer) writeData(ctx context.Context, files []schema.File, edges []
 		allNodes = append(allNodes, file.Nodes...)
 	}
 
-	// Write symbols
-	symbolsResult, err := idx.writer.WriteSymbols(ctx, allSymbols)
+	// Write symbols with adaptive batch sizing
+	batchSize := idx.batchOptimizer.GetBatchSize()
+	symbolsResult, err := idx.writeSymbolsOptimized(ctx, allSymbols, batchSize)
 	if err != nil {
 		return result, err
 	}
 	result.SymbolsCreated = symbolsResult.SymbolsCreated
 	result.Errors = append(result.Errors, symbolsResult.Errors...)
 
-	// Write AST nodes
-	nodesResult, err := idx.writer.WriteASTNodes(ctx, allNodes)
+	// Write AST nodes with streaming (to handle large trees)
+	nodesResult, err := idx.writeNodesStreaming(ctx, allNodes)
 	if err != nil {
 		return result, err
 	}
@@ -623,6 +648,20 @@ func (idx *Indexer) writeData(ctx context.Context, files []schema.File, edges []
 	}
 	result.EdgesCreated = edgesResult.EdgesCreated
 	result.Errors = append(result.Errors, edgesResult.Errors...)
+
+	// Analyze tables after bulk insert
+	if err := idx.db.AnalyzeTables(ctx); err != nil {
+		idx.logger.WarnWithFields("failed to analyze tables", LogField{Key: "error", Value: err})
+	}
+
+	// Log memory stats
+	memStats := idx.streamProcessor.GetMemoryStats()
+	idx.logger.InfoWithFields("write operation completed",
+		LogField{Key: "memory_pressure", Value: fmt.Sprintf("%.1f%%", memStats.MemoryPressure())},
+		LogField{Key: "goroutine_pressure", Value: fmt.Sprintf("%.1f%%", memStats.GoroutinePressure())},
+		LogField{Key: "batch_size", Value: idx.batchOptimizer.GetBatchSize()},
+		LogField{Key: "avg_latency", Value: idx.batchOptimizer.GetAverageLatency()},
+	)
 
 	return result, nil
 }
@@ -829,4 +868,157 @@ func convertErrors(errors []error) []*IndexerError {
 		}
 	}
 	return result
+}
+
+// writeSymbolsOptimized writes symbols with adaptive batch sizing
+func (idx *Indexer) writeSymbolsOptimized(ctx context.Context, symbols []schema.Symbol, batchSize int) (*WriteResult, error) {
+	result := &WriteResult{}
+
+	if len(symbols) == 0 {
+		return result, nil
+	}
+
+	// Convert schema symbols to model symbols
+	modelSymbols := make([]*models.Symbol, 0, len(symbols))
+	for _, symbol := range symbols {
+		modelSymbol := &models.Symbol{
+			SymbolID:        symbol.SymbolID,
+			FileID:          symbol.FileID,
+			Name:            symbol.Name,
+			Kind:            string(symbol.Kind),
+			Signature:       symbol.Signature,
+			StartLine:       symbol.Span.StartLine,
+			EndLine:         symbol.Span.EndLine,
+			StartByte:       symbol.Span.StartByte,
+			EndByte:         symbol.Span.EndByte,
+			Docstring:       symbol.Docstring,
+			SemanticSummary: symbol.SemanticSummary,
+		}
+		modelSymbols = append(modelSymbols, modelSymbol)
+	}
+
+	// Process symbols in adaptive batches
+	symbolRepo := models.NewSymbolRepository(idx.db)
+	for i := 0; i < len(modelSymbols); i += batchSize {
+		end := i + batchSize
+		if end > len(modelSymbols) {
+			end = len(modelSymbols)
+		}
+
+		batch := modelSymbols[i:end]
+		startTime := time.Now()
+
+		err := symbolRepo.BatchCreate(ctx, batch)
+		latency := time.Since(startTime)
+
+		// Record latency for adaptive batch sizing
+		idx.batchOptimizer.RecordLatency(latency)
+
+		if err != nil {
+			result.Errors = append(result.Errors, WriteError{
+				EntityType: "symbols_batch",
+				EntityID:   fmt.Sprintf("batch_%d", i/batchSize),
+				Message:    err.Error(),
+				Retryable:  false,
+			})
+		} else {
+			result.SymbolsCreated += len(batch)
+		}
+
+		// Update batch size for next iteration
+		batchSize = idx.batchOptimizer.GetBatchSize()
+	}
+
+	return result, nil
+}
+
+// writeNodesStreaming writes AST nodes using streaming to handle large trees
+func (idx *Indexer) writeNodesStreaming(ctx context.Context, nodes []schema.ASTNode) (*WriteResult, error) {
+	result := &WriteResult{}
+
+	if len(nodes) == 0 {
+		return result, nil
+	}
+
+	// Use stream processor to handle large AST trees
+	err := idx.streamProcessor.StreamASTNodes(ctx, nodes, idx.config.BatchSize, func(ctx context.Context, batch []schema.ASTNode) error {
+		// Convert schema nodes to model nodes
+		modelNodes := make([]*models.ASTNode, 0, len(batch))
+		for _, node := range batch {
+			var parentID *string
+			if node.ParentID != "" {
+				parentID = &node.ParentID
+			}
+
+			modelNode := &models.ASTNode{
+				NodeID:     node.NodeID,
+				FileID:     node.FileID,
+				Type:       node.Type,
+				ParentID:   parentID,
+				StartLine:  node.Span.StartLine,
+				EndLine:    node.Span.EndLine,
+				StartByte:  node.Span.StartByte,
+				EndByte:    node.Span.EndByte,
+				Text:       node.Text,
+				Attributes: node.Attributes,
+			}
+			modelNodes = append(modelNodes, modelNode)
+		}
+
+		// Write batch
+		astNodeRepo := models.NewASTNodeRepository(idx.db)
+		if err := astNodeRepo.BatchCreate(ctx, modelNodes); err != nil {
+			return err
+		}
+
+		result.NodesCreated += len(modelNodes)
+		return nil
+	})
+
+	if err != nil {
+		result.Errors = append(result.Errors, WriteError{
+			EntityType: "ast_nodes_streaming",
+			Message:    err.Error(),
+			Retryable:  false,
+		})
+		return result, err
+	}
+
+	return result, nil
+}
+
+// GetPerformanceStats returns performance statistics for the indexer
+func (idx *Indexer) GetPerformanceStats() map[string]interface{} {
+	memStats := idx.streamProcessor.GetMemoryStats()
+	batchStats := BatchStats{
+		CurrentBatchSize: idx.batchOptimizer.GetBatchSize(),
+		AverageLatency:   idx.batchOptimizer.GetAverageLatency(),
+	}
+	poolStats := idx.db.GetPoolStats()
+
+	return map[string]interface{}{
+		"memory": map[string]interface{}{
+			"current_mb":        memStats.CurrentMemoryMB,
+			"max_mb":            memStats.MaxMemoryMB,
+			"pressure_percent":  memStats.MemoryPressure(),
+		},
+		"goroutines": map[string]interface{}{
+			"active":            memStats.ActiveGoroutines,
+			"max":               memStats.MaxGoroutines,
+			"pressure_percent":  memStats.GoroutinePressure(),
+		},
+		"batch": map[string]interface{}{
+			"current_size":      batchStats.CurrentBatchSize,
+			"average_latency_ms": batchStats.AverageLatency.Milliseconds(),
+		},
+		"connection_pool": map[string]interface{}{
+			"open_connections":   poolStats.OpenConnections,
+			"in_use":             poolStats.InUse,
+			"idle":               poolStats.Idle,
+			"wait_count":         poolStats.WaitCount,
+			"wait_duration_ms":   poolStats.WaitDuration.Milliseconds(),
+			"max_idle_closed":    poolStats.MaxIdleClosed,
+			"max_lifetime_closed": poolStats.MaxLifetimeClosed,
+		},
+	}
 }
