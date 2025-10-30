@@ -41,6 +41,19 @@ test-unit:
 test-integration:
 	@echo "Running integration tests (requires database)..."
 	@echo "Make sure database is running: make docker-up"
+	go test ./tests/integration/... -v -timeout 5m
+
+# Integration tests with short flag (skips actual database tests)
+.PHONY: test-integration-short
+test-integration-short:
+	@echo "Running integration tests in short mode (skips database)..."
+	go test ./tests/integration/... -v -short -timeout 30s
+
+# Legacy integration tests
+.PHONY: test-integration-legacy
+test-integration-legacy:
+	@echo "Running legacy integration tests (requires database)..."
+	@echo "Make sure database is running: make docker-up"
 	go test ./pkg/models/... ./internal/indexer/... -v -run Integration || \
 	go test ./pkg/models/... ./internal/indexer/... -v
 
@@ -237,6 +250,8 @@ help:
 	@echo "  make test                      - Run unit tests (default, fast)"
 	@echo "  make test-unit                 - Run unit tests only (no external dependencies)"
 	@echo "  make test-integration          - Run integration tests (requires database)"
+	@echo "  make test-integration-short    - Run integration tests in short mode (no database)"
+	@echo "  make test-integration-legacy   - Run legacy integration tests (requires database)"
 	@echo "  make test-integration-tagged   - Run integration tests with build tags"
 	@echo "  make test-cli-integration      - Run CLI integration tests (requires built binary)"
 	@echo "  make test-all                  - Run all tests (unit + integration)"
