@@ -31,10 +31,10 @@ func TestCLIHelp(t *testing.T) {
 
 	outputStr := string(output)
 
-	// Check for upload command (parse command not implemented yet)
-	// if !strings.Contains(outputStr, "parse") {
-	// 	t.Error("Expected 'parse' command in help output")
-	// }
+	// Check for parse and upload commands
+	if !strings.Contains(outputStr, "parse") {
+		t.Error("Expected 'parse' command in help output")
+	}
 
 	if !strings.Contains(outputStr, "upload") {
 		t.Error("Expected 'upload' command in help output")
@@ -43,7 +43,6 @@ func TestCLIHelp(t *testing.T) {
 
 // TestParseCommandHelp tests that parse command help is displayed
 func TestParseCommandHelp(t *testing.T) {
-	t.Skip("Skipping parse command tests - command not implemented")
 	cmd := exec.Command("../../bin/cli", "parse", "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -117,7 +116,6 @@ func TestUploadCommandHelp(t *testing.T) {
 
 // TestParseCommandRequiresInput tests that parse command validates input
 func TestParseCommandRequiresInput(t *testing.T) {
-	t.Skip("Skipping parse command tests - command not implemented")
 	cmd := exec.Command("../../bin/cli", "parse")
 	output, err := cmd.CombinedOutput()
 
@@ -134,7 +132,6 @@ func TestParseCommandRequiresInput(t *testing.T) {
 
 // TestParseCommandSemanticRequiresAPIKey tests that semantic flag requires API key
 func TestParseCommandSemanticRequiresAPIKey(t *testing.T) {
-	t.Skip("Skipping parse command tests - command not implemented")
 	// Create a temporary test file
 	tmpFile, err := os.CreateTemp("", "test*.go")
 	if err != nil {
@@ -170,7 +167,6 @@ func TestParseCommandSemanticRequiresAPIKey(t *testing.T) {
 
 // TestConsistentFlagNaming tests that parse and upload use consistent flag names
 func TestConsistentFlagNaming(t *testing.T) {
-	t.Skip("Skipping parse command tests - command not implemented")
 	// Get parse command help
 	parseCmd := exec.Command("../../bin/cli", "parse", "--help")
 	parseOutput, err := parseCmd.CombinedOutput()
