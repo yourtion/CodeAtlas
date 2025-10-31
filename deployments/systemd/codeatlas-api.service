@@ -1,0 +1,47 @@
+[Unit]
+Description=CodeAtlas Knowledge Graph API Server
+Documentation=https://github.com/yourusername/codeatlas
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=codeatlas
+Group=codeatlas
+WorkingDirectory=/opt/codeatlas
+
+# Environment configuration
+EnvironmentFile=/etc/codeatlas/api.env
+
+# Binary location
+ExecStart=/opt/codeatlas/bin/codeatlas-api
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=5min
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/codeatlas
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=codeatlas-api
+
+# Graceful shutdown
+TimeoutStopSec=30s
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
