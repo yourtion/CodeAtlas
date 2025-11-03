@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,8 +14,14 @@ import (
 	"github.com/yourtionguo/CodeAtlas/internal/schema"
 )
 
-func TestIndexHandler_Index_InvalidRequest(t *testing.T) {
+func init() {
+	// Disable Gin logging in tests
 	gin.SetMode(gin.TestMode)
+	gin.DefaultWriter = io.Discard
+	gin.DefaultErrorWriter = io.Discard
+}
+
+func TestIndexHandler_Index_InvalidRequest(t *testing.T) {
 
 	tests := []struct {
 		name           string

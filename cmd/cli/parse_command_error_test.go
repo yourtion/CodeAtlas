@@ -144,6 +144,13 @@ func main() {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
+	// Capture and discard output to keep tests clean
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	os.Stderr = w
+
 	// Create parse command
 	cmd := ParseCommand{
 		Path:    tmpDir,
@@ -153,6 +160,12 @@ func main() {
 
 	// Execute parse command
 	err := cmd.Execute()
+
+	// Restore stdout/stderr
+	w.Close()
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+	io.Copy(io.Discard, r)
 
 	// We expect the command to succeed even with errors (graceful degradation)
 	if err != nil {

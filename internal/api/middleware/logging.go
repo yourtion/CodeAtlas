@@ -9,7 +9,15 @@ import (
 
 // Logging returns a logging middleware that logs HTTP requests
 func Logging() gin.HandlerFunc {
-	logger := utils.NewLogger(false)
+	return LoggingWithLogger(nil)
+}
+
+// LoggingWithLogger returns a logging middleware with a custom logger
+// If logger is nil, creates a default non-verbose logger
+func LoggingWithLogger(logger *utils.Logger) gin.HandlerFunc {
+	if logger == nil {
+		logger = utils.NewLogger(false)
+	}
 
 	return func(c *gin.Context) {
 		// Start timer

@@ -804,22 +804,11 @@ func (idx *Indexer) writeDataWithTransaction(ctx context.Context, files []schema
 	}
 	
 	if len(modelEdges) > 0 {
-		fmt.Printf("DEBUG writeDataWithTransaction: writing %d edges\n", len(modelEdges))
-		for i, e := range modelEdges {
-			if i < 3 {
-				fmt.Printf("DEBUG edge %d: EdgeID=%s, SourceID=%s, TargetID=%v, EdgeType=%s\n", 
-					i, e.EdgeID[:8], e.SourceID[:8], e.TargetID, e.EdgeType)
-			}
-		}
 		err = edgeRepo.BatchCreateTx(ctx, tx, modelEdges)
 		if err != nil {
-			fmt.Printf("DEBUG writeDataWithTransaction: failed to write edges: %v\n", err)
 			return result, fmt.Errorf("failed to write edges: %w", err)
 		}
 		result.EdgesCreated = len(modelEdges)
-		fmt.Printf("DEBUG writeDataWithTransaction: successfully wrote %d edges\n", len(modelEdges))
-	} else {
-		fmt.Printf("DEBUG writeDataWithTransaction: no edges to write\n")
 	}
 
 	// Commit transaction

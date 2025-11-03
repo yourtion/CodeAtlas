@@ -22,6 +22,9 @@ type TestDB struct {
 func SetupTestDB(t *testing.T) *TestDB {
 	t.Helper()
 
+	// Disable database logging during tests to reduce noise
+	models.SetDBLogger(nil)
+
 	// Generate unique database name for this test
 	dbName := fmt.Sprintf("codeatlas_test_%s", uuid.New().String()[:8])
 
