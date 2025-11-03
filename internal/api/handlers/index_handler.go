@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -123,14 +122,6 @@ func (h *IndexHandler) Index(c *gin.Context) {
 	result, err := idx.Index(ctx, &req.ParseOutput)
 	
 	if err != nil {
-		// Log the error for debugging
-		fmt.Printf("DEBUG Index handler: indexing error: %v\n", err)
-		if result != nil {
-			fmt.Printf("DEBUG Index handler: result status: %s, errors: %d\n", result.Status, len(result.Errors))
-			for i, e := range result.Errors {
-				fmt.Printf("DEBUG Index handler: error %d: type=%s, message=%s\n", i, e.Type, e.Message)
-			}
-		}
 		
 		// Check if it's a validation error
 		if result != nil && result.Status == "failed" {

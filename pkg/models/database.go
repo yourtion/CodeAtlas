@@ -4,13 +4,31 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/yourtionguo/CodeAtlas/internal/config"
+	"github.com/yourtionguo/CodeAtlas/internal/utils"
 )
+
+var (
+	// dbLogger is the logger for database operations
+	// Can be set to nil to disable logging (useful for tests)
+	dbLogger *utils.Logger
+)
+
+func init() {
+	// Initialize with non-verbose logger by default
+	// Set to nil in tests to disable logging
+	verbose := os.Getenv("DB_VERBOSE") == "true"
+	dbLogger = utils.NewLogger(verbose)
+}
+
+// SetDBLogger sets the database logger (use nil to disable logging)
+func SetDBLogger(logger *utils.Logger) {
+	dbLogger = logger
+}
 
 // DB represents the database connection
 type DB struct {
@@ -48,13 +66,15 @@ func NewDBWithConfig(cfg *config.DatabaseConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	log.Printf("Successfully connected to database at %s:%d (pool: %d max, %d idle, lifetime: %s)",
-		cfg.Host, cfg.Port, cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime)
-	
-	// Log connection pool statistics
-	stats := db.Stats()
-	log.Printf("Initial connection pool stats - Open: %d, InUse: %d, Idle: %d",
-		stats.OpenConnections, stats.InUse, stats.Idle)
+	if dbLogger != nil {
+		dbLogger.Debugf("Successfully connected to database at %s:%d (pool: %d max, %d idle, lifetime: %s)",
+			cfg.Host, cfg.Port, cfg.MaxOpenConns, cfg.MaxIdleConns, cfg.ConnMaxLifetime)
+		
+		// Log connection pool statistics
+		stats := db.Stats()
+		dbLogger.Debugf("Initial connection pool stats - Open: %d, InUse: %d, Idle: %d",
+			stats.OpenConnections, stats.InUse, stats.Idle)
+	}
 	
 	return &DB{db}, nil
 }
@@ -80,7 +100,9 @@ func WaitForDatabase(maxRetries int, retryDelay time.Duration) (*DB, error) {
 			return db, nil
 		}
 
-		log.Printf("Database connection attempt %d/%d failed: %v", i+1, maxRetries, err)
+		if dbLogger != nil {
+			dbLogger.Warnf("Database connection attempt %d/%d failed: %v", i+1, maxRetries, err)
+		}
 		if i < maxRetries-1 {
 			time.Sleep(retryDelay)
 		}
@@ -96,8 +118,11 @@ func (db *DB) GetPoolStats() sql.DBStats {
 
 // LogPoolStats logs current connection pool statistics
 func (db *DB) LogPoolStats() {
+	if dbLogger == nil {
+		return
+	}
 	stats := db.Stats()
-	log.Printf("Connection pool stats - Open: %d, InUse: %d, Idle: %d, WaitCount: %d, WaitDuration: %s, MaxIdleClosed: %d, MaxLifetimeClosed: %d",
+	dbLogger.Debugf("Connection pool stats - Open: %d, InUse: %d, Idle: %d, WaitCount: %d, WaitDuration: %s, MaxIdleClosed: %d, MaxLifetimeClosed: %d",
 		stats.OpenConnections,
 		stats.InUse,
 		stats.Idle,
@@ -129,7 +154,9 @@ func (db *DB) OptimizeForBulkInserts(ctx context.Context) error {
 		return fmt.Errorf("failed to set synchronous_commit: %w", err)
 	}
 
-	log.Println("Database optimized for bulk insert operations")
+	if dbLogger != nil {
+		dbLogger.Debug("Database optimized for bulk insert operations")
+	}
 	return nil
 }
 
@@ -150,7 +177,9 @@ func (db *DB) ResetOptimizations(ctx context.Context) error {
 		return fmt.Errorf("failed to reset synchronous_commit: %w", err)
 	}
 
-	log.Println("Database optimizations reset to defaults")
+	if dbLogger != nil {
+		dbLogger.Debug("Database optimizations reset to defaults")
+	}
 	return nil
 }
 
@@ -170,12 +199,16 @@ func (db *DB) AnalyzeTables(ctx context.Context) error {
 	for _, table := range tables {
 		_, err := db.ExecContext(ctx, fmt.Sprintf("ANALYZE %s", table))
 		if err != nil {
-			log.Printf("Warning: failed to analyze table %s: %v", table, err)
+			if dbLogger != nil {
+				dbLogger.Warnf("Failed to analyze table %s: %v", table, err)
+			}
 			// Continue with other tables
 		}
 	}
 
-	log.Println("Table statistics updated with ANALYZE")
+	if dbLogger != nil {
+		dbLogger.Debug("Table statistics updated with ANALYZE")
+	}
 	return nil
 }
 
@@ -195,11 +228,15 @@ func (db *DB) VacuumTables(ctx context.Context) error {
 	for _, table := range tables {
 		_, err := db.ExecContext(ctx, fmt.Sprintf("VACUUM ANALYZE %s", table))
 		if err != nil {
-			log.Printf("Warning: failed to vacuum table %s: %v", table, err)
+			if dbLogger != nil {
+				dbLogger.Warnf("Failed to vacuum table %s: %v", table, err)
+			}
 			// Continue with other tables
 		}
 	}
 
-	log.Println("Tables vacuumed and analyzed")
+	if dbLogger != nil {
+		dbLogger.Debug("Tables vacuumed and analyzed")
+	}
 	return nil
 }

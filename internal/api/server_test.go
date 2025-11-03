@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,8 +9,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestSetupRouter(t *testing.T) {
+func init() {
+	// Disable Gin logging in tests
 	gin.SetMode(gin.TestMode)
+	gin.DefaultWriter = io.Discard
+	gin.DefaultErrorWriter = io.Discard
+}
+
+func TestSetupRouter(t *testing.T) {
 
 	// Create server with default config
 	config := &ServerConfig{

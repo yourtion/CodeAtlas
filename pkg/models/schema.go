@@ -3,7 +3,6 @@ package models
 import (
 	"context"
 	"fmt"
-	"log"
 )
 
 // SchemaManager handles database schema initialization and validation
@@ -18,7 +17,9 @@ func NewSchemaManager(db *DB) *SchemaManager {
 
 // InitializeSchema ensures all required extensions and schema are set up
 func (sm *SchemaManager) InitializeSchema(ctx context.Context) error {
-	log.Println("Initializing database schema...")
+	if dbLogger != nil {
+		dbLogger.Debug("Initializing database schema...")
+	}
 
 	// Check and create extensions
 	if err := sm.ensureExtensions(ctx); err != nil {
@@ -35,7 +36,9 @@ func (sm *SchemaManager) InitializeSchema(ctx context.Context) error {
 		return fmt.Errorf("failed to verify core tables: %w", err)
 	}
 
-	log.Println("Database schema initialized successfully")
+	if dbLogger != nil {
+		dbLogger.Debug("Database schema initialized successfully")
+	}
 	return nil
 }
 
@@ -53,24 +56,34 @@ func (sm *SchemaManager) ensureExtensions(ctx context.Context) error {
 		}
 
 		if !exists {
-			log.Printf("Creating extension: %s", ext)
+			if dbLogger != nil {
+				dbLogger.Debugf("Creating extension: %s", ext)
+			}
 			createQuery := fmt.Sprintf("CREATE EXTENSION IF NOT EXISTS %s", ext)
 			if _, err := sm.db.ExecContext(ctx, createQuery); err != nil {
 				return fmt.Errorf("failed to create extension %s: %w (ensure you have superuser privileges or the extension is pre-installed)", ext, err)
 			}
-			log.Printf("Extension %s created successfully", ext)
+			if dbLogger != nil {
+				dbLogger.Debugf("Extension %s created successfully", ext)
+			}
 		} else {
-			log.Printf("Extension %s already exists", ext)
+			if dbLogger != nil {
+				dbLogger.Debugf("Extension %s already exists", ext)
+			}
 		}
 	}
 
 	// Load AGE into search path
 	if _, err := sm.db.ExecContext(ctx, "LOAD 'age'"); err != nil {
-		log.Printf("Warning: failed to load AGE (may already be loaded): %v", err)
+		if dbLogger != nil {
+			dbLogger.Debugf("Failed to load AGE (may already be loaded): %v", err)
+		}
 	}
 
 	if _, err := sm.db.ExecContext(ctx, "SET search_path = ag_catalog, \"$user\", public"); err != nil {
-		log.Printf("Warning: failed to set search path: %v", err)
+		if dbLogger != nil {
+			dbLogger.Debugf("Failed to set search path: %v", err)
+		}
 	}
 
 	return nil
@@ -87,13 +100,19 @@ func (sm *SchemaManager) ensureAGEGraph(ctx context.Context) error {
 	}
 
 	if !exists {
-		log.Println("Creating AGE graph: code_graph")
+		if dbLogger != nil {
+			dbLogger.Debug("Creating AGE graph: code_graph")
+		}
 		if _, err := sm.db.ExecContext(ctx, "SELECT ag_catalog.create_graph('code_graph')"); err != nil {
 			return fmt.Errorf("failed to create graph: %w", err)
 		}
-		log.Println("AGE graph created successfully")
+		if dbLogger != nil {
+			dbLogger.Debug("AGE graph created successfully")
+		}
 	} else {
-		log.Println("AGE graph already exists")
+		if dbLogger != nil {
+			dbLogger.Debug("AGE graph already exists")
+		}
 	}
 
 	return nil
@@ -125,7 +144,9 @@ func (sm *SchemaManager) verifyCoreTables(ctx context.Context) error {
 		}
 	}
 
-	log.Println("All required tables verified")
+	if dbLogger != nil {
+		dbLogger.Debug("All required tables verified")
+	}
 	return nil
 }
 
@@ -175,7 +196,9 @@ func (sm *SchemaManager) HealthCheck(ctx context.Context) error {
 // CreateVectorIndex creates the IVFFlat index for vector similarity search
 // This should be called after initial data is loaded for better performance
 func (sm *SchemaManager) CreateVectorIndex(ctx context.Context, lists int) error {
-	log.Printf("Creating vector similarity index with %d lists...", lists)
+	if dbLogger != nil {
+		dbLogger.Debugf("Creating vector similarity index with %d lists...", lists)
+	}
 
 	// Drop existing index if it exists
 	dropQuery := `DROP INDEX IF EXISTS idx_vectors_embedding`
@@ -194,7 +217,9 @@ func (sm *SchemaManager) CreateVectorIndex(ctx context.Context, lists int) error
 		return fmt.Errorf("failed to create vector index: %w", err)
 	}
 
-	log.Println("Vector similarity index created successfully")
+	if dbLogger != nil {
+		dbLogger.Debug("Vector similarity index created successfully")
+	}
 	return nil
 }
 

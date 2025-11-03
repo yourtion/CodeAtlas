@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -31,6 +32,18 @@ func NewLogger(verbose bool) *Logger {
 		warnLog: log.New(os.Stdout, "WARN: ", log.Ldate|log.Ltime),
 		errLog:  log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime),
 		dbgLog:  log.New(os.Stdout, "DEBUG: ", log.Ldate|log.Ltime|log.Lshortfile),
+	}
+}
+
+// NewSilentLogger creates a logger that discards all output (useful for tests)
+func NewSilentLogger() *Logger {
+	discard := log.New(io.Discard, "", 0)
+	return &Logger{
+		verbose: false,
+		infoLog: discard,
+		warnLog: discard,
+		errLog:  discard,
+		dbgLog:  discard,
 	}
 }
 
