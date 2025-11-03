@@ -169,9 +169,8 @@ func TestSearchHandlerIntegration(t *testing.T) {
 
 	// Create search request
 	reqBody := handlers.SearchRequest{
-		Query:     "searchable function",
-		Embedding: embedding,
-		Limit:     10,
+		Query: "searchable function",
+		Limit: 10,
 	}
 
 	jsonBody, err := json.Marshal(reqBody)
@@ -189,7 +188,7 @@ func TestSearchHandlerIntegration(t *testing.T) {
 	router.POST("/api/v1/search", handler.Search)
 	router.ServeHTTP(w, req)
 
-	// Check response
+	// Check response - should return 200 OK with search results
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got: %d", w.Code)
 		t.Logf("Response body: %s", w.Body.String())
@@ -214,8 +213,9 @@ func TestSearchHandlerIntegration(t *testing.T) {
 			if result.Name != symbol.Name {
 				t.Errorf("Expected symbol name %s, got: %s", symbol.Name, result.Name)
 			}
-			if result.Similarity < 0 || result.Similarity > 1 {
-				t.Errorf("Invalid similarity score: %f", result.Similarity)
+			// Cosine similarity ranges from -1 to 1
+			if result.Similarity < -1 || result.Similarity > 1 {
+				t.Errorf("Invalid similarity score (should be between -1 and 1): %f", result.Similarity)
 			}
 		}
 	}

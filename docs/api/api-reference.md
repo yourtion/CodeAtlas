@@ -260,14 +260,13 @@ Create a new repository.
 
 #### POST /api/v1/search
 
-Perform semantic search across code symbols.
+Perform semantic search across code symbols using natural language queries.
 
 **Request Body:**
 
 ```json
 {
   "query": "authentication middleware",
-  "embedding": [0.1, 0.2, 0.3, ...],
   "repo_id": "uuid-1",
   "language": "go",
   "kind": ["function", "class"],
@@ -276,13 +275,12 @@ Perform semantic search across code symbols.
 ```
 
 **Required Fields:**
-- `query`: Search query text
-- `embedding`: Query embedding vector (768 dimensions)
+- `query`: Search query text (natural language)
 
 **Optional Fields:**
 - `repo_id`: Filter by repository
 - `language`: Filter by programming language
-- `kind`: Filter by symbol types
+- `kind`: Filter by symbol types (e.g., "function", "class", "interface")
 - `limit`: Max results (default 10)
 
 **Response (200 OK):**
@@ -303,6 +301,31 @@ Perform semantic search across code symbols.
   "total": 1
 }
 ```
+
+**How it works:**
+1. The API receives your natural language query
+2. Generates an embedding vector using the configured embedding service (OpenAI-compatible API)
+3. Performs vector similarity search against indexed code symbols
+4. Returns ranked results with similarity scores (cosine similarity: -1 to 1, higher is better)
+
+**Configuration:**
+
+The search API uses the embedding service configured via environment variables. See [Configuration Guide](../configuration.md#embedder-configuration) for details.
+
+Default configuration:
+- Endpoint: `http://localhost:1234/v1/embeddings`
+- Model: `text-embedding-qwen3-embedding-0.6b`
+- Dimensions: 1024
+
+To use OpenAI:
+```bash
+export EMBEDDING_API_ENDPOINT=https://api.openai.com/v1/embeddings
+export EMBEDDING_API_KEY=sk-...
+export EMBEDDING_MODEL=text-embedding-3-small
+export EMBEDDING_DIMENSIONS=1536
+```
+
+**Note:** The embedding service must be running and accessible. For local development, you can use [LM Studio](https://lmstudio.ai/) or similar tools to run embedding models locally.
 
 ---
 

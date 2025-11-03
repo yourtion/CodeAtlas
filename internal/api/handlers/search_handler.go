@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yourtionguo/CodeAtlas/internal/indexer"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
@@ -13,6 +14,7 @@ type SearchHandler struct {
 	vectorRepo *models.VectorRepository
 	symbolRepo *models.SymbolRepository
 	fileRepo   *models.FileRepository
+	embedder   indexer.Embedder
 }
 
 // NewSearchHandler creates a new search handler
@@ -21,17 +23,27 @@ func NewSearchHandler(db *models.DB) *SearchHandler {
 		vectorRepo: models.NewVectorRepository(db),
 		symbolRepo: models.NewSymbolRepository(db),
 		fileRepo:   models.NewFileRepository(db),
+		embedder:   indexer.NewOpenAIEmbedder(indexer.DefaultEmbedderConfig(), models.NewVectorRepository(db)),
+	}
+}
+
+// NewSearchHandlerWithEmbedder creates a new search handler with custom embedder
+func NewSearchHandlerWithEmbedder(db *models.DB, embedder indexer.Embedder) *SearchHandler {
+	return &SearchHandler{
+		vectorRepo: models.NewVectorRepository(db),
+		symbolRepo: models.NewSymbolRepository(db),
+		fileRepo:   models.NewFileRepository(db),
+		embedder:   embedder,
 	}
 }
 
 // SearchRequest represents the request body for POST /api/v1/search
 type SearchRequest struct {
-	Query     string   `json:"query" binding:"required"`
-	Embedding []float32 `json:"embedding,omitempty"`
-	RepoID    string   `json:"repo_id,omitempty"`
-	Language  string   `json:"language,omitempty"`
-	Kind      []string `json:"kind,omitempty"`
-	Limit     int      `json:"limit,omitempty"`
+	Query    string   `json:"query" binding:"required"`
+	RepoID   string   `json:"repo_id,omitempty"`
+	Language string   `json:"language,omitempty"`
+	Kind     []string `json:"kind,omitempty"`
+	Limit    int      `json:"limit,omitempty"`
 }
 
 // SearchResponse represents the response for POST /api/v1/search
@@ -62,17 +74,21 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		return
 	}
 
-	// Validate that embedding is provided (in real implementation, this would be generated from query)
-	if len(req.Embedding) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Embedding is required for semantic search",
-		})
-		return
-	}
-
 	// Set default limit
 	if req.Limit == 0 {
 		req.Limit = 10
+	}
+
+	ctx := context.Background()
+
+	// Generate embedding from query text using embedding service
+	embedding, err := h.embedder.GenerateEmbedding(ctx, req.Query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate embedding",
+			"details": err.Error(),
+		})
+		return
 	}
 
 	// Build search filters
@@ -81,10 +97,8 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		Limit:      req.Limit,
 	}
 
-	ctx := context.Background()
-
 	// Perform vector similarity search
-	vectorResults, err := h.vectorRepo.SimilaritySearchWithFilters(ctx, req.Embedding, filters)
+	vectorResults, err := h.vectorRepo.SimilaritySearchWithFilters(ctx, embedding, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to perform semantic search",

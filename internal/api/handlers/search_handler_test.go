@@ -27,15 +27,9 @@ func TestSearchHandler_Search_InvalidRequest(t *testing.T) {
 		},
 		{
 			name:           "missing query",
-			requestBody:    `{"embedding": [0.1, 0.2, 0.3]}`,
+			requestBody:    `{"repo_id": "test-repo"}`,
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "Invalid request body",
-		},
-		{
-			name:           "missing embedding",
-			requestBody:    `{"query": "test query"}`,
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Embedding is required for semantic search",
 		},
 		{
 			name:           "invalid json",
@@ -89,36 +83,36 @@ func TestSearchRequest_Validation(t *testing.T) {
 		{
 			name: "valid request with all fields",
 			request: SearchRequest{
-				Query:     "test query",
-				Embedding: []float32{0.1, 0.2, 0.3},
-				RepoID:    "repo-1",
-				Language:  "go",
-				Kind:      []string{"function", "class"},
-				Limit:     10,
+				Query:    "test query",
+				RepoID:   "repo-1",
+				Language: "go",
+				Kind:     []string{"function", "class"},
+				Limit:    10,
 			},
 			valid: true,
 		},
 		{
 			name: "valid request with minimal fields",
 			request: SearchRequest{
-				Query:     "test query",
-				Embedding: []float32{0.1, 0.2, 0.3},
+				Query: "test query",
 			},
 			valid: true,
 		},
 		{
 			name: "invalid request - missing query",
 			request: SearchRequest{
-				Embedding: []float32{0.1, 0.2, 0.3},
+				RepoID: "repo-1",
 			},
 			valid: false,
 		},
 		{
-			name: "invalid request - missing embedding",
+			name: "valid request with filters",
 			request: SearchRequest{
-				Query: "test query",
+				Query:    "test query",
+				Language: "python",
+				Kind:     []string{"function"},
 			},
-			valid: false,
+			valid: true,
 		},
 	}
 
@@ -126,13 +120,12 @@ func TestSearchRequest_Validation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Validate required fields
 			hasQuery := tt.request.Query != ""
-			hasEmbedding := len(tt.request.Embedding) > 0
 
-			if tt.valid && (!hasQuery || !hasEmbedding) {
-				t.Error("Expected valid request to have query and embedding")
+			if tt.valid && !hasQuery {
+				t.Error("Expected valid request to have query")
 			}
-			if !tt.valid && hasQuery && hasEmbedding {
-				t.Error("Expected invalid request to be missing query or embedding")
+			if !tt.valid && hasQuery {
+				t.Error("Expected invalid request to be missing query")
 			}
 		})
 	}
@@ -140,9 +133,8 @@ func TestSearchRequest_Validation(t *testing.T) {
 
 func TestSearchRequest_DefaultLimit(t *testing.T) {
 	request := SearchRequest{
-		Query:     "test",
-		Embedding: []float32{0.1, 0.2},
-		Limit:     0,
+		Query: "test",
+		Limit: 0,
 	}
 
 	// Default limit should be applied in handler
