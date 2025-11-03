@@ -195,12 +195,22 @@ func (p *GoParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 		return err
 	}
 
+	// Find the package symbol to use as the source for imports
+	var packageSymbol string
+	for _, symbol := range parsedFile.Symbols {
+		if symbol.Kind == "package" {
+			packageSymbol = symbol.Name
+			break
+		}
+	}
+
 	for _, match := range matches {
 		for _, capture := range match.Captures {
 			importPath := strings.Trim(capture.Node.Content(content), "\"")
 
 			dependency := ParsedDependency{
 				Type:         "import",
+				Source:       packageSymbol, // Use package as source for file-level imports
 				Target:       importPath,
 				TargetModule: importPath,
 			}

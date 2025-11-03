@@ -238,6 +238,8 @@ func (r *EdgeRepository) Delete(ctx context.Context, edgeID string) error {
 
 // BatchCreate inserts multiple edges with proper foreign key handling
 func (r *EdgeRepository) BatchCreate(ctx context.Context, edges []*Edge) error {
+	fmt.Printf("DEBUG BatchCreate: received %d edges\n", len(edges))
+	
 	if len(edges) == 0 {
 		return nil
 	}
@@ -256,21 +258,29 @@ func (r *EdgeRepository) BatchCreate(ctx context.Context, edges []*Edge) error {
 
 	stmt, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
+		fmt.Printf("DEBUG BatchCreate: failed to prepare statement: %v\n", err)
 		return fmt.Errorf("failed to prepare batch insert statement: %w", err)
 	}
 	defer stmt.Close()
 
 	now := time.Now()
-	for _, edge := range edges {
+	insertedCount := 0
+	for i, edge := range edges {
 		edge.CreatedAt = now
+		fmt.Printf("DEBUG BatchCreate: inserting edge %d: EdgeID=%s, SourceID=%s, TargetID=%v, EdgeType=%s\n", 
+			i, edge.EdgeID[:8], edge.SourceID[:8], edge.TargetID, edge.EdgeType)
+		
 		_, err := stmt.ExecContext(ctx,
 			edge.EdgeID, edge.SourceID, edge.TargetID, edge.EdgeType,
 			edge.SourceFile, edge.TargetFile, edge.TargetModule, edge.CreatedAt)
 		if err != nil {
+			fmt.Printf("DEBUG BatchCreate: failed to insert edge %s: %v\n", edge.EdgeID, err)
 			return fmt.Errorf("failed to insert edge %s: %w", edge.EdgeID, err)
 		}
+		insertedCount++
 	}
 
+	fmt.Printf("DEBUG BatchCreate: successfully inserted %d edges\n", insertedCount)
 	return nil
 }
 

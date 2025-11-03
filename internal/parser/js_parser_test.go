@@ -31,7 +31,7 @@ func TestJSParser_Parse(t *testing.T) {
 	return "hello";
 }`,
 			language:      "javascript",
-			wantSymbols:   1,
+			wantSymbols:   2, // module + function
 			wantFunctions: 1,
 			wantClasses:   0,
 			wantError:     false,
@@ -42,7 +42,7 @@ func TestJSParser_Parse(t *testing.T) {
 	return a + b;
 };`,
 			language:      "javascript",
-			wantSymbols:   1,
+			wantSymbols:   2, // module + arrow function
 			wantFunctions: 1,
 			wantClasses:   0,
 			wantError:     false,
@@ -59,7 +59,7 @@ func TestJSParser_Parse(t *testing.T) {
 	}
 }`,
 			language:      "javascript",
-			wantSymbols:   1,
+			wantSymbols:   2, // module + class
 			wantFunctions: 0,
 			wantClasses:   1,
 			wantError:     false,
@@ -71,7 +71,7 @@ func TestJSParser_Parse(t *testing.T) {
 	return response.json();
 }`,
 			language:      "javascript",
-			wantSymbols:   1,
+			wantSymbols:   2, // module + async function
 			wantFunctions: 1,
 			wantClasses:   0,
 			wantError:     false,
@@ -82,7 +82,7 @@ func TestJSParser_Parse(t *testing.T) {
 	return
 }`,
 			language:    "javascript",
-			wantSymbols: 0, // Severe syntax errors may not extract anything
+			wantSymbols: 1, // Still extracts module even with syntax errors
 			wantError:   true,
 		},
 	}
@@ -129,6 +129,9 @@ func TestJSParser_Parse(t *testing.T) {
 
 			if len(parsedFile.Symbols) != tt.wantSymbols {
 				t.Errorf("Expected %d symbols, got %d", tt.wantSymbols, len(parsedFile.Symbols))
+				for i, sym := range parsedFile.Symbols {
+					t.Logf("Symbol %d: name=%s, kind=%s", i, sym.Name, sym.Kind)
+				}
 			}
 
 			// Count specific symbol types

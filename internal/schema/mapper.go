@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"fmt"
+
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/yourtionguo/CodeAtlas/internal/parser"
 	"github.com/yourtionguo/CodeAtlas/internal/utils"
@@ -21,9 +23,10 @@ func NewSchemaMapper() *SchemaMapper {
 
 // MapToSchema transforms a ParsedFile into a schema.File
 func (m *SchemaMapper) MapToSchema(parsed *parser.ParsedFile) (*File, []DependencyEdge, error) {
-	// Generate file ID and checksum
-	fileID := utils.GenerateUUID()
+	// Generate deterministic file ID based on path and checksum
+	// This ensures the same file always gets the same ID
 	checksum := utils.SHA256Checksum(parsed.Content)
+	fileID := utils.GenerateDeterministicUUID(fmt.Sprintf("file:%s:%s", parsed.Path, checksum))
 
 	file := &File{
 		FileID:   fileID,
@@ -61,7 +64,10 @@ func (m *SchemaMapper) MapToSchema(parsed *parser.ParsedFile) (*File, []Dependen
 
 // mapSymbol transforms a ParsedSymbol into a schema.Symbol
 func (m *SchemaMapper) mapSymbol(parsed parser.ParsedSymbol, fileID string) Symbol {
-	symbolID := utils.GenerateUUID()
+	// Generate deterministic UUID based on file_id, name, start_line, and start_byte
+	// This ensures the same symbol always gets the same ID across multiple parses
+	symbolKey := fmt.Sprintf("%s:%s:%d:%d", fileID, parsed.Name, parsed.Span.StartLine, parsed.Span.StartByte)
+	symbolID := utils.GenerateDeterministicUUID(symbolKey)
 
 	// Map symbol kind
 	kind := m.mapSymbolKind(parsed.Kind)

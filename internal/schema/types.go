@@ -97,7 +97,7 @@ type Span struct {
 type DependencyEdge struct {
 	EdgeID       string   `json:"edge_id"`
 	SourceID     string   `json:"source_id"`
-	TargetID     string   `json:"target_id"`
+	TargetID     string   `json:"target_id,omitempty"` // Optional for external imports
 	EdgeType     EdgeType `json:"edge_type"`
 	SourceFile   string   `json:"source_file"`
 	TargetFile   string   `json:"target_file,omitempty"`

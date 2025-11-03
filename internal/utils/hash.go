@@ -17,3 +17,11 @@ func SHA256Checksum(content []byte) string {
 func GenerateUUID() string {
 	return uuid.New().String()
 }
+
+// GenerateDeterministicUUID generates a deterministic UUID v5 based on the input string
+// This ensures the same input always produces the same UUID
+func GenerateDeterministicUUID(input string) string {
+	// Use UUID v5 with a namespace (DNS namespace is commonly used)
+	namespace := uuid.NameSpaceDNS
+	return uuid.NewSHA1(namespace, []byte(input)).String()
+}

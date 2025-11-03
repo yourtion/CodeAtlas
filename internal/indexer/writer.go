@@ -264,6 +264,8 @@ func (w *Writer) WriteEdges(ctx context.Context, edges []schema.DependencyEdge) 
 	startTime := time.Now()
 	result := &WriteResult{}
 
+	fmt.Printf("DEBUG WriteEdges: received %d edges\n", len(edges))
+
 	if len(edges) == 0 {
 		return result, nil
 	}
@@ -298,6 +300,8 @@ func (w *Writer) WriteEdges(ctx context.Context, edges []schema.DependencyEdge) 
 		modelEdges = append(modelEdges, modelEdge)
 	}
 
+	fmt.Printf("DEBUG WriteEdges: converted to %d model edges\n", len(modelEdges))
+
 	// Process edges in batches
 	for i := 0; i < len(modelEdges); i += w.batchSize {
 		end := i + w.batchSize
@@ -306,11 +310,15 @@ func (w *Writer) WriteEdges(ctx context.Context, edges []schema.DependencyEdge) 
 		}
 
 		batch := modelEdges[i:end]
+		fmt.Printf("DEBUG WriteEdges: processing batch %d with %d edges\n", i/w.batchSize, len(batch))
+		
 		err := w.withRetry(ctx, "edges_batch", fmt.Sprintf("batch_%d", i/w.batchSize), func() error {
+			fmt.Printf("DEBUG WriteEdges: calling BatchCreate for batch %d\n", i/w.batchSize)
 			return w.edgeRepo.BatchCreate(ctx, batch)
 		})
 
 		if err != nil {
+			fmt.Printf("DEBUG WriteEdges: batch %d failed with error: %v\n", i/w.batchSize, err)
 			result.Errors = append(result.Errors, WriteError{
 				EntityType: "edges_batch",
 				EntityID:   fmt.Sprintf("batch_%d", i/w.batchSize),
@@ -318,10 +326,12 @@ func (w *Writer) WriteEdges(ctx context.Context, edges []schema.DependencyEdge) 
 				Retryable:  w.isRetryableError(err),
 			})
 		} else {
+			fmt.Printf("DEBUG WriteEdges: batch %d succeeded, created %d edges\n", i/w.batchSize, len(batch))
 			result.EdgesCreated += len(batch)
 		}
 	}
 
+	fmt.Printf("DEBUG WriteEdges: total edges created: %d\n", result.EdgesCreated)
 	result.Duration = time.Since(startTime)
 	return result, nil
 }

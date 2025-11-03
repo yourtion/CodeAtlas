@@ -71,7 +71,7 @@ func DefaultEmbedderConfig() *EmbedderConfig {
 		Backend:              "openai",
 		APIEndpoint:          "http://localhost:1234/v1/embeddings",
 		Model:                "text-embedding-qwen3-embedding-0.6b",
-		Dimensions:           768, // Adjust based on your model
+		Dimensions:           1024, // text-embedding-qwen3-embedding-0.6b uses 1024 dimensions
 		BatchSize:            50,
 		MaxRequestsPerSecond: 10,
 		MaxRetries:           3,

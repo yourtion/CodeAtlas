@@ -681,12 +681,28 @@ func (idx *Indexer) writeDataWithTransaction(ctx context.Context, files []schema
 		}
 	}()
 
-	// Write files
-	filesResult, err := idx.writer.WriteFilesWithTransaction(ctx, idx.config.RepoID, files)
-	if err != nil {
-		return result, fmt.Errorf("failed to write files: %w", err)
+	// Convert and write files
+	fileRepo := models.NewFileRepository(idx.db)
+	modelFiles := make([]*models.File, 0, len(files))
+	for _, file := range files {
+		modelFile := &models.File{
+			FileID:   file.FileID,
+			RepoID:   idx.config.RepoID,
+			Path:     file.Path,
+			Language: file.Language,
+			Size:     file.Size,
+			Checksum: file.Checksum,
+		}
+		modelFiles = append(modelFiles, modelFile)
 	}
-	result.FilesProcessed = filesResult.FilesProcessed
+	
+	if len(modelFiles) > 0 {
+		err = fileRepo.BatchCreateTx(ctx, tx, modelFiles)
+		if err != nil {
+			return result, fmt.Errorf("failed to write files: %w", err)
+		}
+		result.FilesProcessed = len(modelFiles)
+	}
 
 	// Collect all symbols and nodes
 	var allSymbols []schema.Symbol
@@ -696,26 +712,115 @@ func (idx *Indexer) writeDataWithTransaction(ctx context.Context, files []schema
 		allNodes = append(allNodes, file.Nodes...)
 	}
 
-	// Write symbols
-	symbolsResult, err := idx.writer.WriteSymbolsWithTransaction(ctx, allSymbols)
-	if err != nil {
-		return result, fmt.Errorf("failed to write symbols: %w", err)
+	// Convert and write symbols
+	symbolRepo := models.NewSymbolRepository(idx.db)
+	modelSymbols := make([]*models.Symbol, 0, len(allSymbols))
+	for _, symbol := range allSymbols {
+		modelSymbol := &models.Symbol{
+			SymbolID:        symbol.SymbolID,
+			FileID:          symbol.FileID,
+			Name:            symbol.Name,
+			Kind:            string(symbol.Kind),
+			Signature:       symbol.Signature,
+			StartLine:       symbol.Span.StartLine,
+			EndLine:         symbol.Span.EndLine,
+			StartByte:       symbol.Span.StartByte,
+			EndByte:         symbol.Span.EndByte,
+			Docstring:       symbol.Docstring,
+			SemanticSummary: symbol.SemanticSummary,
+		}
+		modelSymbols = append(modelSymbols, modelSymbol)
 	}
-	result.SymbolsCreated = symbolsResult.SymbolsCreated
+	
+	if len(modelSymbols) > 0 {
+		err = symbolRepo.BatchCreateTx(ctx, tx, modelSymbols)
+		if err != nil {
+			return result, fmt.Errorf("failed to write symbols: %w", err)
+		}
+		result.SymbolsCreated = len(modelSymbols)
+	}
 
-	// Write AST nodes
-	nodesResult, err := idx.writer.WriteASTNodesWithTransaction(ctx, allNodes)
-	if err != nil {
-		return result, fmt.Errorf("failed to write AST nodes: %w", err)
-	}
-	result.NodesCreated = nodesResult.NodesCreated
+	// Convert and write AST nodes
+	astNodeRepo := models.NewASTNodeRepository(idx.db)
+	modelNodes := make([]*models.ASTNode, 0, len(allNodes))
+	for _, node := range allNodes {
+		var parentID *string
+		if node.ParentID != "" {
+			parentID = &node.ParentID
+		}
 
-	// Write edges
-	edgesResult, err := idx.writer.WriteEdgesWithTransaction(ctx, edges)
-	if err != nil {
-		return result, fmt.Errorf("failed to write edges: %w", err)
+		modelNode := &models.ASTNode{
+			NodeID:     node.NodeID,
+			FileID:     node.FileID,
+			Type:       node.Type,
+			ParentID:   parentID,
+			StartLine:  node.Span.StartLine,
+			EndLine:    node.Span.EndLine,
+			StartByte:  node.Span.StartByte,
+			EndByte:    node.Span.EndByte,
+			Text:       node.Text,
+			Attributes: node.Attributes,
+		}
+		modelNodes = append(modelNodes, modelNode)
 	}
-	result.EdgesCreated = edgesResult.EdgesCreated
+	
+	if len(modelNodes) > 0 {
+		err = astNodeRepo.BatchCreateTx(ctx, tx, modelNodes)
+		if err != nil {
+			return result, fmt.Errorf("failed to write AST nodes: %w", err)
+		}
+		result.NodesCreated = len(modelNodes)
+	}
+
+	// Convert and write edges
+	edgeRepo := models.NewEdgeRepository(idx.db)
+	modelEdges := make([]*models.Edge, 0, len(edges))
+	for _, edge := range edges {
+		var targetID *string
+		if edge.TargetID != "" {
+			targetID = &edge.TargetID
+		}
+
+		var targetFile *string
+		if edge.TargetFile != "" {
+			targetFile = &edge.TargetFile
+		}
+
+		var targetModule *string
+		if edge.TargetModule != "" {
+			targetModule = &edge.TargetModule
+		}
+
+		modelEdge := &models.Edge{
+			EdgeID:       edge.EdgeID,
+			SourceID:     edge.SourceID,
+			TargetID:     targetID,
+			EdgeType:     string(edge.EdgeType),
+			SourceFile:   edge.SourceFile,
+			TargetFile:   targetFile,
+			TargetModule: targetModule,
+		}
+		modelEdges = append(modelEdges, modelEdge)
+	}
+	
+	if len(modelEdges) > 0 {
+		fmt.Printf("DEBUG writeDataWithTransaction: writing %d edges\n", len(modelEdges))
+		for i, e := range modelEdges {
+			if i < 3 {
+				fmt.Printf("DEBUG edge %d: EdgeID=%s, SourceID=%s, TargetID=%v, EdgeType=%s\n", 
+					i, e.EdgeID[:8], e.SourceID[:8], e.TargetID, e.EdgeType)
+			}
+		}
+		err = edgeRepo.BatchCreateTx(ctx, tx, modelEdges)
+		if err != nil {
+			fmt.Printf("DEBUG writeDataWithTransaction: failed to write edges: %v\n", err)
+			return result, fmt.Errorf("failed to write edges: %w", err)
+		}
+		result.EdgesCreated = len(modelEdges)
+		fmt.Printf("DEBUG writeDataWithTransaction: successfully wrote %d edges\n", len(modelEdges))
+	} else {
+		fmt.Printf("DEBUG writeDataWithTransaction: no edges to write\n")
+	}
 
 	// Commit transaction
 	if err = tx.Commit(); err != nil {

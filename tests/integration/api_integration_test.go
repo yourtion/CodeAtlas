@@ -148,11 +148,12 @@ func TestSearchHandlerIntegration(t *testing.T) {
 	}
 
 	// Create vector
-	embedding := make([]float32, 768)
+	embedding := make([]float32, 1024)
 	for i := range embedding {
 		embedding[i] = 0.1
 	}
 	vector := &models.Vector{
+		VectorID:   uuid.New().String(),
 		EntityID:   symbol.SymbolID,
 		EntityType: "symbol",
 		Embedding:  embedding,

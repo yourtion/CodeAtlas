@@ -53,6 +53,29 @@ func (p *JSParser) Parse(file ScannedFile) (*ParsedFile, error) {
 		}
 	}
 
+	// Create a module symbol for the file (similar to Go's package symbol)
+	// Extract file name without extension
+	fileName := file.Path
+	if idx := strings.LastIndex(fileName, "/"); idx != -1 {
+		fileName = fileName[idx+1:]
+	}
+	if idx := strings.LastIndex(fileName, "."); idx != -1 {
+		fileName = fileName[:idx]
+	}
+	
+	moduleSymbol := ParsedSymbol{
+		Name: fileName,
+		Kind: "module",
+		Span: ParsedSpan{
+			StartLine: 1,
+			EndLine:   1,
+			StartByte: 0,
+			EndByte:   0,
+		},
+		Node: rootNode,
+	}
+	parsedFile.Symbols = append(parsedFile.Symbols, moduleSymbol)
+
 	// Extract imports (ES6 and CommonJS)
 	if err := p.extractImports(rootNode, parsedFile, content, language); err != nil {
 		// Non-fatal, continue
@@ -107,6 +130,28 @@ func (p *JSParser) detectLanguage(lang string) string {
 
 // extractImports extracts ES6 import statements and CommonJS require calls
 func (p *JSParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte, language string) error {
+	// Find the module symbol to use as the source for imports
+	var moduleSymbol string
+	for _, symbol := range parsedFile.Symbols {
+		if symbol.Kind == "module" {
+			moduleSymbol = symbol.Name
+			break
+		}
+	}
+	
+	// If no module symbol found, use the file name as the module
+	if moduleSymbol == "" {
+		// Extract file name without extension
+		fileName := parsedFile.Path
+		if idx := strings.LastIndex(fileName, "/"); idx != -1 {
+			fileName = fileName[idx+1:]
+		}
+		if idx := strings.LastIndex(fileName, "."); idx != -1 {
+			fileName = fileName[:idx]
+		}
+		moduleSymbol = fileName
+	}
+
 	// ES6 imports
 	importQuery := `(import_statement source: (string) @import.source)`
 
@@ -121,6 +166,7 @@ func (p *JSParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 
 			dependency := ParsedDependency{
 				Type:         "import",
+				Source:       moduleSymbol, // Use module as source for file-level imports
 				Target:       importPath,
 				TargetModule: importPath,
 			}
@@ -146,6 +192,7 @@ func (p *JSParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 
 				dependency := ParsedDependency{
 					Type:         "import",
+					Source:       moduleSymbol, // Use module as source for file-level imports
 					Target:       requirePath,
 					TargetModule: requirePath,
 				}

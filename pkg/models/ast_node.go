@@ -333,11 +333,14 @@ func (r *ASTNodeRepository) BatchCreate(ctx context.Context, nodes []*ASTNode) e
 
 		// Convert attributes to JSON
 		var attributesJSON []byte
-		if node.Attributes != nil {
+		if node.Attributes != nil && len(node.Attributes) > 0 {
 			attributesJSON, err = json.Marshal(node.Attributes)
 			if err != nil {
 				return fmt.Errorf("failed to marshal attributes for node %s: %w", node.NodeID, err)
 			}
+		} else {
+			// Use empty JSON object instead of NULL
+			attributesJSON = []byte("{}")
 		}
 
 		_, err := stmt.ExecContext(ctx,
@@ -386,11 +389,14 @@ func (r *ASTNodeRepository) BatchCreateTx(ctx context.Context, tx *sql.Tx, nodes
 
 		// Convert attributes to JSON
 		var attributesJSON []byte
-		if node.Attributes != nil {
+		if node.Attributes != nil && len(node.Attributes) > 0 {
 			attributesJSON, err = json.Marshal(node.Attributes)
 			if err != nil {
 				return fmt.Errorf("failed to marshal attributes for node %s: %w", node.NodeID, err)
 			}
+		} else {
+			// Use empty JSON object instead of NULL
+			attributesJSON = []byte("{}")
 		}
 
 		_, err := stmt.ExecContext(ctx,

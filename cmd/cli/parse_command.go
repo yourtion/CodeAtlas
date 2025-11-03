@@ -327,6 +327,8 @@ func (cmd *ParseCommand) Execute() error {
 		len(allErrors), len(parseErrors), len(mappingErrors))
 
 	// Create output
+	// FailureCount should be the number of files that failed, not the number of errors
+	failedFiles := len(files) - len(schemaFiles)
 	output := schema.ParseOutput{
 		Files:         schemaFiles,
 		Relationships: allEdges,
@@ -335,7 +337,7 @@ func (cmd *ParseCommand) Execute() error {
 			Timestamp:    time.Now(),
 			TotalFiles:   len(files),
 			SuccessCount: len(schemaFiles),
-			FailureCount: len(allErrors),
+			FailureCount: failedFiles,
 			Errors:       allErrors,
 		},
 	}
