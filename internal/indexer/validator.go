@@ -498,14 +498,18 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 		}
 	}
 
+	// Source ID is optional for import edges (external imports)
 	if edge.SourceID == "" {
-		result.AddError(&ValidationError{
-			Type:       ErrRequired,
-			Message:    "source_id is required",
-			EntityType: "edge",
-			EntityID:   edge.EdgeID,
-			Field:      "source_id",
-		})
+		// Allow empty source_id for import edges
+		if edge.EdgeType != schema.EdgeImport {
+			result.AddError(&ValidationError{
+				Type:       ErrRequired,
+				Message:    "source_id is required for non-import edges",
+				EntityType: "edge",
+				EntityID:   edge.EdgeID,
+				Field:      "source_id",
+			})
+		}
 	} else {
 		// Check referential integrity - source must exist
 		if !v.symbolIDs[edge.SourceID] {

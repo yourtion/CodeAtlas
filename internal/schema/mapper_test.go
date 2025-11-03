@@ -650,19 +650,50 @@ func Test() {}
 		},
 	}
 
-	// Map twice
+	// Map twice with fresh mapper instances
 	file1, edges1, _ := mapper.MapToSchema(parsedFile)
-	file2, edges2, _ := mapper.MapToSchema(parsedFile)
+	
+	// Create new mapper for second run
+	mapper2 := NewSchemaMapper()
+	file2, edges2, _ := mapper2.MapToSchema(parsedFile)
 
-	// UUIDs should be different between runs
-	if file1.FileID == file2.FileID {
-		t.Error("FileIDs should be unique across runs")
+	// FileIDs should be SAME (deterministic based on path + checksum)
+	if file1.FileID != file2.FileID {
+		t.Error("FileIDs should be consistent for same file content")
 	}
-	if file1.Symbols[0].SymbolID == file2.Symbols[0].SymbolID {
-		t.Error("SymbolIDs should be unique across runs")
+	
+	// SymbolIDs should be SAME (deterministic based on file + symbol location)
+	if len(file1.Symbols) > 0 && len(file2.Symbols) > 0 {
+		if file1.Symbols[0].SymbolID != file2.Symbols[0].SymbolID {
+			t.Error("SymbolIDs should be consistent for same symbol")
+		}
 	}
-	if len(edges1) > 0 && len(edges2) > 0 && edges1[0].EdgeID == edges2[0].EdgeID {
-		t.Error("EdgeIDs should be unique across runs")
+	
+	// EdgeIDs should be SAME (deterministic based on source + target)
+	if len(edges1) > 0 && len(edges2) > 0 {
+		if edges1[0].EdgeID != edges2[0].EdgeID {
+			t.Error("EdgeIDs should be consistent for same edge")
+		}
+	}
+	
+	// Verify UUIDs are valid format (not empty)
+	if file1.FileID == "" {
+		t.Error("FileID should not be empty")
+	}
+	if len(file1.Symbols) > 0 && file1.Symbols[0].SymbolID == "" {
+		t.Error("SymbolID should not be empty")
+	}
+	
+	// Test that different content produces different IDs
+	differentContent := []byte(`package main
+
+func Different() {}
+`)
+	parsedFile.Content = differentContent
+	file3, _, _ := mapper.MapToSchema(parsedFile)
+	
+	if file1.FileID == file3.FileID {
+		t.Error("Different file content should produce different FileID")
 	}
 }
 

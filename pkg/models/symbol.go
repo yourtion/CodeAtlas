@@ -212,6 +212,7 @@ func (r *SymbolRepository) BatchCreate(ctx context.Context, symbols []*Symbol) e
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (file_id, name, start_line, start_byte) 
 		DO UPDATE SET 
+			symbol_id = EXCLUDED.symbol_id,
 			kind = EXCLUDED.kind,
 			signature = EXCLUDED.signature,
 			end_line = EXCLUDED.end_line,
@@ -253,6 +254,7 @@ func (r *SymbolRepository) BatchCreateTx(ctx context.Context, tx *sql.Tx, symbol
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (file_id, name, start_line, start_byte) 
 		DO UPDATE SET 
+			symbol_id = EXCLUDED.symbol_id,
 			kind = EXCLUDED.kind,
 			signature = EXCLUDED.signature,
 			end_line = EXCLUDED.end_line,

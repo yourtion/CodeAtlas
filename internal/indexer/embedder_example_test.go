@@ -161,7 +161,7 @@ func ExampleEmbedderConfig() {
 	// Default backend: openai
 	// Default endpoint: http://localhost:1234/v1/embeddings
 	// Default model: text-embedding-qwen3-embedding-0.6b
-	// Default dimensions: 768
+	// Default dimensions: 1024
 	// Default batch size: 50
 	//
 	// Local backend: openai

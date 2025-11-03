@@ -203,11 +203,12 @@ func initializeSchema(ctx context.Context, db *models.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
 
 		-- Vectors (pgvector)
+		-- Using 1024 dimensions to match default embedder (text-embedding-qwen3-embedding-0.6b)
 		CREATE TABLE IF NOT EXISTS vectors (
 			vector_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			entity_id UUID NOT NULL,
 			entity_type VARCHAR(50) NOT NULL,
-			embedding vector(768),
+			embedding vector(1024),
 			content TEXT NOT NULL,
 			model VARCHAR(100) NOT NULL,
 			chunk_index INT DEFAULT 0,

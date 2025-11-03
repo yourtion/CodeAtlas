@@ -123,6 +123,15 @@ func (p *PythonParser) extractModuleDocstring(rootNode *sitter.Node, parsedFile 
 
 // extractImports extracts import statements
 func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
+	// Find the module symbol to use as the source for imports
+	var moduleSymbol string
+	for _, symbol := range parsedFile.Symbols {
+		if symbol.Kind == "module" {
+			moduleSymbol = symbol.Name
+			break
+		}
+	}
+
 	// Simple import: import module
 	importQuery := `(import_statement name: (dotted_name) @import.name)`
 
@@ -137,6 +146,7 @@ func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedF
 
 			dependency := ParsedDependency{
 				Type:         "import",
+				Source:       moduleSymbol, // Use module as source for file-level imports
 				Target:       importName,
 				TargetModule: importName,
 			}
@@ -159,6 +169,7 @@ func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedF
 
 			dependency := ParsedDependency{
 				Type:         "import",
+				Source:       moduleSymbol, // Use module as source for file-level imports
 				Target:       moduleName,
 				TargetModule: moduleName,
 			}

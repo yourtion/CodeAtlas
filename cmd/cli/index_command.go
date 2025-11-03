@@ -365,6 +365,8 @@ func parseRepository(path string, workers int, verbose bool, logger *utils.Logge
 	allErrors = append(allErrors, mappingErrors...)
 
 	// Create output
+	// FailureCount should be the number of files that failed, not the number of errors
+	failedFiles := len(files) - len(schemaFiles)
 	output := schema.ParseOutput{
 		Files:         schemaFiles,
 		Relationships: allEdges,
@@ -373,7 +375,7 @@ func parseRepository(path string, workers int, verbose bool, logger *utils.Logge
 			Timestamp:    time.Now(),
 			TotalFiles:   len(files),
 			SuccessCount: len(schemaFiles),
-			FailureCount: len(allErrors),
+			FailureCount: failedFiles,
 			Errors:       allErrors,
 		},
 	}
