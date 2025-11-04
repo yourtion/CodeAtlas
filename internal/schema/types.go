@@ -72,6 +72,13 @@ const (
 	SymbolVariable  SymbolKind = "variable"
 	SymbolPackage   SymbolKind = "package"
 	SymbolModule    SymbolKind = "module"
+	SymbolExternal  SymbolKind = "external_module" // Virtual symbol for external dependencies
+)
+
+// Constants for external file management
+const (
+	ExternalFileID   = "00000000-0000-0000-0000-000000000000"
+	ExternalFilePath = "__external__"
 )
 
 // ASTNode represents a Tree-sitter AST node

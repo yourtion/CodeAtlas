@@ -169,6 +169,7 @@ func (p *JSParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 				Source:       moduleSymbol, // Use module as source for file-level imports
 				Target:       importPath,
 				TargetModule: importPath,
+				IsExternal:   p.isExternalImport(importPath),
 			}
 
 			parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
@@ -195,6 +196,7 @@ func (p *JSParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 					Source:       moduleSymbol, // Use module as source for file-level imports
 					Target:       requirePath,
 					TargetModule: requirePath,
+					IsExternal:   p.isExternalImport(requirePath),
 				}
 
 				parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
@@ -203,6 +205,20 @@ func (p *JSParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 	}
 
 	return nil
+}
+
+// isExternalImport determines if an import path refers to an external module
+func (p *JSParser) isExternalImport(importPath string) bool {
+	// Relative paths are internal
+	if strings.HasPrefix(importPath, "./") || strings.HasPrefix(importPath, "../") {
+		return false
+	}
+	// Absolute paths starting with / are internal
+	if strings.HasPrefix(importPath, "/") {
+		return false
+	}
+	// Everything else is external (npm packages, scoped packages like @types/node, etc.)
+	return true
 }
 
 // extractExports extracts export statements

@@ -410,8 +410,20 @@ func TestIndexWithTransactions(t *testing.T) {
 		t.Fatalf("failed to get files: %v", err)
 	}
 
-	if len(files) != len(input.Files) {
-		t.Errorf("expected %d files in database, got: %d", len(input.Files), len(files))
+	// Expected files = input files + external file (if external dependencies exist)
+	expectedFiles := len(input.Files)
+	// Check if external file was created
+	hasExternalFile := false
+	for _, f := range files {
+		if f.Path == "__external__" {
+			hasExternalFile = true
+			expectedFiles++
+			break
+		}
+	}
+
+	if len(files) != expectedFiles {
+		t.Errorf("expected %d files in database (including external file: %v), got: %d", expectedFiles, hasExternalFile, len(files))
 	}
 }
 

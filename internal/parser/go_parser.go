@@ -60,6 +60,7 @@ type ParsedDependency struct {
 	Source       string // Symbol name
 	Target       string // Symbol/module name
 	TargetModule string // For imports
+	IsExternal   bool   // True if this is an external dependency (e.g., npm package, third-party library)
 }
 
 // GoParser parses Go source code using Tree-sitter
@@ -213,6 +214,7 @@ func (p *GoParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 				Source:       packageSymbol, // Use package as source for file-level imports
 				Target:       importPath,
 				TargetModule: importPath,
+				IsExternal:   p.isExternalImport(importPath, parsedFile.Path),
 			}
 
 			parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
@@ -220,6 +222,19 @@ func (p *GoParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedFile,
 	}
 
 	return nil
+}
+
+// isExternalImport determines if an import path refers to an external module
+func (p *GoParser) isExternalImport(importPath string, currentFilePath string) bool {
+	// Standard library packages (no dots in path, or starts with known stdlib prefixes)
+	if !strings.Contains(importPath, ".") {
+		return false // Standard library is considered internal
+	}
+	
+	// Extract module path from current file to determine internal imports
+	// For now, treat all imports with dots as external (third-party)
+	// A more sophisticated approach would parse go.mod to determine the module path
+	return true
 }
 
 // extractFunctions extracts function declarations

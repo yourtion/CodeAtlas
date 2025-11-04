@@ -149,6 +149,7 @@ func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedF
 				Source:       moduleSymbol, // Use module as source for file-level imports
 				Target:       importName,
 				TargetModule: importName,
+				IsExternal:   p.isExternalImport(importName),
 			}
 
 			parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
@@ -172,6 +173,7 @@ func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedF
 				Source:       moduleSymbol, // Use module as source for file-level imports
 				Target:       moduleName,
 				TargetModule: moduleName,
+				IsExternal:   p.isExternalImport(moduleName),
 			}
 
 			parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
@@ -179,6 +181,36 @@ func (p *PythonParser) extractImports(rootNode *sitter.Node, parsedFile *ParsedF
 	}
 
 	return nil
+}
+
+// isExternalImport determines if an import path refers to an external module
+func (p *PythonParser) isExternalImport(importPath string) bool {
+	// Relative imports start with dots
+	if strings.HasPrefix(importPath, ".") {
+		return false
+	}
+	
+	// Standard library modules (common ones)
+	stdlibModules := map[string]bool{
+		"os": true, "sys": true, "re": true, "json": true, "time": true,
+		"datetime": true, "collections": true, "itertools": true, "functools": true,
+		"pathlib": true, "typing": true, "unittest": true, "logging": true,
+		"math": true, "random": true, "string": true, "io": true, "subprocess": true,
+	}
+	
+	// Get the root module name (before first dot)
+	rootModule := importPath
+	if idx := strings.Index(importPath, "."); idx != -1 {
+		rootModule = importPath[:idx]
+	}
+	
+	// If it's a known stdlib module, it's not external
+	if stdlibModules[rootModule] {
+		return false
+	}
+	
+	// Everything else is considered external (third-party packages)
+	return true
 }
 
 // extractFunctions extracts function definitions
