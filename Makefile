@@ -34,7 +34,7 @@ test: test-unit
 .PHONY: test-unit
 test-unit:
 	@echo "Running unit tests (no external dependencies)..."
-	go test -short ./... -v
+	go test -short $(shell go list ./... | grep -v /scripts) -v
 
 # Integration tests only (requires database and external services)
 .PHONY: test-integration
@@ -61,7 +61,7 @@ test-integration-legacy:
 .PHONY: test-integration-tagged
 test-integration-tagged:
 	@echo "Running integration tests with build tags..."
-	go test -tags=integration ./... -v
+	go test -tags=integration $(shell go list ./... | grep -v /scripts) -v
 
 # CLI integration tests (requires built binary)
 .PHONY: test-cli-integration
@@ -74,7 +74,7 @@ test-cli-integration: build-cli
 test-all:
 	@echo "Running all tests (unit + integration)..."
 	@echo "Make sure database is running: make docker-up"
-	go test ./... -v
+	go test $(shell go list ./... | grep -v /scripts) -v
 
 # Specific test suites
 .PHONY: test-cli
@@ -110,7 +110,7 @@ test-coverage: test-coverage-unit
 .PHONY: test-coverage-unit
 test-coverage-unit:
 	@echo "Generating unit test coverage report..."
-	go test -short ./... -coverprofile=coverage_unit.out -covermode=atomic
+	go test -short $(shell go list ./... | grep -v /scripts) -coverprofile=coverage_unit.out -covermode=atomic
 	go tool cover -html=coverage_unit.out -o coverage_unit.html
 	@echo "Unit test coverage: $$(go tool cover -func=coverage_unit.out | tail -1 | awk '{print $$3}')"
 	@echo "Coverage report generated: coverage_unit.html"
@@ -130,7 +130,7 @@ test-coverage-integration:
 test-coverage-all:
 	@echo "Generating combined test coverage report..."
 	@echo "Make sure database is running: make docker-up"
-	go test ./... -coverprofile=coverage_all.out -covermode=atomic
+	go test $(shell go list ./... | grep -v /scripts) -coverprofile=coverage_all.out -covermode=atomic
 	go tool cover -html=coverage_all.out -o coverage_all.html
 	@echo "Total coverage: $$(go tool cover -func=coverage_all.out | tail -1 | awk '{print $$3}')"
 	@echo "Coverage report generated: coverage_all.html"
@@ -193,6 +193,35 @@ init-db-stats: build-init-db
 .PHONY: init-db-with-index
 init-db-with-index: build-init-db
 	./${INIT_DB_BINARY} -create-vector-index -vector-index-lists 100
+
+# Vector dimension management
+.PHONY: alter-vector-dimension
+alter-vector-dimension:
+	@if [ -z "$(VECTOR_DIM)" ]; then \
+		echo "Error: VECTOR_DIM not specified"; \
+		echo "Usage: make alter-vector-dimension VECTOR_DIM=1536"; \
+		echo "Or set EMBEDDING_DIMENSIONS environment variable"; \
+		exit 1; \
+	fi
+	go run scripts/alter_vector_dimension.go -dimension $(VECTOR_DIM)
+
+.PHONY: alter-vector-dimension-force
+alter-vector-dimension-force:
+	@if [ -z "$(VECTOR_DIM)" ]; then \
+		echo "Error: VECTOR_DIM not specified"; \
+		echo "Usage: make alter-vector-dimension-force VECTOR_DIM=1536"; \
+		exit 1; \
+	fi
+	go run scripts/alter_vector_dimension.go -dimension $(VECTOR_DIM) -force
+
+.PHONY: alter-vector-dimension-from-env
+alter-vector-dimension-from-env:
+	@if [ -z "$$EMBEDDING_DIMENSIONS" ]; then \
+		echo "Error: EMBEDDING_DIMENSIONS environment variable not set"; \
+		echo "Usage: EMBEDDING_DIMENSIONS=1536 make alter-vector-dimension-from-env"; \
+		exit 1; \
+	fi
+	go run scripts/alter_vector_dimension.go
 
 # Clean targets
 .PHONY: clean
@@ -278,6 +307,9 @@ help:
 	@echo "  make init-db                   - Initialize database schema"
 	@echo "  make init-db-stats             - Initialize database and show statistics"
 	@echo "  make init-db-with-index        - Initialize database with vector index"
+	@echo "  make alter-vector-dimension VECTOR_DIM=<dim> - Change vector dimension"
+	@echo "  make alter-vector-dimension-force VECTOR_DIM=<dim> - Change dimension (truncate data)"
+	@echo "  make alter-vector-dimension-from-env - Change dimension from EMBEDDING_DIMENSIONS env"
 	@echo ""
 	@echo "Docker Commands:"
 	@echo "  make docker-up                 - Start Docker services"
