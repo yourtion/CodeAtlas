@@ -37,7 +37,7 @@ print_error() {
 # Function to run tests with coverage
 run_coverage() {
     print_info "Running tests with coverage..."
-    go test ./... -coverprofile=$COVERAGE_FILE -covermode=atomic -v
+    go test $(go list ./... | grep -v /scripts) -coverprofile=$COVERAGE_FILE -covermode=atomic -v
     
     if [ $? -ne 0 ]; then
         print_error "Tests failed!"

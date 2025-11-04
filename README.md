@@ -181,9 +181,34 @@ make run-api
 | `INDEXER_BATCH_SIZE` | `100` | 索引批处理大小 |
 | `INDEXER_WORKER_COUNT` | `4` | 并发工作线程数 |
 | `EMBEDDING_MODEL` | `text-embedding-qwen3-embedding-0.6b` | 向量模型 |
+| `EMBEDDING_DIMENSIONS` | `1024` | 向量维度（需与模型匹配） |
+
+**向量维度配置：**
+
+不同的 embedding 模型产生不同维度的向量，数据库 schema 必须匹配：
+
+| 模型 | 维度 |
+|------|------|
+| nomic-embed-text | 768 |
+| text-embedding-qwen3-embedding-0.6b | 1024 |
+| text-embedding-3-small (OpenAI) | 1536 |
+| text-embedding-3-large (OpenAI) | 3072 |
+
+初始化数据库前设置正确的维度：
+
+```bash
+# 新数据库：在 .env 中设置维度
+echo "EMBEDDING_DIMENSIONS=1536" >> .env
+make docker-up
+make init-db
+
+# 已有数据库：修改向量维度
+make alter-vector-dimension VECTOR_DIM=1536
+```
 
 **完整配置文档：**
 - **[配置指南](./docs/configuration.md)** - 完整的配置选项说明
+- **[向量维度配置](./docs/dev/vector-dimensions-configuration.md)** - 向量维度配置详解
 - **[.env.example](./.env.example)** - 配置文件示例
 
 ### API 文档

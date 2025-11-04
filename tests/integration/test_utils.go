@@ -111,6 +111,9 @@ func (tdb *TestDB) TeardownTestDB(t *testing.T) {
 
 // initializeSchema creates all required tables and extensions
 func initializeSchema(ctx context.Context, db *models.DB) error {
+	// Get vector dimension from environment or use default
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+	
 	// Create extensions
 	extensions := []string{
 		"CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"",
@@ -123,8 +126,8 @@ func initializeSchema(ctx context.Context, db *models.DB) error {
 		}
 	}
 
-	// Create tables
-	schema := `
+	// Create tables with dynamic vector dimension
+	schema := fmt.Sprintf(`
 		-- Repositories
 		CREATE TABLE IF NOT EXISTS repositories (
 			repo_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -206,12 +209,12 @@ func initializeSchema(ctx context.Context, db *models.DB) error {
 		CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
 
 		-- Vectors (pgvector)
-		-- Using 1024 dimensions to match default embedder (text-embedding-qwen3-embedding-0.6b)
+		-- Vector dimension is configurable via VECTOR_DIMENSIONS environment variable
 		CREATE TABLE IF NOT EXISTS vectors (
 			vector_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			entity_id UUID NOT NULL,
 			entity_type VARCHAR(50) NOT NULL,
-			embedding vector(1024),
+			embedding vector(%d),
 			content TEXT NOT NULL,
 			model VARCHAR(100) NOT NULL,
 			chunk_index INT DEFAULT 0,
@@ -239,7 +242,7 @@ func initializeSchema(ctx context.Context, db *models.DB) error {
 			created_at TIMESTAMP DEFAULT NOW()
 		);
 		CREATE INDEX IF NOT EXISTS idx_summaries_entity ON summaries(entity_id, entity_type);
-	`
+	`, vectorDim)
 
 	if _, err := db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
