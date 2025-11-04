@@ -360,6 +360,7 @@ func (v *SchemaValidator) ValidateSymbol(symbol *schema.Symbol) *ValidationResul
 			schema.SymbolVariable:  true,
 			schema.SymbolPackage:   true,
 			schema.SymbolModule:    true,
+			schema.SymbolExternal:  true, // Virtual symbol for external dependencies
 		}
 
 		if !validKinds[symbol.Kind] {

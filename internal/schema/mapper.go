@@ -11,13 +11,16 @@ import (
 // SchemaMapper transforms parsed files into the unified schema format
 type SchemaMapper struct {
 	// Map to track symbol IDs for dependency resolution
-	symbolIDMap map[string]string
+	symbolIDMap     map[string]string
+	// Map to track external symbols (module name -> Symbol)
+	externalSymbols map[string]*Symbol
 }
 
 // NewSchemaMapper creates a new schema mapper
 func NewSchemaMapper() *SchemaMapper {
 	return &SchemaMapper{
-		symbolIDMap: make(map[string]string),
+		symbolIDMap:     make(map[string]string),
+		externalSymbols: make(map[string]*Symbol),
 	}
 }
 
@@ -50,13 +53,23 @@ func (m *SchemaMapper) MapToSchema(parsed *parser.ParsedFile) (*File, []Dependen
 		m.symbolIDMap[parsedSymbol.Name] = symbol.SymbolID
 	}
 
+	// Collect external modules and create virtual symbols
+	// Note: External symbols are tracked but NOT added to this file's symbols
+	// They will be collected and written separately by the indexer
+	externalModules := m.collectExternalModules(parsed.Dependencies)
+	for moduleName := range externalModules {
+		externalSymbol := m.createExternalSymbol(moduleName)
+		m.externalSymbols[moduleName] = &externalSymbol
+		m.symbolIDMap[moduleName] = externalSymbol.SymbolID
+	}
+
 	// Map AST nodes if root node exists
 	if parsed.RootNode != nil {
 		astNodes := m.mapASTNodes(parsed.RootNode, fileID, "", parsed.Content)
 		file.Nodes = astNodes
 	}
 
-	// Map dependencies
+	// Map dependencies (now all will have target_id)
 	edges := m.mapDependencies(parsed.Dependencies, fileID, parsed.Path)
 
 	return file, edges, nil
@@ -243,4 +256,44 @@ func (m *SchemaMapper) resolveSymbolID(symbolName string) string {
 		return ""
 	}
 	return m.symbolIDMap[symbolName]
+}
+
+// collectExternalModules collects all external module names from dependencies
+func (m *SchemaMapper) collectExternalModules(deps []parser.ParsedDependency) map[string]bool {
+	modules := make(map[string]bool)
+	for _, dep := range deps {
+		if dep.IsExternal && dep.Type == "import" && dep.TargetModule != "" {
+			modules[dep.TargetModule] = true
+		}
+	}
+	return modules
+}
+
+// createExternalSymbol creates a virtual symbol for an external module
+func (m *SchemaMapper) createExternalSymbol(moduleName string) Symbol {
+	// Generate deterministic ID for external modules
+	symbolID := utils.GenerateDeterministicUUID("external:" + moduleName)
+
+	return Symbol{
+		SymbolID:  symbolID,
+		FileID:    ExternalFileID,
+		Name:      moduleName,
+		Kind:      SymbolExternal,
+		Signature: fmt.Sprintf("external module: %s", moduleName),
+		Span: Span{
+			StartLine: 1, // Validators require start_line >= 1
+			EndLine:   1,
+			StartByte: 0,
+			EndByte:   0,
+		},
+	}
+}
+
+// GetExternalSymbols returns all external symbols collected during mapping
+func (m *SchemaMapper) GetExternalSymbols() []Symbol {
+	symbols := make([]Symbol, 0, len(m.externalSymbols))
+	for _, symbol := range m.externalSymbols {
+		symbols = append(symbols, *symbol)
+	}
+	return symbols
 }

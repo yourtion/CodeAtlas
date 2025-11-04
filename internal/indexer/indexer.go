@@ -237,6 +237,13 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		LogField{Key: "repo_id", Value: idx.config.RepoID},
 	)
 
+	// Step 2.5: Ensure external file exists
+	idx.logger.Debug("ensuring external file exists")
+	if err := idx.ensureExternalFile(ctx); err != nil {
+		idx.logger.WarnWithFields("failed to create external file", LogField{Key: "error", Value: err})
+		// Non-fatal, continue
+	}
+
 	// Step 3: Process files (with incremental support)
 	filesToProcess := input.Files
 	if idx.config.Incremental {
@@ -1115,4 +1122,36 @@ func (idx *Indexer) GetPerformanceStats() map[string]interface{} {
 			"max_lifetime_closed": poolStats.MaxLifetimeClosed,
 		},
 	}
+}
+
+// ensureExternalFile creates the special external file if it doesn't exist
+func (idx *Indexer) ensureExternalFile(ctx context.Context) error {
+	fileRepo := models.NewFileRepository(idx.db)
+
+	// Check if external file exists
+	existing, err := fileRepo.GetByID(ctx, schema.ExternalFileID)
+	if err != nil {
+		return fmt.Errorf("failed to check for external file: %w", err)
+	}
+
+	if existing == nil {
+		// Create external file
+		externalFile := &models.File{
+			FileID:   schema.ExternalFileID,
+			RepoID:   idx.config.RepoID,
+			Path:     schema.ExternalFilePath,
+			Language: "external",
+			Size:     0,
+			Checksum: "external",
+		}
+		if err := fileRepo.Create(ctx, externalFile); err != nil {
+			return fmt.Errorf("failed to create external file: %w", err)
+		}
+		idx.logger.InfoWithFields("created external file",
+			LogField{Key: "file_id", Value: schema.ExternalFileID},
+			LogField{Key: "repo_id", Value: idx.config.RepoID},
+		)
+	}
+
+	return nil
 }
