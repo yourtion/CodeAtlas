@@ -34,7 +34,7 @@ test: test-unit
 .PHONY: test-unit
 test-unit:
 	@echo "Running unit tests (no external dependencies)..."
-	go test -short $(shell go list ./... | grep -v /scripts) -v
+	go test -short $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
 
 # Integration tests only (requires database and external services)
 .PHONY: test-integration
@@ -61,7 +61,7 @@ test-integration-legacy:
 .PHONY: test-integration-tagged
 test-integration-tagged:
 	@echo "Running integration tests with build tags..."
-	go test -tags=integration $(shell go list ./... | grep -v /scripts) -v
+	go test -tags=integration $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
 
 # CLI integration tests (requires built binary)
 .PHONY: test-cli-integration
@@ -74,7 +74,7 @@ test-cli-integration: build-cli
 test-all:
 	@echo "Running all tests (unit + integration)..."
 	@echo "Make sure database is running: make docker-up"
-	go test $(shell go list ./... | grep -v /scripts) -v
+	go test $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
 
 # Specific test suites
 .PHONY: test-cli
@@ -110,7 +110,7 @@ test-coverage: test-coverage-unit
 .PHONY: test-coverage-unit
 test-coverage-unit:
 	@echo "Generating unit test coverage report..."
-	go test -short $(shell go list ./... | grep -v /scripts) -coverprofile=coverage_unit.out -covermode=atomic
+	go test -short $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -coverprofile=coverage_unit.out -covermode=atomic
 	go tool cover -html=coverage_unit.out -o coverage_unit.html
 	@echo "Unit test coverage: $$(go tool cover -func=coverage_unit.out | tail -1 | awk '{print $$3}')"
 	@echo "Coverage report generated: coverage_unit.html"
@@ -130,7 +130,7 @@ test-coverage-integration:
 test-coverage-all:
 	@echo "Generating combined test coverage report..."
 	@echo "Make sure database is running: make docker-up"
-	go test $(shell go list ./... | grep -v /scripts) -coverprofile=coverage_all.out -covermode=atomic
+	go test $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -coverprofile=coverage_all.out -covermode=atomic
 	go tool cover -html=coverage_all.out -o coverage_all.html
 	@echo "Total coverage: $$(go tool cover -func=coverage_all.out | tail -1 | awk '{print $$3}')"
 	@echo "Coverage report generated: coverage_all.html"

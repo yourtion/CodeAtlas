@@ -226,7 +226,7 @@ func (r *VectorRepository) BatchCreate(ctx context.Context, vectors []*Vector) e
 	query := `
 		INSERT INTO vectors (vector_id, entity_id, entity_type, embedding, content, model, chunk_index, created_at)
 		VALUES ($1, $2, $3, $4::vector, $5, $6, $7, $8)
-		ON CONFLICT (entity_id, entity_type, chunk_index) 
+		ON CONFLICT (vector_id) 
 		DO UPDATE SET 
 			embedding = EXCLUDED.embedding,
 			content = EXCLUDED.content,
@@ -405,7 +405,7 @@ func (r *VectorRepository) SimilaritySearchWithFilters(ctx context.Context, quer
 // GetEmbeddingDimensions returns the dimensions of embeddings for a model
 func (r *VectorRepository) GetEmbeddingDimensions(ctx context.Context, model string) (int, error) {
 	query := `
-		SELECT array_length(embedding, 1) as dimensions
+		SELECT vector_dims(embedding) as dimensions
 		FROM vectors 
 		WHERE model = $1 
 		LIMIT 1
