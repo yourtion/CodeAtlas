@@ -15,7 +15,7 @@ import (
 
 // skipIfNoParseCommand skips the test if parse command is not available
 func skipIfNoParseCommand(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	cmd := exec.Command(cliBinaryPath, "parse", "--help")
 	if err := cmd.Run(); err != nil {
 		t.Skip("Skipping test: parse command not implemented")
 	}
@@ -23,6 +23,7 @@ func skipIfNoParseCommand(t *testing.T) {
 
 // TestParseIgnoreRules tests that .gitignore rules are respected
 func TestParseIgnoreRules(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -37,7 +38,7 @@ func TestParseIgnoreRules(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name())
 
@@ -93,6 +94,7 @@ func TestParseIgnoreRules(t *testing.T) {
 
 // TestParseNestedGitignore tests that nested .gitignore files are respected
 func TestParseNestedGitignore(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -107,7 +109,7 @@ func TestParseNestedGitignore(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name())
 
@@ -156,6 +158,7 @@ func TestParseNestedGitignore(t *testing.T) {
 
 // TestParseCustomIgnoreFile tests custom ignore file support
 func TestParseCustomIgnoreFile(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -181,7 +184,7 @@ func TestParseCustomIgnoreFile(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with custom ignore file
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--ignore-file", customIgnore.Name())
@@ -231,6 +234,7 @@ func TestParseCustomIgnoreFile(t *testing.T) {
 
 // TestParseCustomIgnorePattern tests command-line ignore patterns
 func TestParseCustomIgnorePattern(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -245,7 +249,7 @@ func TestParseCustomIgnorePattern(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with ignore pattern for JavaScript files
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--ignore-pattern", "*.js")
@@ -295,6 +299,7 @@ func TestParseCustomIgnorePattern(t *testing.T) {
 
 // TestParseMultipleIgnorePatterns tests multiple ignore patterns
 func TestParseMultipleIgnorePatterns(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -309,7 +314,7 @@ func TestParseMultipleIgnorePatterns(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with multiple ignore patterns
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--ignore-pattern", "*.js",
@@ -345,6 +350,7 @@ func TestParseMultipleIgnorePatterns(t *testing.T) {
 
 // TestParseNoIgnore tests that --no-ignore disables all ignore rules
 func TestParseNoIgnore(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -359,7 +365,7 @@ func TestParseNoIgnore(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with --no-ignore
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--no-ignore")
@@ -396,6 +402,7 @@ func TestParseNoIgnore(t *testing.T) {
 
 // TestParseDefaultIgnorePatterns tests that default patterns are applied
 func TestParseDefaultIgnorePatterns(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary test directory with files that should be ignored by default
 	tmpDir, err := os.MkdirTemp("", "test-default-ignore-*")
 	if err != nil {
@@ -433,7 +440,7 @@ func TestParseDefaultIgnorePatterns(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", tmpDir,
 		"--output", tmpFile.Name())
 

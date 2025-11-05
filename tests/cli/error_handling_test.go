@@ -12,6 +12,7 @@ import (
 
 // TestErrorHandlingIntegration tests the complete error handling pipeline
 func TestErrorHandlingIntegration(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary directory with various test files
 	tmpDir := t.TempDir()
 
@@ -208,6 +209,7 @@ func BrokenFunction() {
 
 // TestGracefulDegradation verifies that parsing continues even with errors
 func TestGracefulDegradation(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	tmpDir := t.TempDir()
 
 	// Create multiple files with various issues

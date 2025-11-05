@@ -13,16 +13,13 @@ func TestFileRepository_Create(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -30,12 +27,12 @@ func TestFileRepository_Create(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	repo := NewFileRepository(db)
+	repo := NewFileRepository(testDB.DB)
 
 	file := &File{
 		FileID:   uuid.New().String(),
@@ -80,16 +77,13 @@ func TestFileRepository_GetByPath(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -97,12 +91,12 @@ func TestFileRepository_GetByPath(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	repo := NewFileRepository(db)
+	repo := NewFileRepository(testDB.DB)
 
 	file := &File{
 		FileID:   uuid.New().String(),
@@ -138,16 +132,13 @@ func TestFileRepository_BatchCreate(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -155,12 +146,12 @@ func TestFileRepository_BatchCreate(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	repo := NewFileRepository(db)
+	repo := NewFileRepository(testDB.DB)
 
 	files := []*File{
 		{
@@ -218,16 +209,13 @@ func TestFileRepository_Update(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -235,12 +223,12 @@ func TestFileRepository_Update(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	repo := NewFileRepository(db)
+	repo := NewFileRepository(testDB.DB)
 
 	file := &File{
 		FileID:   uuid.New().String(),
@@ -291,16 +279,13 @@ func TestFileRepository_GetFilesByLanguage(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -308,12 +293,12 @@ func TestFileRepository_GetFilesByLanguage(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	repo := NewFileRepository(db)
+	repo := NewFileRepository(testDB.DB)
 
 	files := []*File{
 		{
@@ -379,16 +364,13 @@ func TestFileRepository_Count(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -396,12 +378,12 @@ func TestFileRepository_Count(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	repo := NewFileRepository(db)
+	repo := NewFileRepository(testDB.DB)
 
 	// Initial count should be 0
 	count, err := repo.Count(ctx, repository.RepoID)
@@ -452,16 +434,13 @@ func TestFileRepository_Delete(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -469,12 +448,12 @@ func TestFileRepository_Delete(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	repo := NewFileRepository(db)
+	repo := NewFileRepository(testDB.DB)
 
 	file := &File{
 		FileID:   uuid.New().String(),

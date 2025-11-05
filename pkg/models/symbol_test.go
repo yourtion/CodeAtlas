@@ -12,16 +12,13 @@ func TestSymbolRepository_Create(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -29,12 +26,12 @@ func TestSymbolRepository_Create(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -48,7 +45,7 @@ func TestSymbolRepository_Create(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	repo := NewSymbolRepository(db)
+	repo := NewSymbolRepository(testDB.DB)
 
 	symbol := &Symbol{
 		SymbolID:        uuid.New().String(),
@@ -104,16 +101,13 @@ func TestSymbolRepository_GetByFileID(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -121,12 +115,12 @@ func TestSymbolRepository_GetByFileID(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -140,7 +134,7 @@ func TestSymbolRepository_GetByFileID(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	repo := NewSymbolRepository(db)
+	repo := NewSymbolRepository(testDB.DB)
 
 	symbols := []*Symbol{
 		{
@@ -207,16 +201,13 @@ func TestSymbolRepository_GetByKind(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -224,12 +215,12 @@ func TestSymbolRepository_GetByKind(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -243,7 +234,7 @@ func TestSymbolRepository_GetByKind(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	repo := NewSymbolRepository(db)
+	repo := NewSymbolRepository(testDB.DB)
 
 	symbols := []*Symbol{
 		{
@@ -318,16 +309,13 @@ func TestSymbolRepository_GetByName(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -335,12 +323,12 @@ func TestSymbolRepository_GetByName(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -354,7 +342,7 @@ func TestSymbolRepository_GetByName(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	repo := NewSymbolRepository(db)
+	repo := NewSymbolRepository(testDB.DB)
 
 	symbols := []*Symbol{
 		{
@@ -436,16 +424,13 @@ func TestSymbolRepository_GetSymbolsWithDocstrings(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -453,12 +438,12 @@ func TestSymbolRepository_GetSymbolsWithDocstrings(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -472,7 +457,7 @@ func TestSymbolRepository_GetSymbolsWithDocstrings(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	repo := NewSymbolRepository(db)
+	repo := NewSymbolRepository(testDB.DB)
 
 	symbols := []*Symbol{
 		{
@@ -538,16 +523,13 @@ func TestSymbolRepository_CountByKind(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -555,12 +537,12 @@ func TestSymbolRepository_CountByKind(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -574,7 +556,7 @@ func TestSymbolRepository_CountByKind(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	repo := NewSymbolRepository(db)
+	repo := NewSymbolRepository(testDB.DB)
 
 	symbols := []*Symbol{
 		{
@@ -652,16 +634,13 @@ func TestSymbolRepository_Update(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -669,12 +648,12 @@ func TestSymbolRepository_Update(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -688,7 +667,7 @@ func TestSymbolRepository_Update(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	repo := NewSymbolRepository(db)
+	repo := NewSymbolRepository(testDB.DB)
 
 	symbol := &Symbol{
 		SymbolID:        uuid.New().String(),
@@ -745,16 +724,13 @@ func TestSymbolRepository_Delete(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -762,12 +738,12 @@ func TestSymbolRepository_Delete(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -781,7 +757,7 @@ func TestSymbolRepository_Delete(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	repo := NewSymbolRepository(db)
+	repo := NewSymbolRepository(testDB.DB)
 
 	symbol := &Symbol{
 		SymbolID:  uuid.New().String(),

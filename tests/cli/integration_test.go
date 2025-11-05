@@ -1,4 +1,4 @@
-package cli_test
+package cli
 
 import (
 	"os"
@@ -9,7 +9,8 @@ import (
 
 // TestCLIVersion tests that the version flag works
 func TestCLIVersion(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "--version")
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "--version")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run CLI: %v", err)
@@ -23,7 +24,9 @@ func TestCLIVersion(t *testing.T) {
 
 // TestCLIHelp tests that help displays available commands
 func TestCLIHelp(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "--help")
+	skipIfBinaryNotExists(t)
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run CLI: %v", err)
@@ -43,7 +46,9 @@ func TestCLIHelp(t *testing.T) {
 
 // TestParseCommandHelp tests that parse command help is displayed
 func TestParseCommandHelp(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	skipIfBinaryNotExists(t)
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "parse", "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run CLI: %v", err)
@@ -87,7 +92,8 @@ func TestParseCommandHelp(t *testing.T) {
 
 // TestUploadCommandHelp tests that upload command help is displayed
 func TestUploadCommandHelp(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "upload", "--help")
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "upload", "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run CLI: %v", err)
@@ -116,7 +122,8 @@ func TestUploadCommandHelp(t *testing.T) {
 
 // TestParseCommandRequiresInput tests that parse command validates input
 func TestParseCommandRequiresInput(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse")
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "parse")
 	output, err := cmd.CombinedOutput()
 
 	// Should fail with non-zero exit code
@@ -132,6 +139,7 @@ func TestParseCommandRequiresInput(t *testing.T) {
 
 // TestParseCommandSemanticRequiresAPIKey tests that semantic flag requires API key
 func TestParseCommandSemanticRequiresAPIKey(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary test file
 	tmpFile, err := os.CreateTemp("", "test*.go")
 	if err != nil {
@@ -151,7 +159,7 @@ func TestParseCommandSemanticRequiresAPIKey(t *testing.T) {
 		}
 	}()
 
-	cmd := exec.Command("../../bin/cli", "parse", "--file", tmpFile.Name(), "--semantic")
+	cmd := exec.Command(cliBinaryPath, "parse", "--file", tmpFile.Name(), "--semantic")
 	output, err := cmd.CombinedOutput()
 
 	// Should fail with non-zero exit code
@@ -167,15 +175,16 @@ func TestParseCommandSemanticRequiresAPIKey(t *testing.T) {
 
 // TestConsistentFlagNaming tests that parse and upload use consistent flag names
 func TestConsistentFlagNaming(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Get parse command help
-	parseCmd := exec.Command("../../bin/cli", "parse", "--help")
+	parseCmd := exec.Command(cliBinaryPath, "parse", "--help")
 	parseOutput, err := parseCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run parse help: %v", err)
 	}
 
 	// Get upload command help
-	uploadCmd := exec.Command("../../bin/cli", "upload", "--help")
+	uploadCmd := exec.Command(cliBinaryPath, "upload", "--help")
 	uploadOutput, err := uploadCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run upload help: %v", err)

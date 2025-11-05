@@ -63,14 +63,11 @@ func TestNewDB_Success(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	// Test that we can ping the database
-	err = db.Ping()
+	err := testDB.DB.Ping()
 	if err != nil {
 		t.Errorf("Failed to ping database: %v", err)
 	}
@@ -124,14 +121,11 @@ func TestNewDB_WithCustomEnv(t *testing.T) {
 	os.Setenv("DB_PASSWORD", "codeatlas")
 	os.Setenv("DB_NAME", "codeatlas")
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database with custom env: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	// Test that we can ping the database
-	err = db.Ping()
+	err := testDB.DB.Ping()
 	if err != nil {
 		t.Errorf("Failed to ping database: %v", err)
 	}
@@ -175,19 +169,17 @@ func TestDB_Close(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
+	testDB := SetupTestDB(t)
+	// Don't defer TeardownTestDB since we're testing Close
 
 	// Close the database
-	err = db.Close()
+	err := testDB.DB.Close()
 	if err != nil {
 		t.Errorf("Failed to close database: %v", err)
 	}
 
 	// Verify that we can't ping after closing
-	err = db.Ping()
+	err = testDB.DB.Ping()
 	if err == nil {
 		t.Error("Expected error when pinging closed database, got nil")
 	}

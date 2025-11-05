@@ -200,16 +200,13 @@ func TestVectorRepository_Create(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create repository and file first
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -217,12 +214,12 @@ func TestVectorRepository_Create(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -236,7 +233,7 @@ func TestVectorRepository_Create(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	symbolRepo := NewSymbolRepository(db)
+	symbolRepo := NewSymbolRepository(testDB.DB)
 	symbol := &Symbol{
 		SymbolID:  uuid.New().String(),
 		FileID:    file.FileID,
@@ -254,7 +251,7 @@ func TestVectorRepository_Create(t *testing.T) {
 	}
 
 	// Create vector with 1024 dimensions (as defined in schema)
-	vectorRepo := NewVectorRepository(db)
+	vectorRepo := NewVectorRepository(testDB.DB)
 	embedding := make([]float32, 1024)
 	for i := range embedding {
 		embedding[i] = float32(i) / 1000.0
@@ -314,16 +311,13 @@ func TestVectorRepository_GetByEntityID(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create test data
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -331,12 +325,12 @@ func TestVectorRepository_GetByEntityID(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -350,7 +344,7 @@ func TestVectorRepository_GetByEntityID(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	symbolRepo := NewSymbolRepository(db)
+	symbolRepo := NewSymbolRepository(testDB.DB)
 	symbol := &Symbol{
 		SymbolID:  uuid.New().String(),
 		FileID:    file.FileID,
@@ -368,7 +362,7 @@ func TestVectorRepository_GetByEntityID(t *testing.T) {
 	}
 
 	// Create multiple vectors for the same entity with 1024 dimensions
-	vectorRepo := NewVectorRepository(db)
+	vectorRepo := NewVectorRepository(testDB.DB)
 	
 	createEmbedding := func(offset int) []float32 {
 		emb := make([]float32, 1024)
@@ -444,16 +438,13 @@ func TestVectorRepository_Update(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create test data
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -461,12 +452,12 @@ func TestVectorRepository_Update(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -480,7 +471,7 @@ func TestVectorRepository_Update(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	symbolRepo := NewSymbolRepository(db)
+	symbolRepo := NewSymbolRepository(testDB.DB)
 	symbol := &Symbol{
 		SymbolID:  uuid.New().String(),
 		FileID:    file.FileID,
@@ -498,7 +489,7 @@ func TestVectorRepository_Update(t *testing.T) {
 	}
 
 	// Create vector with 1024 dimensions
-	vectorRepo := NewVectorRepository(db)
+	vectorRepo := NewVectorRepository(testDB.DB)
 	originalEmbedding := make([]float32, 1024)
 	for i := range originalEmbedding {
 		originalEmbedding[i] = float32(i) / 1000.0
@@ -565,16 +556,13 @@ func TestVectorRepository_Delete(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
 
 	// Create test data
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 	repository := &Repository{
 		RepoID: repoID,
@@ -582,12 +570,12 @@ func TestVectorRepository_Delete(t *testing.T) {
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err = repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
 
-	fileRepo := NewFileRepository(db)
+	fileRepo := NewFileRepository(testDB.DB)
 	file := &File{
 		FileID:   uuid.New().String(),
 		RepoID:   repository.RepoID,
@@ -601,7 +589,7 @@ func TestVectorRepository_Delete(t *testing.T) {
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	symbolRepo := NewSymbolRepository(db)
+	symbolRepo := NewSymbolRepository(testDB.DB)
 	symbol := &Symbol{
 		SymbolID:  uuid.New().String(),
 		FileID:    file.FileID,
@@ -619,7 +607,7 @@ func TestVectorRepository_Delete(t *testing.T) {
 	}
 
 	// Create vector with 1024 dimensions
-	vectorRepo := NewVectorRepository(db)
+	vectorRepo := NewVectorRepository(testDB.DB)
 	embedding := make([]float32, 1024)
 	for i := range embedding {
 		embedding[i] = float32(i) / 1000.0

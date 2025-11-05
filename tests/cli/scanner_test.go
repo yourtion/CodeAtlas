@@ -9,6 +9,7 @@ import (
 )
 
 func TestScanRepository(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary directory for testing
 	tempDir := t.TempDir()
 
@@ -87,6 +88,7 @@ func TestScanRepository(t *testing.T) {
 }
 
 func TestIsBinaryFile(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Test binary file extensions
 	binaryFiles := []string{
 		"test.exe", "test.dll", "test.so", "test.jpg",
@@ -102,6 +104,7 @@ func TestIsBinaryFile(t *testing.T) {
 }
 
 func TestDetermineLanguage(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Test language detection
 	testCases := map[string]string{
 		"main.go":     "Go",

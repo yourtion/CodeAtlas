@@ -15,7 +15,7 @@ import (
 
 // skipIfNoParseCommand skips the test if parse command is not available
 func skipIfNoParseCommand(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	cmd := exec.Command(cliBinaryPath, "parse", "--help")
 	if err := cmd.Run(); err != nil {
 		t.Skip("Skipping test: parse command not implemented")
 	}
@@ -23,6 +23,7 @@ func skipIfNoParseCommand(t *testing.T) {
 
 // TestParseConcurrentProcessing tests parsing with different worker counts
 func TestParseConcurrentProcessing(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -46,7 +47,7 @@ func TestParseConcurrentProcessing(t *testing.T) {
 			start := time.Now()
 
 			// Run parse command with specified worker count
-			cmd := exec.Command("../../bin/cli", "parse",
+			cmd := exec.Command(cliBinaryPath, "parse",
 				"--path", fixturesPath,
 				"--output", tmpFile.Name(),
 				"--workers", string(rune(workers+'0')))
@@ -140,6 +141,7 @@ func TestParseConcurrentProcessing(t *testing.T) {
 
 // TestParseRaceConditions tests for race conditions in concurrent processing
 func TestParseRaceConditions(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	if testing.Short() {
 		t.Skip("Skipping race condition test in short mode")
 	}
@@ -162,7 +164,7 @@ func TestParseRaceConditions(t *testing.T) {
 			tmpFile.Close()
 
 			// Run with maximum workers to stress test
-			cmd := exec.Command("../../bin/cli", "parse",
+			cmd := exec.Command(cliBinaryPath, "parse",
 				"--path", fixturesPath,
 				"--output", tmpFile.Name(),
 				"--workers", "8")
@@ -196,6 +198,7 @@ func TestParseRaceConditions(t *testing.T) {
 
 // TestParseWorkerCountValidation tests worker count validation
 func TestParseWorkerCountValidation(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -223,7 +226,7 @@ func TestParseWorkerCountValidation(t *testing.T) {
 			defer os.Remove(tmpFile.Name())
 			tmpFile.Close()
 
-			cmd := exec.Command("../../bin/cli", "parse",
+			cmd := exec.Command(cliBinaryPath, "parse",
 				"--path", fixturesPath,
 				"--output", tmpFile.Name(),
 				"--workers", tc.workers)
@@ -245,6 +248,7 @@ func TestParseWorkerCountValidation(t *testing.T) {
 
 // TestParseDefaultWorkerCount tests that default worker count is reasonable
 func TestParseDefaultWorkerCount(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -258,7 +262,7 @@ func TestParseDefaultWorkerCount(t *testing.T) {
 	tmpFile.Close()
 
 	// Run without specifying workers (should use default)
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--verbose")
@@ -286,6 +290,7 @@ func TestParseDefaultWorkerCount(t *testing.T) {
 
 // TestParseLargeRepository tests performance with a larger repository
 func TestParseLargeRepository(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	if testing.Short() {
 		t.Skip("Skipping large repository test in short mode")
 	}
@@ -333,7 +338,7 @@ type Struct` + string(rune(i/10+'0')) + string(rune(i%10+'0')) + ` struct {
 
 			start := time.Now()
 
-			cmd := exec.Command("../../bin/cli", "parse",
+			cmd := exec.Command(cliBinaryPath, "parse",
 				"--path", tmpDir,
 				"--output", tmpFile.Name(),
 				"--workers", string(rune(workers+'0')))
@@ -386,6 +391,7 @@ type Struct` + string(rune(i/10+'0')) + string(rune(i%10+'0')) + ` struct {
 
 // TestParseEnvironmentVariableWorkers tests CODEATLAS_WORKERS env var
 func TestParseEnvironmentVariableWorkers(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -399,7 +405,7 @@ func TestParseEnvironmentVariableWorkers(t *testing.T) {
 	tmpFile.Close()
 
 	// Set environment variable
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name())
 

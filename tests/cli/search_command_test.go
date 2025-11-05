@@ -1,4 +1,4 @@
-package cli_test
+package cli
 
 import (
 	"os/exec"
@@ -8,7 +8,8 @@ import (
 
 // TestSearchCommandHelp tests that search command help is displayed
 func TestSearchCommandHelp(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "search", "--help")
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "search", "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to run CLI: %v", err)
@@ -42,7 +43,8 @@ func TestSearchCommandHelp(t *testing.T) {
 
 // TestSearchCommandMissingQuery tests that search command requires query flag
 func TestSearchCommandMissingQuery(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "search")
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "search")
 	output, err := cmd.CombinedOutput()
 
 	// Command should fail without query
@@ -58,7 +60,8 @@ func TestSearchCommandMissingQuery(t *testing.T) {
 
 // TestSearchCommandMissingAPIURL tests that search command requires API URL
 func TestSearchCommandMissingAPIURL(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "search", "--query", "test query")
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "search", "--query", "test query")
 	output, err := cmd.CombinedOutput()
 
 	// Command should fail without API URL
