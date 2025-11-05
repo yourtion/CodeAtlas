@@ -7,6 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// getVectorDimension returns the embedding dimension from environment variable
+func getVectorDimension() int {
+	return getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+}
+
 // Unit tests for vector format conversion functions
 
 func TestFormatVectorForPgvector(t *testing.T) {
@@ -250,9 +255,10 @@ func TestVectorRepository_Create(t *testing.T) {
 		t.Fatalf("Failed to create symbol: %v", err)
 	}
 
-	// Create vector with 1024 dimensions (as defined in schema)
+	// Create vector with dynamic dimensions from environment
 	vectorRepo := NewVectorRepository(testDB.DB)
-	embedding := make([]float32, 1024)
+	vectorDim := getVectorDimension()
+	embedding := make([]float32, vectorDim)
 	for i := range embedding {
 		embedding[i] = float32(i) / 1000.0
 	}
@@ -361,11 +367,12 @@ func TestVectorRepository_GetByEntityID(t *testing.T) {
 		t.Fatalf("Failed to create symbol: %v", err)
 	}
 
-	// Create multiple vectors for the same entity with 1024 dimensions
+	// Create multiple vectors for the same entity with dynamic dimensions
 	vectorRepo := NewVectorRepository(testDB.DB)
+	vectorDim := getVectorDimension()
 	
 	createEmbedding := func(offset int) []float32 {
-		emb := make([]float32, 1024)
+		emb := make([]float32, vectorDim)
 		for i := range emb {
 			emb[i] = float32(i+offset) / 1000.0
 		}
@@ -427,8 +434,8 @@ func TestVectorRepository_GetByEntityID(t *testing.T) {
 
 	// Verify embeddings are correctly retrieved
 	for i, vec := range retrieved {
-		if len(vec.Embedding) != 1024 {
-			t.Errorf("Vector %d: expected embedding length 1024, got %d", i, len(vec.Embedding))
+		if len(vec.Embedding) != vectorDim {
+			t.Errorf("Vector %d: expected embedding length %d, got %d", i, vectorDim, len(vec.Embedding))
 		}
 	}
 }
@@ -488,9 +495,10 @@ func TestVectorRepository_Update(t *testing.T) {
 		t.Fatalf("Failed to create symbol: %v", err)
 	}
 
-	// Create vector with 1024 dimensions
+	// Create vector with dynamic dimensions
 	vectorRepo := NewVectorRepository(testDB.DB)
-	originalEmbedding := make([]float32, 1024)
+	vectorDim := getVectorDimension()
+	originalEmbedding := make([]float32, vectorDim)
 	for i := range originalEmbedding {
 		originalEmbedding[i] = float32(i) / 1000.0
 	}
@@ -511,7 +519,7 @@ func TestVectorRepository_Update(t *testing.T) {
 	}
 
 	// Update the vector
-	updatedEmbedding := make([]float32, 1024)
+	updatedEmbedding := make([]float32, vectorDim)
 	for i := range updatedEmbedding {
 		updatedEmbedding[i] = float32(i+1000) / 1000.0
 	}
@@ -538,8 +546,8 @@ func TestVectorRepository_Update(t *testing.T) {
 	}
 
 	// Verify embedding was updated
-	if len(retrieved.Embedding) != 1024 {
-		t.Errorf("Expected embedding length 1024, got %d", len(retrieved.Embedding))
+	if len(retrieved.Embedding) != vectorDim {
+		t.Errorf("Expected embedding length %d, got %d", vectorDim, len(retrieved.Embedding))
 	}
 	// Check a few sample values
 	for i := 0; i < 10; i++ {
@@ -606,9 +614,10 @@ func TestVectorRepository_Delete(t *testing.T) {
 		t.Fatalf("Failed to create symbol: %v", err)
 	}
 
-	// Create vector with 1024 dimensions
+	// Create vector with dynamic dimensions
 	vectorRepo := NewVectorRepository(testDB.DB)
-	embedding := make([]float32, 1024)
+	vectorDim := getVectorDimension()
+	embedding := make([]float32, vectorDim)
 	for i := range embedding {
 		embedding[i] = float32(i) / 1000.0
 	}
