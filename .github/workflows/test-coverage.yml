@@ -11,24 +11,38 @@ jobs:
     name: Test Coverage
     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: codeatlas
-          POSTGRES_PASSWORD: codeatlas
-          POSTGRES_DB: codeatlas
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+    
+    - name: Build custom PostgreSQL image
+      run: |
+        docker build -t codeatlas-postgres:test -f docker/Dockerfile .
+    
+    - name: Start PostgreSQL with extensions
+      run: |
+        docker run -d \
+          --name postgres \
+          -e POSTGRES_USER=codeatlas \
+          -e POSTGRES_PASSWORD=codeatlas \
+          -e POSTGRES_DB=codeatlas \
+          -p 5432:5432 \
+          --health-cmd="pg_isready -U codeatlas" \
+          --health-interval=10s \
+          --health-timeout=5s \
+          --health-retries=5 \
+          codeatlas-postgres:test
+    
+    - name: Wait for PostgreSQL to be ready
+      run: |
+        timeout 60 bash -c 'until docker exec postgres pg_isready -U codeatlas; do sleep 2; done'
+    
+    - name: Initialize database extensions
+      run: |
+        docker exec postgres psql -U codeatlas -d codeatlas -c "CREATE EXTENSION IF NOT EXISTS vector;"
+        docker exec postgres psql -U codeatlas -d codeatlas -c "CREATE EXTENSION IF NOT EXISTS age;"
+        docker exec postgres psql -U codeatlas -d codeatlas -c "LOAD 'age';"
+        docker exec postgres psql -U codeatlas -d codeatlas -c "SET search_path = ag_catalog, \"\$user\", public;"
     
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -55,6 +69,12 @@ jobs:
         DB_USER: codeatlas
         DB_PASSWORD: codeatlas
         DB_NAME: codeatlas
+        # Use GitHub Models API for embeddings
+        EMBEDDING_BACKEND: openai
+        EMBEDDING_API_ENDPOINT: https://models.inference.ai.azure.com/embeddings
+        EMBEDDING_API_KEY: ${{ secrets.GITHUB_TOKEN }}
+        EMBEDDING_DIMENSIONS: 768
+        INDEXER_SKIP_VECTORS: false
       run: |
         go test ./... -coverprofile=coverage.out -covermode=atomic -v
     
@@ -106,3 +126,9 @@ jobs:
           coverage.html
           coverage.txt
         retention-days: 30
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        docker stop postgres || true
+        docker rm postgres || true
