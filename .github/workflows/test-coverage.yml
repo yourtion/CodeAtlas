@@ -76,7 +76,7 @@ jobs:
         EMBEDDING_DIMENSIONS: 768
         INDEXER_SKIP_VECTORS: false
       run: |
-        go test ./... -coverprofile=coverage.out -covermode=atomic -v
+        go test $(go list ./... | grep -v /scripts | grep -v /test-repo) -coverprofile=coverage.out -covermode=atomic -v
     
     - name: Generate coverage report
       run: |
