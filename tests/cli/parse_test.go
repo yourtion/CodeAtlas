@@ -15,7 +15,7 @@ import (
 
 // skipIfNoParseCommand skips the test if parse command is not available
 func skipIfNoParseCommand(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	cmd := exec.Command(cliBinaryPath, "parse", "--help")
 	if err := cmd.Run(); err != nil {
 		t.Skip("Skipping test: parse command not implemented")
 	}
@@ -23,6 +23,7 @@ func skipIfNoParseCommand(t *testing.T) {
 
 // TestParseEndToEnd tests parsing the test repository
 func TestParseEndToEnd(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	skipIfNoParseCommand(t)
 	// Build the CLI first
 	buildCmd := exec.Command("make", "build-cli")
@@ -45,7 +46,7 @@ func TestParseEndToEnd(t *testing.T) {
 		t.Fatalf("Failed to get fixtures path: %v", err)
 	}
 
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--verbose")
@@ -382,13 +383,14 @@ func verifyRelationships(t *testing.T, result schema.ParseOutput) {
 
 // TestParseOutputToStdout tests that parse can output to stdout
 func TestParseOutputToStdout(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	skipIfNoParseCommand(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
 	}
 
-	cmd := exec.Command("../../bin/cli", "parse", "--path", fixturesPath)
+	cmd := exec.Command(cliBinaryPath, "parse", "--path", fixturesPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Parse command failed: %v\nOutput: %s", err, string(output))
@@ -407,8 +409,9 @@ func TestParseOutputToStdout(t *testing.T) {
 
 // TestParseNonExistentPath tests error handling for non-existent paths
 func TestParseNonExistentPath(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	skipIfNoParseCommand(t)
-	cmd := exec.Command("../../bin/cli", "parse", "--path", "/nonexistent/path")
+	cmd := exec.Command(cliBinaryPath, "parse", "--path", "/nonexistent/path")
 	output, err := cmd.CombinedOutput()
 
 	if err == nil {
@@ -423,13 +426,14 @@ func TestParseNonExistentPath(t *testing.T) {
 
 // TestParseVerboseOutput tests verbose logging
 func TestParseVerboseOutput(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	skipIfNoParseCommand(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
 	}
 
-	cmd := exec.Command("../../bin/cli", "parse", "--path", fixturesPath, "--verbose")
+	cmd := exec.Command(cliBinaryPath, "parse", "--path", fixturesPath, "--verbose")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Parse command failed: %v", err)

@@ -229,6 +229,18 @@ clean:
 	rm -f ${API_BINARY} ${CLI_BINARY} ${INIT_DB_BINARY}
 	rm -f coverage.out coverage.html
 
+# Clean test databases
+.PHONY: clean-test-dbs
+clean-test-dbs:
+	@echo "Cleaning up test databases..."
+	@bash scripts/cleanup_test_databases.sh
+
+# Verify test setup (comprehensive verification)
+.PHONY: verify-tests
+verify-tests:
+	@echo "Running complete test verification..."
+	@bash scripts/verify_test_setup.sh
+
 # Docker targets
 .PHONY: docker-up
 docker-up:
@@ -237,6 +249,16 @@ docker-up:
 .PHONY: docker-down
 docker-down:
 	docker-compose down
+
+# Start only database (for testing)
+.PHONY: docker-db
+docker-db:
+	docker-compose up -d db
+
+# Stop only database
+.PHONY: docker-db-down
+docker-db-down:
+	docker-compose stop db
 
 # DevContainer targets
 .PHONY: devcontainer-build
@@ -310,6 +332,11 @@ help:
 	@echo "  make alter-vector-dimension VECTOR_DIM=<dim> - Change vector dimension"
 	@echo "  make alter-vector-dimension-force VECTOR_DIM=<dim> - Change dimension (truncate data)"
 	@echo "  make alter-vector-dimension-from-env - Change dimension from EMBEDDING_DIMENSIONS env"
+	@echo ""
+	@echo "Cleanup & Verification Commands:"
+	@echo "  make clean                     - Remove built binaries and coverage files"
+	@echo "  make clean-test-dbs            - Remove all test databases"
+	@echo "  make verify-tests              - Run complete test verification (clean + test)"
 	@echo ""
 	@echo "Docker Commands:"
 	@echo "  make docker-up                 - Start Docker services"

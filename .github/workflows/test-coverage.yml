@@ -62,6 +62,9 @@ jobs:
     - name: Install dependencies
       run: go mod download
     
+    - name: Build CLI binary for integration tests
+      run: make build-cli
+    
     - name: Run tests with coverage
       env:
         DB_HOST: localhost

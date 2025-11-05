@@ -15,7 +15,7 @@ import (
 
 // skipIfNoParseCommand skips the test if parse command is not available
 func skipIfNoParseCommand(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	cmd := exec.Command(cliBinaryPath, "parse", "--help")
 	if err := cmd.Run(); err != nil {
 		t.Skip("Skipping test: parse command not implemented")
 	}
@@ -23,6 +23,7 @@ func skipIfNoParseCommand(t *testing.T) {
 
 // TestParseErrorRecovery tests that parsing continues after encountering errors
 func TestParseErrorRecovery(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -37,7 +38,7 @@ func TestParseErrorRecovery(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command (test-repo contains syntax_error.go and syntax_error.py)
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--verbose")
@@ -118,6 +119,7 @@ func TestParseErrorRecovery(t *testing.T) {
 
 // TestParseSyntaxErrors tests handling of files with syntax errors
 func TestParseSyntaxErrors(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary directory with syntax error files
 	tmpDir, err := os.MkdirTemp("", "test-syntax-errors-*")
 	if err != nil {
@@ -168,7 +170,7 @@ func BrokenFunction() {
 	tmpFile.Close()
 
 	// Run parse command
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", tmpDir,
 		"--output", tmpFile.Name())
 
@@ -227,6 +229,7 @@ func BrokenFunction() {
 
 // TestParsePartialResults tests that partial results are returned on errors
 func TestParsePartialResults(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary directory with mixed valid/invalid files
 	tmpDir, err := os.MkdirTemp("", "test-partial-*")
 	if err != nil {
@@ -269,7 +272,7 @@ func BrokenFunction() {
 	tmpFile.Close()
 
 	// Run parse command
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", tmpDir,
 		"--output", tmpFile.Name())
 
@@ -306,6 +309,7 @@ func BrokenFunction() {
 
 // TestParseFileReadErrors tests handling of file read errors
 func TestParseFileReadErrors(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary directory
 	tmpDir, err := os.MkdirTemp("", "test-read-errors-*")
 	if err != nil {
@@ -337,7 +341,7 @@ func TestParseFileReadErrors(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", tmpDir,
 		"--output", tmpFile.Name())
 
@@ -372,6 +376,7 @@ func TestParseFileReadErrors(t *testing.T) {
 
 // TestParseGracefulDegradation tests graceful degradation on various errors
 func TestParseGracefulDegradation(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	testCases := []struct {
 		name        string
 		setupFunc   func(string) error
@@ -433,7 +438,7 @@ func TestParseGracefulDegradation(t *testing.T) {
 			tmpFile.Close()
 
 			// Run parse command
-			cmd := exec.Command("../../bin/cli", "parse",
+			cmd := exec.Command(cliBinaryPath, "parse",
 				"--path", tmpDir,
 				"--output", tmpFile.Name())
 
@@ -473,6 +478,7 @@ func TestParseGracefulDegradation(t *testing.T) {
 
 // TestParseErrorSummary tests that error summary is properly formatted
 func TestParseErrorSummary(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -487,7 +493,7 @@ func TestParseErrorSummary(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with verbose to see error summary
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--verbose")

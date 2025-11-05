@@ -12,16 +12,13 @@ func TestSchemaManager_InitializeSchema(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	sm := NewSchemaManager(db)
+	sm := NewSchemaManager(testDB.DB)
 	ctx := context.Background()
 
-	err = sm.InitializeSchema(ctx)
+	err := sm.InitializeSchema(ctx)
 	if err != nil {
 		t.Fatalf("Failed to initialize schema: %v", err)
 	}
@@ -32,23 +29,20 @@ func TestSchemaManager_EnsureExtensions(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	sm := NewSchemaManager(db)
+	sm := NewSchemaManager(testDB.DB)
 	ctx := context.Background()
 
-	err = sm.ensureExtensions(ctx)
+	err := sm.ensureExtensions(ctx)
 	if err != nil {
 		t.Fatalf("Failed to ensure extensions: %v", err)
 	}
 
 	// Verify pgvector extension
 	var vectorExists bool
-	err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector')").Scan(&vectorExists)
+	err = testDB.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector')").Scan(&vectorExists)
 	if err != nil {
 		t.Fatalf("Failed to check vector extension: %v", err)
 	}
@@ -58,7 +52,7 @@ func TestSchemaManager_EnsureExtensions(t *testing.T) {
 
 	// Verify AGE extension
 	var ageExists bool
-	err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'age')").Scan(&ageExists)
+	err = testDB.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'age')").Scan(&ageExists)
 	if err != nil {
 		t.Fatalf("Failed to check age extension: %v", err)
 	}
@@ -72,13 +66,10 @@ func TestSchemaManager_EnsureAGEGraph(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	sm := NewSchemaManager(db)
+	sm := NewSchemaManager(testDB.DB)
 	ctx := context.Background()
 
 	// Ensure extensions first
@@ -87,14 +78,14 @@ func TestSchemaManager_EnsureAGEGraph(t *testing.T) {
 	}
 
 	// Ensure graph
-	err = sm.ensureAGEGraph(ctx)
+	err := sm.ensureAGEGraph(ctx)
 	if err != nil {
 		t.Fatalf("Failed to ensure AGE graph: %v", err)
 	}
 
 	// Verify graph exists
 	var graphExists bool
-	err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM ag_catalog.ag_graph WHERE name = 'code_graph')").Scan(&graphExists)
+	err = testDB.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM ag_catalog.ag_graph WHERE name = 'code_graph')").Scan(&graphExists)
 	if err != nil {
 		t.Fatalf("Failed to check graph existence: %v", err)
 	}
@@ -108,16 +99,13 @@ func TestSchemaManager_VerifyCoreTables(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	sm := NewSchemaManager(db)
+	sm := NewSchemaManager(testDB.DB)
 	ctx := context.Background()
 
-	err = sm.verifyCoreTables(ctx)
+	err := sm.verifyCoreTables(ctx)
 	if err != nil {
 		t.Fatalf("Failed to verify core tables: %v", err)
 	}
@@ -137,7 +125,7 @@ func TestSchemaManager_VerifyCoreTables(t *testing.T) {
 	for _, table := range requiredTables {
 		var exists bool
 		query := `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1)`
-		err := db.QueryRowContext(ctx, query, table).Scan(&exists)
+		err := testDB.DB.QueryRowContext(ctx, query, table).Scan(&exists)
 		if err != nil {
 			t.Fatalf("Failed to check table %s: %v", table, err)
 		}
@@ -152,13 +140,10 @@ func TestSchemaManager_HealthCheck(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	sm := NewSchemaManager(db)
+	sm := NewSchemaManager(testDB.DB)
 	ctx := context.Background()
 
 	// Initialize schema first
@@ -167,7 +152,7 @@ func TestSchemaManager_HealthCheck(t *testing.T) {
 	}
 
 	// Run health check
-	err = sm.HealthCheck(ctx)
+	err := sm.HealthCheck(ctx)
 	if err != nil {
 		t.Fatalf("Health check failed: %v", err)
 	}
@@ -178,13 +163,10 @@ func TestSchemaManager_GetDatabaseStats(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	sm := NewSchemaManager(db)
+	sm := NewSchemaManager(testDB.DB)
 	ctx := context.Background()
 
 	stats, err := sm.GetDatabaseStats(ctx)
@@ -224,13 +206,10 @@ func TestSchemaManager_GetSchemaVersion(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	sm := NewSchemaManager(db)
+	sm := NewSchemaManager(testDB.DB)
 	ctx := context.Background()
 
 	version, err := sm.GetSchemaVersion(ctx)
@@ -250,15 +229,15 @@ func TestWaitForDatabase(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := WaitForDatabase(5, 1*time.Second)
+	testDB, err := WaitForDatabase(5, 1*time.Second)
 	if err != nil {
 		t.Fatalf("Failed to wait for database: %v", err)
 	}
-	defer db.Close()
+	defer testDB.Close()
 
 	// Verify connection works
 	ctx := context.Background()
-	if err := db.PingContext(ctx); err != nil {
+	if err := testDB.PingContext(ctx); err != nil {
 		t.Fatalf("Database ping failed: %v", err)
 	}
 }
@@ -268,13 +247,10 @@ func TestSchemaManager_CreateVectorIndex(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	sm := NewSchemaManager(db)
+	sm := NewSchemaManager(testDB.DB)
 	ctx := context.Background()
 
 	// Initialize schema first
@@ -283,7 +259,7 @@ func TestSchemaManager_CreateVectorIndex(t *testing.T) {
 	}
 
 	// Create vector index
-	err = sm.CreateVectorIndex(ctx, 10)
+	err := sm.CreateVectorIndex(ctx, 10)
 	if err != nil {
 		t.Fatalf("Failed to create vector index: %v", err)
 	}
@@ -291,7 +267,7 @@ func TestSchemaManager_CreateVectorIndex(t *testing.T) {
 	// Verify index exists
 	var indexExists bool
 	query := `SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE indexname = 'idx_vectors_embedding')`
-	err = db.QueryRowContext(ctx, query).Scan(&indexExists)
+	err = testDB.DB.QueryRowContext(ctx, query).Scan(&indexExists)
 	if err != nil {
 		t.Fatalf("Failed to check index existence: %v", err)
 	}

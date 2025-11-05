@@ -16,7 +16,7 @@ import (
 
 // skipIfNoParseCommand skips the test if parse command is not available
 func skipIfNoParseCommand(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	cmd := exec.Command(cliBinaryPath, "parse", "--help")
 	if err := cmd.Run(); err != nil {
 		t.Skip("Skipping test: parse command not implemented")
 	}
@@ -24,6 +24,7 @@ func skipIfNoParseCommand(t *testing.T) {
 
 // TestParsePerformance validates that parsing meets performance targets
 func TestParsePerformance(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a large test repository with 1000+ files
 	testDir := t.TempDir()
 	fileCount := 1000
@@ -100,6 +101,7 @@ func TestParsePerformance(t *testing.T) {
 
 // TestParseMemoryUsage validates memory usage during parsing
 func TestParseMemoryUsage(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	if testing.Short() {
 		t.Skip("Skipping memory test in short mode")
 	}
@@ -154,6 +156,7 @@ func TestParseMemoryUsage(t *testing.T) {
 
 // TestWorkerScaling validates that increasing workers improves performance
 func TestWorkerScaling(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	if testing.Short() {
 		t.Skip("Skipping scaling test in short mode")
 	}
@@ -209,6 +212,7 @@ func TestWorkerScaling(t *testing.T) {
 
 // TestFileScanningPerformance validates file scanning performance
 func TestFileScanningPerformance(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	testDir := t.TempDir()
 	fileCount := 1000
 
@@ -349,7 +353,7 @@ import (
 
 // skipIfNoParseCommand skips the test if parse command is not available
 func skipIfNoParseCommand(t *testing.T) {
-cmd := exec.Command("../../bin/cli", "parse", "--help")
+cmd := exec.Command(cliBinaryPath, "parse", "--help")
 if err := cmd.Run(); err != nil {
 t.Skip("Skipping test: parse command not implemented")
 }

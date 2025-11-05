@@ -14,14 +14,11 @@ func TestRepositoryRepository_Create(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	repository := &Repository{
 		RepoID:     uuid.New().String(),
@@ -35,7 +32,7 @@ func TestRepositoryRepository_Create(t *testing.T) {
 		},
 	}
 
-	err = repo.Create(ctx, repository)
+	err := repo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
@@ -84,14 +81,11 @@ func TestRepositoryRepository_GetByName(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	repoName := "test-repo-getbyname-" + uuid.New().String()[:8]
 	repository := &Repository{
@@ -102,7 +96,7 @@ func TestRepositoryRepository_GetByName(t *testing.T) {
 		CommitHash: "def456",
 	}
 
-	err = repo.Create(ctx, repository)
+	err := repo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
@@ -128,14 +122,11 @@ func TestRepositoryRepository_GetAll(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	// Get initial count
 	initialRepos, err := repo.GetAll(ctx)
@@ -192,14 +183,11 @@ func TestRepositoryRepository_Update(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	repository := &Repository{
 		RepoID:     uuid.New().String(),
@@ -212,7 +200,7 @@ func TestRepositoryRepository_Update(t *testing.T) {
 		},
 	}
 
-	err = repo.Create(ctx, repository)
+	err := repo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
@@ -262,14 +250,11 @@ func TestRepositoryRepository_Delete(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	repository := &Repository{
 		RepoID: uuid.New().String(),
@@ -278,7 +263,7 @@ func TestRepositoryRepository_Delete(t *testing.T) {
 		Branch: "main",
 	}
 
-	err = repo.Create(ctx, repository)
+	err := repo.Create(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
@@ -304,14 +289,11 @@ func TestRepositoryRepository_CreateOrUpdate(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	repoID := uuid.New().String()
 	repository := &Repository{
@@ -323,7 +305,7 @@ func TestRepositoryRepository_CreateOrUpdate(t *testing.T) {
 	}
 
 	// First call should create
-	err = repo.CreateOrUpdate(ctx, repository)
+	err := repo.CreateOrUpdate(ctx, repository)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
@@ -367,14 +349,11 @@ func TestRepositoryRepository_Count(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	// Get initial count
 	initialCount, err := repo.Count(ctx)
@@ -422,14 +401,11 @@ func TestRepositoryRepository_MetadataHandling(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	tests := []struct {
 		name     string
@@ -466,7 +442,7 @@ func TestRepositoryRepository_MetadataHandling(t *testing.T) {
 				Metadata: tt.metadata,
 			}
 
-			err = repo.Create(ctx, repository)
+			err := repo.Create(ctx, repository)
 			if err != nil {
 				t.Fatalf("Failed to create repository: %v", err)
 			}
@@ -503,14 +479,11 @@ func TestRepositoryRepository_UpdateNonExistent(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
 	repository := &Repository{
 		RepoID: uuid.New().String(),
@@ -519,7 +492,7 @@ func TestRepositoryRepository_UpdateNonExistent(t *testing.T) {
 		Branch: "main",
 	}
 
-	err = repo.Update(ctx, repository)
+	err := repo.Update(ctx, repository)
 	if err == nil {
 		t.Error("Expected error when updating non-existent repository, got nil")
 	}
@@ -530,16 +503,13 @@ func TestRepositoryRepository_DeleteNonExistent(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-	repo := NewRepositoryRepository(db)
+	repo := NewRepositoryRepository(testDB.DB)
 
-	err = repo.Delete(ctx, uuid.New().String())
+	err := repo.Delete(ctx, uuid.New().String())
 	if err == nil {
 		t.Error("Expected error when deleting non-existent repository, got nil")
 	}

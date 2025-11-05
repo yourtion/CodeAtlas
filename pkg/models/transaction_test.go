@@ -14,18 +14,15 @@ func TestTransactionManager_WithTransaction_Success(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	tm := NewTransactionManager(db)
+	tm := NewTransactionManager(testDB.DB)
 	ctx := context.Background()
 
 	// Test successful transaction
 	var executed bool
-	err = tm.WithTransaction(ctx, func(tx *sql.Tx) error {
+	err := tm.WithTransaction(ctx, func(tx *sql.Tx) error {
 		executed = true
 		// Perform some database operation
 		_, err := tx.ExecContext(ctx, "SELECT 1")
@@ -46,20 +43,17 @@ func TestTransactionManager_WithTransaction_Rollback(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	tm := NewTransactionManager(db)
+	tm := NewTransactionManager(testDB.DB)
 	ctx := context.Background()
 
 	// Test transaction rollback on error
 	testError := errors.New("test error")
 	var executed bool
 
-	err = tm.WithTransaction(ctx, func(tx *sql.Tx) error {
+	err := tm.WithTransaction(ctx, func(tx *sql.Tx) error {
 		executed = true
 		return testError
 	})
@@ -78,18 +72,15 @@ func TestTransactionManager_ExecuteBatch(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	tm := NewTransactionManager(db)
+	tm := NewTransactionManager(testDB.DB)
 	ctx := context.Background()
 
 	// Create repositories for testing
-	repoRepo := NewRepositoryRepository(db)
-	fileRepo := NewFileRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
+	fileRepo := NewFileRepository(testDB.DB)
 
 	repoID := uuid.New().String()
 	fileID := uuid.New().String()
@@ -124,7 +115,7 @@ func TestTransactionManager_ExecuteBatch(t *testing.T) {
 		},
 	}
 
-	err = tm.ExecuteBatch(ctx, operations)
+	err := tm.ExecuteBatch(ctx, operations)
 	if err != nil {
 		t.Fatalf("Batch execution should have succeeded: %v", err)
 	}
@@ -152,16 +143,13 @@ func TestTransactionManager_ExecuteBatch_Rollback(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	tm := NewTransactionManager(db)
+	tm := NewTransactionManager(testDB.DB)
 	ctx := context.Background()
 
-	repoRepo := NewRepositoryRepository(db)
+	repoRepo := NewRepositoryRepository(testDB.DB)
 	repoID := uuid.New().String()
 
 	operations := []BatchOperation{
@@ -186,7 +174,7 @@ func TestTransactionManager_ExecuteBatch_Rollback(t *testing.T) {
 		},
 	}
 
-	err = tm.ExecuteBatch(ctx, operations)
+	err := tm.ExecuteBatch(ctx, operations)
 	if err == nil {
 		t.Fatal("Batch execution should have failed")
 	}
@@ -202,13 +190,10 @@ func TestTransactionManager_BeginTx(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	tm := NewTransactionManager(db)
+	tm := NewTransactionManager(testDB.DB)
 	ctx := context.Background()
 
 	// Test manual transaction management
@@ -235,13 +220,10 @@ func TestTransactionManager_RollbackTx(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	tm := NewTransactionManager(db)
+	tm := NewTransactionManager(testDB.DB)
 	ctx := context.Background()
 
 	// Test manual transaction rollback
@@ -268,18 +250,15 @@ func TestTransactionManager_WithTransactionRetry(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	tm := NewTransactionManager(db)
+	tm := NewTransactionManager(testDB.DB)
 	ctx := context.Background()
 
 	// Test successful retry
 	attempts := 0
-	err = tm.WithTransactionRetry(ctx, 2, func(tx *sql.Tx) error {
+	err := tm.WithTransactionRetry(ctx, 2, func(tx *sql.Tx) error {
 		attempts++
 		if attempts == 1 {
 			// Simulate a retryable error on first attempt
@@ -304,20 +283,17 @@ func TestTransactionManager_WithTransactionRetry_NonRetryableError(t *testing.T)
 		t.Skip("Skipping integration test")
 	}
 
-	db, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	defer db.Close()
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
 
-	tm := NewTransactionManager(db)
+	tm := NewTransactionManager(testDB.DB)
 	ctx := context.Background()
 
 	// Test non-retryable error
 	attempts := 0
 	testError := errors.New("non-retryable error")
 
-	err = tm.WithTransactionRetry(ctx, 2, func(tx *sql.Tx) error {
+	err := tm.WithTransactionRetry(ctx, 2, func(tx *sql.Tx) error {
 		attempts++
 		return testError
 	})

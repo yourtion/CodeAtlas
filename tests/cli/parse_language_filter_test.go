@@ -14,7 +14,7 @@ import (
 
 // skipIfNoParseCommand skips the test if parse command is not available
 func skipIfNoParseCommand(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	cmd := exec.Command(cliBinaryPath, "parse", "--help")
 	if err := cmd.Run(); err != nil {
 		t.Skip("Skipping test: parse command not implemented")
 	}
@@ -22,6 +22,7 @@ func skipIfNoParseCommand(t *testing.T) {
 
 // TestParseLanguageFilterGo tests filtering for Go files only
 func TestParseLanguageFilterGo(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -36,7 +37,7 @@ func TestParseLanguageFilterGo(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with Go language filter
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--language", "go")
@@ -83,6 +84,7 @@ func TestParseLanguageFilterGo(t *testing.T) {
 
 // TestParseLanguageFilterPython tests filtering for Python files only
 func TestParseLanguageFilterPython(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -97,7 +99,7 @@ func TestParseLanguageFilterPython(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with Python language filter
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--language", "python")
@@ -132,6 +134,7 @@ func TestParseLanguageFilterPython(t *testing.T) {
 
 // TestParseLanguageFilterJavaScript tests filtering for JavaScript files only
 func TestParseLanguageFilterJavaScript(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -146,7 +149,7 @@ func TestParseLanguageFilterJavaScript(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with JavaScript language filter
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--language", "javascript")
@@ -181,6 +184,7 @@ func TestParseLanguageFilterJavaScript(t *testing.T) {
 
 // TestParseLanguageFilterCaseInsensitive tests case-insensitive language filter
 func TestParseLanguageFilterCaseInsensitive(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -205,7 +209,7 @@ func TestParseLanguageFilterCaseInsensitive(t *testing.T) {
 			defer os.Remove(tmpFile.Name())
 			tmpFile.Close()
 
-			cmd := exec.Command("../../bin/cli", "parse",
+			cmd := exec.Command(cliBinaryPath, "parse",
 				"--path", fixturesPath,
 				"--output", tmpFile.Name(),
 				"--language", tc.language)
@@ -237,6 +241,7 @@ func TestParseLanguageFilterCaseInsensitive(t *testing.T) {
 
 // TestParseLanguageFilterInvalid tests handling of invalid language filter
 func TestParseLanguageFilterInvalid(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -250,7 +255,7 @@ func TestParseLanguageFilterInvalid(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with invalid language
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--language", "rust") // Unsupported language
@@ -279,6 +284,7 @@ func TestParseLanguageFilterInvalid(t *testing.T) {
 
 // TestParseLanguageFilterWithIgnore tests language filter combined with ignore rules
 func TestParseLanguageFilterWithIgnore(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -292,7 +298,7 @@ func TestParseLanguageFilterWithIgnore(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with language filter and ignore pattern
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--language", "go",
@@ -331,6 +337,7 @@ func TestParseLanguageFilterWithIgnore(t *testing.T) {
 
 // TestParseLanguageFilterMultipleExtensions tests language with multiple extensions
 func TestParseLanguageFilterMultipleExtensions(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary directory with JavaScript and TypeScript files
 	tmpDir, err := os.MkdirTemp("", "test-multi-ext-*")
 	if err != nil {
@@ -362,7 +369,7 @@ func TestParseLanguageFilterMultipleExtensions(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with JavaScript filter (should include .js and .jsx)
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", tmpDir,
 		"--output", tmpFile.Name(),
 		"--language", "javascript")
@@ -400,6 +407,7 @@ func TestParseLanguageFilterMultipleExtensions(t *testing.T) {
 
 // TestParseLanguageFilterEmptyResult tests language filter with no matching files
 func TestParseLanguageFilterEmptyResult(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary directory with only Go files
 	tmpDir, err := os.MkdirTemp("", "test-empty-filter-*")
 	if err != nil {
@@ -421,7 +429,7 @@ func TestParseLanguageFilterEmptyResult(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with Python filter (no Python files exist)
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", tmpDir,
 		"--output", tmpFile.Name(),
 		"--language", "python")
@@ -454,6 +462,7 @@ func TestParseLanguageFilterEmptyResult(t *testing.T) {
 
 // TestParseLanguageFilterWithWorkers tests language filter with concurrent processing
 func TestParseLanguageFilterWithWorkers(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -467,7 +476,7 @@ func TestParseLanguageFilterWithWorkers(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with language filter and multiple workers
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--output", tmpFile.Name(),
 		"--language", "go",
@@ -502,12 +511,13 @@ func TestParseLanguageFilterWithWorkers(t *testing.T) {
 
 // TestParseLanguageFilterVerbose tests verbose output with language filter
 func TestParseLanguageFilterVerbose(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
 	}
 
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--path", fixturesPath,
 		"--language", "go",
 		"--verbose")

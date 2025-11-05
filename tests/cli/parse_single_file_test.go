@@ -15,7 +15,7 @@ import (
 
 // skipIfNoParseCommand skips the test if parse command is not available
 func skipIfNoParseCommand(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--help")
+	cmd := exec.Command(cliBinaryPath, "parse", "--help")
 	if err := cmd.Run(); err != nil {
 		t.Skip("Skipping test: parse command not implemented")
 	}
@@ -23,6 +23,7 @@ func skipIfNoParseCommand(t *testing.T) {
 
 // TestParseSingleGoFile tests parsing a single Go file
 func TestParseSingleGoFile(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -39,7 +40,7 @@ func TestParseSingleGoFile(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command on single file
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--file", singleFile,
 		"--output", tmpFile.Name())
 
@@ -105,6 +106,7 @@ func TestParseSingleGoFile(t *testing.T) {
 
 // TestParseSinglePythonFile tests parsing a single Python file
 func TestParseSinglePythonFile(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -121,7 +123,7 @@ func TestParseSinglePythonFile(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command on single file
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--file", singleFile,
 		"--output", tmpFile.Name())
 
@@ -179,6 +181,7 @@ func TestParseSinglePythonFile(t *testing.T) {
 
 // TestParseSingleJavaScriptFile tests parsing a single JavaScript file
 func TestParseSingleJavaScriptFile(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -195,7 +198,7 @@ func TestParseSingleJavaScriptFile(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command on single file
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--file", singleFile,
 		"--output", tmpFile.Name())
 
@@ -253,6 +256,7 @@ func TestParseSingleJavaScriptFile(t *testing.T) {
 
 // TestParseSingleFileToStdout tests single file parsing to stdout
 func TestParseSingleFileToStdout(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -261,7 +265,7 @@ func TestParseSingleFileToStdout(t *testing.T) {
 	singleFile := filepath.Join(fixturesPath, "main.go")
 
 	// Run parse command without output file (should go to stdout)
-	cmd := exec.Command("../../bin/cli", "parse", "--file", singleFile)
+	cmd := exec.Command(cliBinaryPath, "parse", "--file", singleFile)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -282,7 +286,8 @@ func TestParseSingleFileToStdout(t *testing.T) {
 
 // TestParseSingleFileNonExistent tests error handling for non-existent file
 func TestParseSingleFileNonExistent(t *testing.T) {
-	cmd := exec.Command("../../bin/cli", "parse", "--file", "/nonexistent/file.go")
+	skipIfBinaryNotExists(t)
+	cmd := exec.Command(cliBinaryPath, "parse", "--file", "/nonexistent/file.go")
 
 	output, err := cmd.CombinedOutput()
 
@@ -299,6 +304,7 @@ func TestParseSingleFileNonExistent(t *testing.T) {
 
 // TestParseSingleFileUnsupportedLanguage tests handling of unsupported file types
 func TestParseSingleFileUnsupportedLanguage(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create a temporary file with unsupported extension
 	tmpFile, err := os.CreateTemp("", "test-*.txt")
 	if err != nil {
@@ -310,7 +316,7 @@ func TestParseSingleFileUnsupportedLanguage(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command
-	cmd := exec.Command("../../bin/cli", "parse", "--file", tmpFile.Name())
+	cmd := exec.Command(cliBinaryPath, "parse", "--file", tmpFile.Name())
 
 	output, err := cmd.CombinedOutput()
 
@@ -328,6 +334,7 @@ func TestParseSingleFileUnsupportedLanguage(t *testing.T) {
 
 // TestParseSingleFileSyntaxError tests single file with syntax error
 func TestParseSingleFileSyntaxError(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -344,7 +351,7 @@ func TestParseSingleFileSyntaxError(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--file", singleFile,
 		"--output", tmpFile.Name())
 
@@ -376,6 +383,7 @@ func TestParseSingleFileSyntaxError(t *testing.T) {
 
 // TestParseSingleFileAbsolutePath tests parsing with absolute path
 func TestParseSingleFileAbsolutePath(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -392,7 +400,7 @@ func TestParseSingleFileAbsolutePath(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with absolute path
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--file", absolutePath,
 		"--output", tmpFile.Name())
 
@@ -420,6 +428,7 @@ func TestParseSingleFileAbsolutePath(t *testing.T) {
 
 // TestParseSingleFileRelativePath tests parsing with relative path
 func TestParseSingleFileRelativePath(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	// Create temp output file
 	tmpFile, err := os.CreateTemp("", "parse-rel-*.json")
 	if err != nil {
@@ -429,7 +438,7 @@ func TestParseSingleFileRelativePath(t *testing.T) {
 	tmpFile.Close()
 
 	// Run parse command with relative path
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--file", "../fixtures/test-repo/main.go",
 		"--output", tmpFile.Name())
 
@@ -460,6 +469,7 @@ func TestParseSingleFileRelativePath(t *testing.T) {
 
 // TestParseSingleFileWithVerbose tests verbose output for single file
 func TestParseSingleFileWithVerbose(t *testing.T) {
+	skipIfBinaryNotExists(t)
 	fixturesPath, err := filepath.Abs("../fixtures/test-repo")
 	if err != nil {
 		t.Fatalf("Failed to get fixtures path: %v", err)
@@ -468,7 +478,7 @@ func TestParseSingleFileWithVerbose(t *testing.T) {
 	singleFile := filepath.Join(fixturesPath, "main.go")
 
 	// Run parse command with verbose
-	cmd := exec.Command("../../bin/cli", "parse",
+	cmd := exec.Command(cliBinaryPath, "parse",
 		"--file", singleFile,
 		"--verbose")
 
