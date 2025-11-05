@@ -43,13 +43,15 @@ func (r *ASTNodeRepository) Create(ctx context.Context, node *ASTNode) error {
 	node.CreatedAt = time.Now()
 
 	// Convert attributes to JSON
-	var attributesJSON []byte
+	var attributesJSON interface{}
 	var err error
-	if node.Attributes != nil {
+	if node.Attributes != nil && len(node.Attributes) > 0 {
 		attributesJSON, err = json.Marshal(node.Attributes)
 		if err != nil {
 			return fmt.Errorf("failed to marshal attributes: %w", err)
 		}
+	} else {
+		attributesJSON = nil // Use NULL for empty attributes
 	}
 
 	_, err = r.db.ExecContext(ctx, query,
@@ -254,13 +256,15 @@ func (r *ASTNodeRepository) Update(ctx context.Context, node *ASTNode) error {
 	`
 
 	// Convert attributes to JSON
-	var attributesJSON []byte
+	var attributesJSON interface{}
 	var err error
-	if node.Attributes != nil {
+	if node.Attributes != nil && len(node.Attributes) > 0 {
 		attributesJSON, err = json.Marshal(node.Attributes)
 		if err != nil {
 			return fmt.Errorf("failed to marshal attributes: %w", err)
 		}
+	} else {
+		attributesJSON = nil // Use NULL for empty attributes
 	}
 
 	result, err := r.db.ExecContext(ctx, query,
