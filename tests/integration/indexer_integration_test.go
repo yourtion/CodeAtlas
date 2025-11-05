@@ -289,6 +289,9 @@ func TestVectorSearch(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Get vector dimension from environment (same as schema initialization)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Create test vectors
 	vectorRepo := models.NewVectorRepository(testDB.DB)
 
@@ -349,9 +352,9 @@ func TestVectorSearch(t *testing.T) {
 		}
 
 		// Create vector embedding (random for test)
-		embedding := make([]float32, 1024)
+		embedding := make([]float32, vectorDim)
 		for i := range embedding {
-			embedding[i] = float32(i) / 1024.0
+			embedding[i] = float32(i) / float32(vectorDim)
 		}
 
 		vector := &models.Vector{
@@ -369,9 +372,9 @@ func TestVectorSearch(t *testing.T) {
 
 	// Test similarity search
 	t.Run("SimilaritySearch", func(t *testing.T) {
-		queryEmbedding := make([]float32, 1024)
+		queryEmbedding := make([]float32, vectorDim)
 		for i := range queryEmbedding {
-			queryEmbedding[i] = float32(i) / 1024.0
+			queryEmbedding[i] = float32(i) / float32(vectorDim)
 		}
 
 		results, err := vectorRepo.SimilaritySearch(ctx, queryEmbedding, "symbol", 10)

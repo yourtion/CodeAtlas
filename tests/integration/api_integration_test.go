@@ -104,6 +104,9 @@ func TestSearchHandlerIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Get vector dimension from environment (same as schema initialization)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Setup test data
 	repoRepo := models.NewRepositoryRepository(testDB.DB)
 	fileRepo := models.NewFileRepository(testDB.DB)
@@ -148,7 +151,7 @@ func TestSearchHandlerIntegration(t *testing.T) {
 	}
 
 	// Create vector
-	embedding := make([]float32, 1024)
+	embedding := make([]float32, vectorDim)
 	for i := range embedding {
 		embedding[i] = 0.1
 	}

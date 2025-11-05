@@ -848,6 +848,9 @@ func TestVectorOperations(t *testing.T) {
 	ctx := context.Background()
 	vectorRepo := models.NewVectorRepository(testDB.DB)
 
+	// Get vector dimension from environment (same as schema initialization)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Setup: Create repository, file, and symbol
 	repoRepo := models.NewRepositoryRepository(testDB.DB)
 	fileRepo := models.NewFileRepository(testDB.DB)
@@ -888,9 +891,9 @@ func TestVectorOperations(t *testing.T) {
 	}
 
 	t.Run("CreateAndGet", func(t *testing.T) {
-		embedding := make([]float32, 1024)
+		embedding := make([]float32, vectorDim)
 		for i := range embedding {
-			embedding[i] = float32(i) / 1024.0
+			embedding[i] = float32(i) / float32(vectorDim)
 		}
 
 		vector := &models.Vector{
@@ -948,9 +951,9 @@ func TestVectorOperations(t *testing.T) {
 	})
 
 	t.Run("Update", func(t *testing.T) {
-		embedding := make([]float32, 1024)
+		embedding := make([]float32, vectorDim)
 		for i := range embedding {
-			embedding[i] = float32(i) / 512.0
+			embedding[i] = float32(i) / float32(vectorDim/2)
 		}
 
 		vector := &models.Vector{
@@ -999,7 +1002,7 @@ func TestVectorOperations(t *testing.T) {
 				VectorID:   uuid.New().String(),
 				EntityID:   symbol2.SymbolID,
 				EntityType: "symbol",
-				Embedding:  make([]float32, 1024),
+				Embedding:  make([]float32, vectorDim),
 				Content:    "batch vector 1",
 				Model:      "test-model",
 			},
@@ -1007,7 +1010,7 @@ func TestVectorOperations(t *testing.T) {
 				VectorID:   uuid.New().String(),
 				EntityID:   symbol2.SymbolID,
 				EntityType: "symbol",
-				Embedding:  make([]float32, 1024),
+				Embedding:  make([]float32, vectorDim),
 				Content:    "batch vector 2",
 				Model:      "test-model",
 				ChunkIndex: 1,
@@ -1048,9 +1051,9 @@ func TestVectorOperations(t *testing.T) {
 				t.Fatalf("Failed to create symbol: %v", err)
 			}
 
-			embedding := make([]float32, 1024)
+			embedding := make([]float32, vectorDim)
 			for j := range embedding {
-				embedding[j] = float32(i+j) / 1024.0
+				embedding[j] = float32(i+j) / float32(vectorDim)
 			}
 
 			vector := &models.Vector{
@@ -1067,9 +1070,9 @@ func TestVectorOperations(t *testing.T) {
 		}
 
 		// Perform similarity search
-		queryEmbedding := make([]float32, 1024)
+		queryEmbedding := make([]float32, vectorDim)
 		for i := range queryEmbedding {
-			queryEmbedding[i] = float32(i) / 1024.0
+			queryEmbedding[i] = float32(i) / float32(vectorDim)
 		}
 
 		results, err := vectorRepo.SimilaritySearch(ctx, queryEmbedding, "symbol", 5)
@@ -1093,9 +1096,9 @@ func TestVectorOperations(t *testing.T) {
 	})
 
 	t.Run("SimilaritySearchWithFilters", func(t *testing.T) {
-		queryEmbedding := make([]float32, 1024)
+		queryEmbedding := make([]float32, vectorDim)
 		for i := range queryEmbedding {
-			queryEmbedding[i] = float32(i) / 1024.0
+			queryEmbedding[i] = float32(i) / float32(vectorDim)
 		}
 
 		filters := models.VectorSearchFilters{
@@ -1157,7 +1160,7 @@ func TestVectorOperations(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		embedding := make([]float32, 1024)
+		embedding := make([]float32, vectorDim)
 		vector := &models.Vector{
 			VectorID:   uuid.New().String(),
 			EntityID:   testSymbol.SymbolID,
@@ -1201,7 +1204,7 @@ func TestVectorOperations(t *testing.T) {
 			VectorID:   uuid.New().String(),
 			EntityID:   deleteSymbol.SymbolID,
 			EntityType: "symbol",
-			Embedding:  make([]float32, 1024),
+			Embedding:  make([]float32, vectorDim),
 			Content:    "delete by entity test",
 			Model:      "test-model",
 		}

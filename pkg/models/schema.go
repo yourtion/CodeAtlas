@@ -16,6 +16,7 @@ func NewSchemaManager(db *DB) *SchemaManager {
 }
 
 // InitializeSchema ensures all required extensions and schema are set up
+// It creates tables if they don't exist, making it safe for test environments
 func (sm *SchemaManager) InitializeSchema(ctx context.Context) error {
 	if dbLogger != nil {
 		dbLogger.Debug("Initializing database schema...")
@@ -31,13 +32,153 @@ func (sm *SchemaManager) InitializeSchema(ctx context.Context) error {
 		return fmt.Errorf("failed to ensure AGE graph: %w", err)
 	}
 
-	// Verify core tables exist
+	// Try to verify tables exist, if not create them
 	if err := sm.verifyCoreTables(ctx); err != nil {
-		return fmt.Errorf("failed to verify core tables: %w", err)
+		if dbLogger != nil {
+			dbLogger.Debug("Core tables don't exist, creating schema...")
+		}
+		if err := sm.CreateSchema(ctx); err != nil {
+			return fmt.Errorf("failed to create schema: %w", err)
+		}
+		// Verify again after creation
+		if err := sm.verifyCoreTables(ctx); err != nil {
+			return fmt.Errorf("failed to verify tables after creation: %w", err)
+		}
 	}
 
 	if dbLogger != nil {
 		dbLogger.Debug("Database schema initialized successfully")
+	}
+	return nil
+}
+
+// CreateSchema creates all required database tables
+func (sm *SchemaManager) CreateSchema(ctx context.Context) error {
+	// Get vector dimension from environment or use default
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
+	schema := fmt.Sprintf(`
+		-- Repositories
+		CREATE TABLE IF NOT EXISTS repositories (
+			repo_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			name VARCHAR(255) NOT NULL,
+			url TEXT,
+			branch VARCHAR(255) DEFAULT 'main',
+			commit_hash VARCHAR(64),
+			metadata JSONB,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW()
+		);
+
+		-- Files
+		CREATE TABLE IF NOT EXISTS files (
+			file_id UUID PRIMARY KEY,
+			repo_id UUID NOT NULL REFERENCES repositories(repo_id) ON DELETE CASCADE,
+			path TEXT NOT NULL,
+			language VARCHAR(50) NOT NULL,
+			size BIGINT NOT NULL,
+			checksum VARCHAR(64) NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW(),
+			updated_at TIMESTAMP DEFAULT NOW(),
+			UNIQUE(repo_id, path)
+		);
+		CREATE INDEX IF NOT EXISTS idx_files_repo ON files(repo_id);
+		CREATE INDEX IF NOT EXISTS idx_files_checksum ON files(checksum);
+
+		-- Symbols
+		CREATE TABLE IF NOT EXISTS symbols (
+			symbol_id UUID PRIMARY KEY,
+			file_id UUID NOT NULL REFERENCES files(file_id) ON DELETE CASCADE,
+			name VARCHAR(255) NOT NULL,
+			kind VARCHAR(50) NOT NULL,
+			signature TEXT,
+			start_line INT NOT NULL,
+			end_line INT NOT NULL,
+			start_byte INT NOT NULL,
+			end_byte INT NOT NULL,
+			docstring TEXT,
+			semantic_summary TEXT,
+			created_at TIMESTAMP DEFAULT NOW(),
+			UNIQUE(file_id, name, start_line, start_byte)
+		);
+		CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
+		CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
+		CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
+
+		-- AST Nodes
+		CREATE TABLE IF NOT EXISTS ast_nodes (
+			node_id UUID PRIMARY KEY,
+			file_id UUID NOT NULL REFERENCES files(file_id) ON DELETE CASCADE,
+			type VARCHAR(100) NOT NULL,
+			parent_id UUID REFERENCES ast_nodes(node_id) ON DELETE CASCADE,
+			start_line INT NOT NULL,
+			end_line INT NOT NULL,
+			start_byte INT NOT NULL,
+			end_byte INT NOT NULL,
+			text TEXT,
+			attributes JSONB,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_ast_nodes_file ON ast_nodes(file_id);
+		CREATE INDEX IF NOT EXISTS idx_ast_nodes_parent ON ast_nodes(parent_id);
+		CREATE INDEX IF NOT EXISTS idx_ast_nodes_type ON ast_nodes(type);
+
+		-- Dependency Edges
+		CREATE TABLE IF NOT EXISTS edges (
+			edge_id UUID PRIMARY KEY,
+			source_id UUID NOT NULL REFERENCES symbols(symbol_id) ON DELETE CASCADE,
+			target_id UUID REFERENCES symbols(symbol_id) ON DELETE CASCADE,
+			edge_type VARCHAR(50) NOT NULL,
+			source_file TEXT NOT NULL,
+			target_file TEXT,
+			target_module TEXT,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id);
+		CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id);
+		CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
+
+		-- Vectors (pgvector)
+		CREATE TABLE IF NOT EXISTS vectors (
+			vector_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			entity_id UUID NOT NULL,
+			entity_type VARCHAR(50) NOT NULL,
+			embedding vector(%d),
+			content TEXT NOT NULL,
+			model VARCHAR(100) NOT NULL,
+			chunk_index INT DEFAULT 0,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_vectors_entity ON vectors(entity_id, entity_type);
+		CREATE INDEX IF NOT EXISTS idx_vectors_embedding ON vectors USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+		-- Docstrings
+		CREATE TABLE IF NOT EXISTS docstrings (
+			doc_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			symbol_id UUID NOT NULL REFERENCES symbols(symbol_id) ON DELETE CASCADE,
+			content TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_docstrings_symbol ON docstrings(symbol_id);
+
+		-- Summaries
+		CREATE TABLE IF NOT EXISTS summaries (
+			summary_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			entity_id UUID NOT NULL,
+			entity_type VARCHAR(50) NOT NULL,
+			summary_type VARCHAR(50) NOT NULL,
+			content TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT NOW()
+		);
+		CREATE INDEX IF NOT EXISTS idx_summaries_entity ON summaries(entity_id, entity_type);
+	`, vectorDim)
+
+	if _, err := sm.db.ExecContext(ctx, schema); err != nil {
+		return fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	if dbLogger != nil {
+		dbLogger.Debug("Database schema created successfully")
 	}
 	return nil
 }
@@ -269,4 +410,15 @@ type DatabaseStats struct {
 	EdgeCount       int64
 	VectorCount     int64
 	DatabaseSize    string
+}
+
+// getEnvInt retrieves environment variable as int or returns default value
+func getEnvInt(key string, defaultValue int) int {
+	value := getEnv(key, "")
+	if value == "" {
+		return defaultValue
+	}
+	var intValue int
+	fmt.Sscanf(value, "%d", &intValue)
+	return intValue
 }
