@@ -1,4 +1,33 @@
-# CodeAtlas Deployment Guide
+# CodeAtlas 部署快速参考
+
+> 生产环境部署配置和脚本
+
+**完整文档**: [部署完整指南](../docs/deployment/README.md)
+
+---
+
+## 快速开始
+
+### Docker 部署（推荐）
+
+```bash
+cd deployments
+cp .env.example .env
+nano .env
+./scripts/deploy.sh docker
+```
+
+### Systemd 部署
+
+```bash
+sudo ./scripts/deploy.sh systemd
+sudo nano /etc/codeatlas/api.env
+sudo systemctl restart codeatlas-api
+```
+
+---
+
+## 目录内容
 
 This directory contains all deployment configurations and scripts for the CodeAtlas Knowledge Graph Indexer.
 

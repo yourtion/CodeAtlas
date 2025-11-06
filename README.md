@@ -69,265 +69,80 @@ flowchart TD
 
 ## 🚀 快速开始
 
-### 项目结构
-
-```
-.
-├── cmd/
-│   ├── api/          # API 服务端入口
-│   └── cli/          # CLI 工具入口
-├── internal/
-│   ├── api/          # API 服务实现
-│   ├── parser/       # 代码解析引擎
-│   ├── graph/        # 知识图谱服务
-│   ├── retrieval/    # 向量检索服务
-│   └── qa/           # QA 引擎实现
-├── pkg/
-│   ├── models/       # 数据模型
-│   └── utils/        # 工具函数
-├── web/              # Svelte 前端
-│   ├── src/
-│   └── public/
-├── docker/           # Docker 相关文件
-├── deployments/      # 部署文件
-├── configs/          # 配置文件
-├── scripts/          # 开发脚本
-├── docs/             # 文档
-├── tests/            # 测试
-├── go.mod            # Go 模块定义
-├── go.sum            # Go 依赖
-├── package.json      # 前端依赖
-├── docker-compose.yml # 开发环境
-└── README.md         # 项目文档
-```
-
-### 运行开发环境
+### 三种启动方式
 
 #### 方式 1: DevContainer（推荐）⭐
 
-使用 DevContainer 可以获得开箱即用的完整开发环境，包含所有依赖和测试数据。
+最简单的方式，开箱即用的完整开发环境。
 
-**使用 VS Code:**
+**VS Code:**
 1. 安装 [Dev Containers 扩展](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 2. 打开项目，点击 "Reopen in Container"
 3. 等待容器构建完成（首次约 3-5 分钟）
-4. 开始开发！
 
-**使用 GitHub Codespaces:**
+**GitHub Codespaces:**
 - 点击 "Code" → "Codespaces" → "Create codespace"
 
-**命令行方式:**
+详细文档：**[DevContainer 开发指南](docs/development/devcontainer.md)**
+
+#### 方式 2: Docker Compose
+
+适合快速测试和演示。
+
 ```bash
-make devcontainer-up
-```
-
-详细文档：[DevContainer 开发环境指南](docs/devcontainer-guide.md)
-
-#### 方式 2: 传统方式
-
-1. 启动数据库和后端服务：
-```bash
+# 启动所有服务
 docker-compose up -d
+
+# 检查服务状态
+docker-compose ps
 ```
 
-2. 运行 API 服务：
+服务地址：
+- API: http://localhost:8080
+- 数据库: localhost:5432
+
+#### 方式 3: 本地开发
+
+适合需要完全控制的开发场景。
+
 ```bash
+# 启动数据库
+make docker-up
+
+# 运行 API 服务
 make run-api
-# 或
-cd cmd/api
-go run main.go
-```
 
-3. 运行 CLI 工具：
-```bash
-make run-cli
-# 或
-cd cmd/cli
-go run main.go upload -p /path/to/repo -s http://localhost:8080
-```
-
-4. 运行前端：
-```bash
+# 运行前端（另一个终端）
 cd web
 pnpm install
 pnpm dev
 ```
 
-### 配置管理
-
-CodeAtlas 使用环境变量进行配置，提供合理的默认值，开箱即用。
-
-**快速配置：**
+### 第一次使用
 
 ```bash
-# 复制示例配置文件
-cp .env.example .env
-
-# 编辑配置（可选）
-vim .env
-
-# 使用配置启动
-source .env
-make run-api
-```
-
-**主要配置项：**
-
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `DB_HOST` | `localhost` | 数据库主机 |
-| `DB_PORT` | `5432` | 数据库端口 |
-| `API_PORT` | `8080` | API 服务端口 |
-| `INDEXER_BATCH_SIZE` | `100` | 索引批处理大小 |
-| `INDEXER_WORKER_COUNT` | `4` | 并发工作线程数 |
-| `EMBEDDING_MODEL` | `text-embedding-qwen3-embedding-0.6b` | 向量模型 |
-| `EMBEDDING_DIMENSIONS` | `1024` | 向量维度（需与模型匹配） |
-
-**向量维度配置：**
-
-不同的 embedding 模型产生不同维度的向量，数据库 schema 必须匹配：
-
-| 模型 | 维度 |
-|------|------|
-| nomic-embed-text | 768 |
-| text-embedding-qwen3-embedding-0.6b | 1024 |
-| text-embedding-3-small (OpenAI) | 1536 |
-| text-embedding-3-large (OpenAI) | 3072 |
-
-初始化数据库前设置正确的维度：
-
-```bash
-# 新数据库：在 .env 中设置维度
-echo "EMBEDDING_DIMENSIONS=1536" >> .env
-make docker-up
-make init-db
-
-# 已有数据库：修改向量维度
-make alter-vector-dimension VECTOR_DIM=1536
-```
-
-**完整配置文档：**
-- **[配置指南](./docs/configuration.md)** - 完整的配置选项说明
-- **[向量维度配置](./docs/dev/vector-dimensions-configuration.md)** - 向量维度配置详解
-- **[.env.example](./.env.example)** - 配置文件示例
-
-### API 文档
-
-完整的 API 文档和使用指南：
-
-- **[API 文档总览](./docs/api/README.md)** - API 文档索引
-- **[快速开始](./docs/api/quick-start.md)** - 快速上手指南
-- **[API 参考](./docs/api/api-reference.md)** - 完整的端点文档
-- **[中间件配置](./docs/api/middleware-and-configuration.md)** - 认证、CORS、日志配置
-- **[HTTP 示例](./example.http)** - 可直接使用的 HTTP 请求示例
-
-**快速测试：**
-
-```bash
-# 健康检查
+# 1. 验证安装
 curl http://localhost:8080/health
 
-# 列出仓库
+# 2. 解析代码仓库
+make build-cli
+./bin/cli parse --path /path/to/your/repo --output result.json
+
+# 3. 索引到知识图谱
+./bin/cli index --path /path/to/your/repo --api-url http://localhost:8080
+
+# 4. 查询代码
 curl http://localhost:8080/api/v1/repositories
-
-# 带认证的请求
-curl -H "Authorization: Bearer your-token" \
-  http://localhost:8080/api/v1/repositories
 ```
 
-### CLI 工具使用
+### 完整文档
 
-#### Parse 命令 - 代码解析
-
-`parse` 命令用于分析源代码并输出结构化的 JSON AST 表示。支持 Go、JavaScript/TypeScript 和 Python。
-
-**基本用法：**
-
-```bash
-# 解析整个仓库
-codeatlas parse --path /path/to/repository
-
-# 解析单个文件
-codeatlas parse --file /path/to/file.go
-
-# 保存输出到文件
-codeatlas parse --path /path/to/repository --output result.json
-
-# 只解析特定语言
-codeatlas parse --path /path/to/repository --language go
-
-# 使用多个并发工作线程
-codeatlas parse --path /path/to/repository --workers 8
-
-# 启用详细日志
-codeatlas parse --path /path/to/repository --verbose
-```
-
-**常用选项：**
-
-| 选项 | 说明 | 示例 |
-|------|------|------|
-| `--path`, `-p` | 仓库或目录路径 | `--path ./myproject` |
-| `--file`, `-f` | 单个文件路径 | `--file main.go` |
-| `--output`, `-o` | 输出文件路径 | `--output result.json` |
-| `--language`, `-l` | 按语言过滤 | `--language go` |
-| `--workers`, `-w` | 并发工作线程数 | `--workers 4` |
-| `--verbose`, `-v` | 详细日志 | `--verbose` |
-| `--ignore-pattern` | 忽略模式 | `--ignore-pattern "*.test.js"` |
-| `--no-ignore` | 禁用所有忽略规则 | `--no-ignore` |
-
-**详细文档：**
-- [CLI Parse 命令完整文档](./docs/cli/cli-parse-command.md) - 完整的命令参考和使用指南
-- [快速参考](./docs/cli/parse-command-quick-reference.md) - 常用命令速查
-- [故障排除指南](./docs/cli/parse-troubleshooting.md) - 常见问题解决方案
-- [环境变量配置](./docs/cli/parse-environment-variables.md) - 环境变量说明
-- [性能优化指南](./docs/testing/performance.md) - 性能调优和基准测试
-- [性能验证结果](./docs/testing/performance-validation-results.md) - 性能测试结果
-- [输出示例](./docs/examples/parse-output-example.json) - JSON 输出格式示例
-
-#### Upload 命令 - 上传到服务器
-
-```bash
-codeatlas upload -p /path/to/repo -s http://localhost:8080
-```
-
-### 测试与代码覆盖率
-
-运行测试：
-```bash
-# 快速单元测试（推荐日常开发使用）
-make test-unit
-
-# 增强输出测试（彩色输出 + 失败信息提取 + 统计）
-make test-unit-pretty          # 单元测试
-make test-all-pretty           # 所有测试
-make test-integration-pretty   # 集成测试
-
-# CI 友好测试（生成 JSON 报告）
-make test-ci                   # 单元测试
-make test-ci-all               # 所有测试
-make test-ci-integration       # 集成测试
-
-# 运行特定模块测试
-make test-api
-make test-cli
-make test-models
-
-# 生成测试覆盖率报告
-make test-coverage-unit        # 单元测试覆盖率
-make test-coverage-all         # 完整覆盖率
-
-# 查看函数级覆盖率统计
-make test-coverage-func
-```
-
-**新功能：增强的测试输出**
-- ✅ 彩色输出，失败测试一目了然
-- ✅ 自动统计测试数量、通过率、耗时
-- ✅ 失败测试详细信息自动提取
-- ✅ CI 友好的 JSON 格式报告
-
-详细的测试指南请参考 [测试文档](./docs/TESTING.md)。
+- **[快速开始指南](docs/getting-started/quick-start.md)** - 5 分钟快速上手
+- **[CLI 工具指南](docs/user-guide/cli/README.md)** - Parse 和 Index 命令完整文档
+- **[API 使用指南](docs/user-guide/api/README.md)** - HTTP API 完整参考
+- **[配置指南](docs/configuration/README.md)** - 所有配置选项说明
+- **[部署指南](docs/deployment/README.md)** - 生产环境部署
+- **[开发指南](docs/development/testing.md)** - 测试和开发最佳实践
 
 ---
 
