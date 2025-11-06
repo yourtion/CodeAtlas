@@ -16,6 +16,7 @@ type ServerConfig struct {
 	EnableAuth     bool
 	AuthTokens     []string
 	CORSOrigins    []string
+	EmbedderConfig *handlers.EmbedderConfig
 }
 
 // Server represents the API server
@@ -45,9 +46,9 @@ func NewServer(db *models.DB, config *ServerConfig) *Server {
 		config:              config,
 		repoRepository:      models.NewRepositoryRepository(db),
 		fileRepository:      models.NewFileRepository(db),
-		indexHandler:        handlers.NewIndexHandler(db),
+		indexHandler:        handlers.NewIndexHandler(db, config.EmbedderConfig),
 		repoHandler:         handlers.NewRepositoryHandler(db),
-		searchHandler:       handlers.NewSearchHandler(db),
+		searchHandler:       handlers.NewSearchHandler(db, config.EmbedderConfig),
 		relationshipHandler: handlers.NewRelationshipHandler(db),
 	}
 }

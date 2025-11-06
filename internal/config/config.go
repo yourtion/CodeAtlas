@@ -66,6 +66,24 @@ type EmbedderConfig struct {
 	Timeout              time.Duration
 }
 
+// ToIndexerConfig converts config.EmbedderConfig to indexer.EmbedderConfig
+// This is a helper to avoid import cycles and provide a clean conversion
+func (e *EmbedderConfig) ToIndexerEmbedderConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"Backend":              e.Backend,
+		"APIEndpoint":          e.APIEndpoint,
+		"APIKey":               e.APIKey,
+		"Model":                e.Model,
+		"Dimensions":           e.Dimensions,
+		"BatchSize":            e.BatchSize,
+		"MaxRequestsPerSecond": e.MaxRequestsPerSecond,
+		"MaxRetries":           e.MaxRetries,
+		"BaseRetryDelay":       e.BaseRetryDelay,
+		"MaxRetryDelay":        e.MaxRetryDelay,
+		"Timeout":              e.Timeout,
+	}
+}
+
 // LoadConfig loads configuration from environment variables with defaults
 func LoadConfig() (*Config, error) {
 	config := &Config{
