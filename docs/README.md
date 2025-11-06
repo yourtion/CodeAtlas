@@ -1,169 +1,220 @@
-# CodeAtlas Documentation
+# CodeAtlas 文档中心
 
-Welcome to the CodeAtlas documentation. This directory contains comprehensive guides for using CodeAtlas.
+> 欢迎来到 CodeAtlas 文档中心，这里是所有文档的导航入口
 
-## Table of Contents
+## 📚 文档导航
 
-### CLI Tools
+### 🚀 新手入门
 
-#### Parse Command
-The `parse` command analyzes source code and outputs structured JSON AST representations.
+从这里开始，快速上手 CodeAtlas。
 
-- **[Complete Documentation](./cli/cli-parse-command.md)** - Full reference guide with all features and options
-- **[Quick Reference](./cli/parse-command-quick-reference.md)** - Common commands and quick examples
-- **[Troubleshooting Guide](./cli/parse-troubleshooting.md)** - Solutions to common problems
-- **[Environment Variables](./cli/parse-environment-variables.md)** - Configuration via environment variables
-- **[Example Output](./examples/parse-output-example.json)** - Sample JSON output
+- **[快速开始指南](getting-started/quick-start.md)** - 5 分钟快速上手
+  - 三种启动方式（DevContainer、Docker、本地）
+  - 第一次使用教程
+  - 常用命令参考
 
-#### Index Command
-The `index` command indexes parsed code into the knowledge graph for semantic search and relationship queries.
+### 📖 用户指南
 
-- **[Complete Documentation](./indexer/cli-index-command.md)** - Full CLI reference
-- **[Quick Start Guide](./indexer/quick-start.md)** - Get started in minutes
-- **[Troubleshooting Guide](./indexer/troubleshooting.md)** - Common issues and solutions
+日常使用 CodeAtlas 的完整指南。
 
-### Knowledge Graph Indexer
+#### CLI 工具
 
-The indexer transforms parsed code into a queryable knowledge base with semantic search and graph traversal.
+- **[CLI 工具完整指南](user-guide/cli/README.md)** - 命令行工具使用手册
+  - Parse 命令 - 代码解析
+  - Index 命令 - 代码索引
+  - 环境变量配置
+  - 性能优化和故障排除
 
-- **[Overview](./indexer/README.md)** - Introduction and features
-- **[Quick Start](./indexer/quick-start.md)** - Get up and running quickly
-- **[Architecture](./indexer/architecture.md)** - System design and components
-- **[API Reference](./indexer/api-reference.md)** - Complete API documentation
-- **[Configuration](./indexer/configuration.md)** - All configuration options
-- **[Troubleshooting](./indexer/troubleshooting.md)** - Common issues and solutions
+#### API 服务
 
-### API Server
+- **[API 完整指南](user-guide/api/README.md)** - HTTP API 使用手册
+  - 端点参考（仓库、索引、搜索、关系查询）
+  - 认证和错误处理
+  - 集成示例（JavaScript、Python、cURL）
+  - 搜索和关系查询最佳实践
 
-The API server provides HTTP endpoints for indexing and querying code.
+### ⚙️ 配置
 
-- **[API Documentation](./api/README.md)** - Complete API guide
-- **[Quick Start](./api/quick-start.md)** - Get started with the API
-- **[API Reference](./api/api-reference.md)** - Endpoint documentation
-- **[Search and Relationships](./api/search-and-relationships.md)** - Advanced queries
+配置 CodeAtlas 以满足你的需求。
 
-### Testing
+- **[配置完整指南](configuration/README.md)** - 所有配置选项说明
+  - 数据库配置（连接、连接池）
+  - API 服务器配置（认证、CORS）
+  - 索引器配置（批处理、并发）
+  - 向量模型配置（OpenAI、本地模型）
+  - 安全配置（SSL、认证、密码）
+  - 多环境配置示例
 
-- **[Testing Coverage](./testing/testing-coverage.md)** - Comprehensive testing guide
-- **[Coverage Summary](./testing/coverage-summary.md)** - Test coverage statistics
-- **[Coverage Quick Reference](./testing/coverage-quick-reference.md)** - Quick testing commands
-- **[Test Template](./testing/test-template.md)** - Template for writing tests
+### 🚢 部署
 
-### Architecture
+将 CodeAtlas 部署到生产环境。
 
-- **[Schema Documentation](./schema.md)** - Database schema and data models
-- **[Error Handling Implementation](./error-handling-implementation.md)** - Error handling patterns
+- **[部署完整指南](deployment/README.md)** - 生产环境部署手册
+  - Docker 部署（推荐用于中小规模）
+  - Systemd 部署（推荐用于大规模生产）
+  - 数据库迁移
+  - 生产环境最佳实践
+  - 监控、备份和故障排除
 
-## Quick Links
+### 💻 开发
 
-### Getting Started
+参与 CodeAtlas 开发的指南。
 
-1. [Installation](#installation)
-2. [Quick Start](#quick-start)
-3. [Basic Usage](#basic-usage)
+- **[DevContainer 开发指南](development/devcontainer.md)** - 开箱即用的开发环境
+  - VS Code 和 GitHub Codespaces 支持
+  - 预置测试数据
+  - 调试和性能优化
+  - 自定义配置
 
-### Common Tasks
+- **[测试完整指南](development/testing.md)** - 测试和覆盖率
+  - 单元测试和集成测试
+  - 测试覆盖率工具
+  - CI/CD 集成
+  - 最佳实践和故障排除
 
-- [Parse a repository](./cli/cli-parse-command.md#basic-usage)
-- [Parse a single file](./cli/cli-parse-command.md#parse-a-single-file)
-- [Filter by language](./cli/cli-parse-command.md#language-specific-parsing)
-- [Optimize performance](./cli/cli-parse-command.md#performance-tips)
-- [Troubleshoot issues](./cli/parse-troubleshooting.md)
+### 📋 参考
 
-### Advanced Topics
+技术参考文档。
 
-- [Custom ignore patterns](./cli/cli-parse-command.md#file-filtering-and-ignore-patterns)
-- [Semantic enhancement with LLM](./cli/cli-parse-command.md#semantic-enhancement)
-- [Concurrent processing](./cli/cli-parse-command.md#performance-optimization)
-- [Output processing with jq](./cli/parse-command-quick-reference.md#output-processing-with-jq)
+- **[数据库 Schema](reference/schema.md)** - 数据库结构说明
+- **[HTTP 请求示例](../example.http)** - 可直接使用的 API 请求示例
 
-## Installation
+### 🔧 故障排除
 
-Build the CLI tool:
+遇到问题？这里有解决方案。
 
-```bash
-make build-cli
-```
+- **[CLI 故障排除](cli/parse-troubleshooting.md)** - CLI 工具常见问题
+- **[索引器故障排除](indexer/troubleshooting.md)** - 索引器常见问题
 
-The binary will be available at `bin/cli`.
+## 🔍 快速查找
 
-## Quick Start
+### 按任务查找
 
-### Parse a Repository
+#### 我想开始使用 CodeAtlas
+→ [快速开始指南](getting-started/quick-start.md)
 
-```bash
-codeatlas parse --path /path/to/repository --output result.json
-```
+#### 我想解析代码
+→ [CLI 工具指南 - Parse 命令](user-guide/cli/README.md#parse-命令)
 
-### Parse a Single File
+#### 我想索引代码到知识图谱
+→ [CLI 工具指南 - Index 命令](user-guide/cli/README.md#index-命令)
 
-```bash
-codeatlas parse --file src/main.go
-```
+#### 我想搜索代码
+→ [API 指南 - 语义搜索](user-guide/api/README.md#语义搜索)
 
-### Parse with Verbose Output
+#### 我想查询代码关系
+→ [API 指南 - 关系查询](user-guide/api/README.md#关系查询)
 
-```bash
-codeatlas parse --path /path/to/repository --verbose
-```
+#### 我想配置 CodeAtlas
+→ [配置指南](configuration/README.md)
 
-## Basic Usage
+#### 我想部署到生产环境
+→ [部署指南](deployment/README.md)
 
-### Parse Command
+#### 我想设置开发环境
+→ [DevContainer 开发指南](development/devcontainer.md)
 
-```bash
-# Parse entire repository
-codeatlas parse --path ./myproject
+#### 我想运行测试
+→ [测试指南](development/testing.md)
 
-# Parse only Go files
-codeatlas parse --path ./myproject --language go
+### 按角色查找
 
-# Use 8 concurrent workers
-codeatlas parse --path ./myproject --workers 8
+#### 开发者
+- [快速开始](getting-started/quick-start.md)
+- [DevContainer 开发指南](development/devcontainer.md)
+- [测试指南](development/testing.md)
+- [CLI 工具指南](user-guide/cli/README.md)
 
-# Enable verbose logging
-codeatlas parse --path ./myproject --verbose
-```
+#### 运维人员
+- [部署指南](deployment/README.md)
+- [配置指南](configuration/README.md)
+- [API 指南](user-guide/api/README.md)
 
-For more examples, see the [Quick Reference Guide](./parse-command-quick-reference.md).
+#### 用户
+- [快速开始](getting-started/quick-start.md)
+- [CLI 工具指南](user-guide/cli/README.md)
+- [API 指南](user-guide/api/README.md)
 
-## Documentation Structure
+## 📊 文档结构
 
 ```
 docs/
-├── README.md                               # This file
-├── cli/
-    ├── cli-parse-command.md                # Complete parse command documentation
-    ├── parse-command-quick-reference.md    # Quick reference guide
-    ├── parse-troubleshooting.md            # Troubleshooting guide
-    └──parse-environment-variables.md       # Environment variables reference
-├── schema.md                               # Database schema
-├── error-handling-implementation.md    # Error handling patterns
-├── examples/
-│   └── parse-output-example.json       # Example JSON output
-└── testing/
-    ├── testing-coverage.md             # Testing guide
-    ├── coverage-summary.md             # Coverage statistics
-    ├── coverage-quick-reference.md     # Quick testing commands
-    └── test-template.md                # Test template
+├── README.md                       # 本文件 - 文档导航中心
+├── getting-started/                # 新手入门
+│   └── quick-start.md             # 快速开始指南
+├── user-guide/                     # 用户指南
+│   ├── cli/                       # CLI 工具
+│   │   └── README.md              # CLI 完整指南
+│   └── api/                       # API 服务
+│       └── README.md              # API 完整指南
+├── configuration/                  # 配置指南
+│   └── README.md                  # 配置完整指南
+├── deployment/                     # 部署指南
+│   └── README.md                  # 部署完整指南
+├── development/                    # 开发指南
+│   ├── devcontainer.md            # DevContainer 指南
+│   └── testing.md                 # 测试指南
+├── reference/                      # 技术参考
+│   └── schema.md                  # 数据库 Schema
+├── cli/                           # CLI 详细文档（保留）
+├── indexer/                       # 索引器详细文档（保留）
+├── testing/                       # 测试详细文档（保留）
+└── examples/                      # 示例文件
 ```
 
-## Contributing
+## 🆘 获取帮助
 
-When adding new documentation:
+### 文档问题
 
-1. Follow the existing structure and style
-2. Include practical examples
-3. Add troubleshooting sections for common issues
-4. Update this index file with links to new documents
-5. Cross-reference related documentation
+如果你在文档中发现错误或有改进建议：
 
-## Support
+1. 查看 [GitHub Issues](https://github.com/yourtionguo/CodeAtlas/issues)
+2. 创建新 Issue 并标记为 `documentation`
+3. 或直接提交 Pull Request
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/codeatlas/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/codeatlas/discussions)
-- **Documentation**: This directory
+### 技术问题
 
-## License
+如果你遇到技术问题：
 
-MIT License - See [LICENSE](../LICENSE) for details.
+1. 先查看相关文档的"故障排除"部分
+2. 搜索 [GitHub Issues](https://github.com/yourtionguo/CodeAtlas/issues)
+3. 如果没有找到解决方案，创建新 Issue
+
+### 功能请求
+
+如果你有功能建议：
+
+1. 查看 [GitHub Discussions](https://github.com/yourtionguo/CodeAtlas/discussions)
+2. 在 "Ideas" 分类下创建新讨论
+3. 或创建 Issue 并标记为 `enhancement`
+
+## 🤝 贡献
+
+想要改进文档？
+
+1. 阅读 [贡献指南](../CONTRIBUTING.md)
+2. Fork 仓库
+3. 创建分支
+4. 提交 Pull Request
+
+### 文档编写规范
+
+- 使用清晰、简洁的语言
+- 提供实际可运行的示例
+- 包含故障排除部分
+- 保持格式一致
+- 更新相关链接
+
+## 📝 文档版本
+
+- **当前版本**: 1.0.0
+- **最后更新**: 2025-11-06
+- **维护者**: CodeAtlas Team
+
+## 📄 许可证
+
+文档采用 [MIT License](../LICENSE)
+
+---
+
+**提示**：使用 `Ctrl+F` (Windows/Linux) 或 `Cmd+F` (macOS) 在本页面快速搜索关键词。

@@ -1,41 +1,33 @@
-# CodeAtlas API Documentation
+# API 文档导航
 
-Welcome to the CodeAtlas API documentation. This directory contains comprehensive guides for using and integrating with the CodeAtlas API.
+> 此目录已重组，完整的 API 文档已移至新位置
 
-## Documentation Index
+## 📖 完整文档
 
-### Getting Started
+**[API 完整指南](../user-guide/api/README.md)** - HTTP API 使用手册
 
-- **[Quick Start Guide](./quick-start.md)** - Get up and running with the API in minutes
-  - Server setup and configuration
-  - Basic API testing
-  - Common workflows
-  - Troubleshooting tips
+包含：
+- 端点参考（仓库、索引、搜索、关系查询）
+- 认证和错误处理
+- 集成示例（JavaScript、Python、cURL）
+- 搜索和关系查询最佳实践
 
-### API Reference
+## 🔗 相关文档
 
-- **[API Reference](./api-reference.md)** - Complete API endpoint documentation
-  - All endpoints with request/response examples
-  - Authentication details
-  - Error codes and responses
-  - Data models
+- [快速开始指南](../getting-started/quick-start.md)
+- [配置指南](../configuration/README.md)
+- [部署指南](../deployment/README.md)
 
-### Configuration
+---
 
-- **[Middleware and Configuration](./middleware-and-configuration.md)** - Server configuration guide
-  - Authentication middleware
-  - CORS configuration
-  - Logging setup
-  - Security best practices
-  - Environment variables
+## 旧文档索引（已整合）
 
-### Advanced Topics
+以下文档已整合到新的 API 完整指南中：
 
-- **[Search and Relationships](./search-and-relationships.md)** - Advanced query capabilities
-  - Semantic search
-  - Code relationship queries
-  - Graph traversal
-  - Performance optimization
+- ~~Quick Start Guide~~ → [API 完整指南 - 快速开始](../user-guide/api/README.md#快速开始)
+- ~~API Reference~~ → [API 完整指南 - 端点参考](../user-guide/api/README.md#端点参考)
+- ~~Middleware and Configuration~~ → [配置指南 - 安全配置](../configuration/README.md#安全配置)
+- ~~Search and Relationships~~ → [API 完整指南 - 搜索和关系查询](../user-guide/api/README.md#搜索和关系查询)
 
 ## Quick Links
 
