@@ -295,8 +295,18 @@ codeatlas upload -p /path/to/repo -s http://localhost:8080
 
 运行测试：
 ```bash
-# 运行所有测试
-make test
+# 快速单元测试（推荐日常开发使用）
+make test-unit
+
+# 增强输出测试（彩色输出 + 失败信息提取 + 统计）
+make test-unit-pretty          # 单元测试
+make test-all-pretty           # 所有测试
+make test-integration-pretty   # 集成测试
+
+# CI 友好测试（生成 JSON 报告）
+make test-ci                   # 单元测试
+make test-ci-all               # 所有测试
+make test-ci-integration       # 集成测试
 
 # 运行特定模块测试
 make test-api
@@ -304,16 +314,20 @@ make test-cli
 make test-models
 
 # 生成测试覆盖率报告
-make test-coverage
+make test-coverage-unit        # 单元测试覆盖率
+make test-coverage-all         # 完整覆盖率
 
 # 查看函数级覆盖率统计
 make test-coverage-func
-
-# 使用高级覆盖率分析脚本
-./scripts/coverage.sh all
 ```
 
-详细的测试和覆盖率指南请参考 [测试覆盖率文档](./docs/testing-coverage.md)。
+**新功能：增强的测试输出**
+- ✅ 彩色输出，失败测试一目了然
+- ✅ 自动统计测试数量、通过率、耗时
+- ✅ 失败测试详细信息自动提取
+- ✅ CI 友好的 JSON 格式报告
+
+详细的测试指南请参考 [测试文档](./docs/TESTING.md)。
 
 ---
 

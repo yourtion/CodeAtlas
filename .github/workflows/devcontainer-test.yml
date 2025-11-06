@@ -54,9 +54,33 @@ jobs:
         run: |
           docker-compose -f .devcontainer/docker-compose.yml exec -T dev make build
 
-      - name: Run tests
+      - name: Run tests with enhanced output
         run: |
-          docker-compose -f .devcontainer/docker-compose.yml exec -T dev make test
+          docker-compose -f .devcontainer/docker-compose.yml exec -T dev make test-ci
+      
+      - name: Extract test results
+        if: always()
+        run: |
+          # Copy test report from container
+          docker cp $(docker-compose -f .devcontainer/docker-compose.yml ps -q dev):/workspace/test_report_*.json . 2>/dev/null || true
+          
+          # Display summary if report exists
+          if ls test_report_*.json 1> /dev/null 2>&1; then
+            echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+            REPORT=$(ls -t test_report_*.json | head -1)
+            echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+            cat "$REPORT" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devcontainer-test-report
+          path: test_report_*.json
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Cleanup
         if: always()

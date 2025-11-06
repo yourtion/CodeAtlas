@@ -79,7 +79,7 @@ jobs:
         EMBEDDING_DIMENSIONS: 768
         INDEXER_SKIP_VECTORS: false
       run: |
-        go test $(go list ./... | grep -v /scripts | grep -v /test-repo) -coverprofile=coverage.out -covermode=atomic -v
+        bash scripts/test_ci.sh go test $(go list ./... | grep -v /scripts | grep -v /test-repo) -coverprofile=coverage.out -covermode=atomic -v
     
     - name: Generate coverage report
       run: |
@@ -98,6 +98,16 @@ jobs:
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         go tool cover -func=coverage.out >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Add test report if available
+        if [ -f test_report_*.json ]; then
+          REPORT_FILE=$(ls -t test_report_*.json | head -1)
+          echo "### Test Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          cat "$REPORT_FILE" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        fi
     
     - name: Check coverage threshold
       run: |
@@ -128,6 +138,7 @@ jobs:
           coverage.out
           coverage.html
           coverage.txt
+          test_report_*.json
         retention-days: 30
     
     - name: Cleanup

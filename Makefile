@@ -36,12 +36,22 @@ test-unit:
 	@echo "Running unit tests (no external dependencies)..."
 	go test -short $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
 
+# Unit tests with enhanced output
+.PHONY: test-unit-pretty
+test-unit-pretty:
+	@bash scripts/test_runner.sh go test -short $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
+
 # Integration tests only (requires database and external services)
 .PHONY: test-integration
 test-integration:
 	@echo "Running integration tests (requires database)..."
 	@echo "Make sure database is running: make docker-up"
 	go test ./tests/integration/... -v -timeout 5m
+
+# Integration tests with enhanced output
+.PHONY: test-integration-pretty
+test-integration-pretty:
+	@bash scripts/test_runner.sh go test ./tests/integration/... -v -timeout 5m
 
 # Integration tests with short flag (skips actual database tests)
 .PHONY: test-integration-short
@@ -75,6 +85,11 @@ test-all:
 	@echo "Running all tests (unit + integration)..."
 	@echo "Make sure database is running: make docker-up"
 	go test $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
+
+# All tests with enhanced output
+.PHONY: test-all-pretty
+test-all-pretty:
+	@bash scripts/test_runner.sh go test $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
 
 # Specific test suites
 .PHONY: test-cli
@@ -241,6 +256,19 @@ verify-tests:
 	@echo "Running complete test verification..."
 	@bash scripts/verify_test_setup.sh
 
+# CI-friendly test targets with enhanced output
+.PHONY: test-ci
+test-ci:
+	@bash scripts/test_ci.sh go test -short $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
+
+.PHONY: test-ci-all
+test-ci-all:
+	@bash scripts/test_ci.sh go test $(shell go list ./... | grep -v /scripts | grep -v /test-repo) -v
+
+.PHONY: test-ci-integration
+test-ci-integration:
+	@bash scripts/test_ci.sh go test ./tests/integration/... -v -timeout 5m
+
 # Docker targets
 .PHONY: docker-up
 docker-up:
@@ -300,17 +328,25 @@ help:
 	@echo "Test Commands:"
 	@echo "  make test                      - Run unit tests (default, fast)"
 	@echo "  make test-unit                 - Run unit tests only (no external dependencies)"
+	@echo "  make test-unit-pretty          - Run unit tests with enhanced output"
 	@echo "  make test-integration          - Run integration tests (requires database)"
+	@echo "  make test-integration-pretty   - Run integration tests with enhanced output"
 	@echo "  make test-integration-short    - Run integration tests in short mode (no database)"
 	@echo "  make test-integration-legacy   - Run legacy integration tests (requires database)"
 	@echo "  make test-integration-tagged   - Run integration tests with build tags"
 	@echo "  make test-cli-integration      - Run CLI integration tests (requires built binary)"
 	@echo "  make test-all                  - Run all tests (unit + integration)"
+	@echo "  make test-all-pretty           - Run all tests with enhanced output"
 	@echo "  make test-cli                  - Run CLI unit tests"
 	@echo "  make test-api                  - Run API unit tests"
 	@echo "  make test-models               - Run model tests (requires database)"
 	@echo "  make test-parser               - Run parser unit tests"
 	@echo "  make test-indexer              - Run indexer tests (requires database)"
+	@echo ""
+	@echo "CI Test Commands (with failure extraction & statistics):"
+	@echo "  make test-ci                   - Run unit tests with CI-friendly output"
+	@echo "  make test-ci-all               - Run all tests with CI-friendly output"
+	@echo "  make test-ci-integration       - Run integration tests with CI-friendly output"
 	@echo ""
 	@echo "Coverage Commands:"
 	@echo "  make test-coverage             - Generate unit test coverage report (default)"
