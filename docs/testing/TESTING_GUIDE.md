@@ -230,6 +230,77 @@ func TestSymbolRepository_Create(t *testing.T) {
 }
 ```
 
+### Example Tests
+
+Example tests serve as executable documentation and are included in godoc. They can use environment variables for configuration:
+
+```go
+package indexer_test
+
+import (
+    "fmt"
+    "os"
+    "github.com/yourtionguo/CodeAtlas/internal/indexer"
+)
+
+// ExampleOpenAIEmbedder_GenerateEmbedding demonstrates generating embeddings
+// This example requires an embedding service to be available
+func ExampleOpenAIEmbedder_GenerateEmbedding() {
+    // Skip if vectors are disabled
+    if os.Getenv("INDEXER_SKIP_VECTORS") == "true" {
+        fmt.Println("Skipping: INDEXER_SKIP_VECTORS is enabled")
+        return
+    }
+    
+    // Get configuration from environment
+    config := getEmbedderConfigFromEnv()
+    embedder := indexer.NewOpenAIEmbedder(config, nil)
+    
+    embedding, err := embedder.GenerateEmbedding(ctx, "sample code")
+    if err != nil {
+        fmt.Printf("Skipping: embedding service not available (%v)\n", err)
+        return
+    }
+    
+    fmt.Printf("✓ Generated embedding with %d dimensions\n", len(embedding))
+}
+
+// Helper function to read config from environment
+func getEmbedderConfigFromEnv() *indexer.EmbedderConfig {
+    return &indexer.EmbedderConfig{
+        Backend:     os.Getenv("EMBEDDING_BACKEND"),      // Default: "openai"
+        APIEndpoint: os.Getenv("EMBEDDING_API_ENDPOINT"), // Default: "http://localhost:1234/v1/embeddings"
+        APIKey:      os.Getenv("EMBEDDING_API_KEY"),      // Optional
+        Model:       os.Getenv("EMBEDDING_MODEL"),        // Default: "text-embedding-qwen3-embedding-0.6b"
+        Dimensions:  1024,                                 // From EMBEDDING_DIMENSIONS env var
+    }
+}
+```
+
+**Environment Variables for Example Tests:**
+
+- `EMBEDDING_BACKEND` - Embedding service backend (default: "openai")
+- `EMBEDDING_API_ENDPOINT` - API endpoint URL
+- `EMBEDDING_API_KEY` - API authentication key (optional)
+- `EMBEDDING_MODEL` - Model name to use
+- `EMBEDDING_DIMENSIONS` - Expected embedding dimensions
+- `INDEXER_SKIP_VECTORS` - Set to "true" to skip embedding tests
+
+**Running Example Tests:**
+
+```bash
+# Run with default (localhost) configuration
+go test -v -run Example ./internal/indexer
+
+# Run with CI configuration
+EMBEDDING_BACKEND=openai \
+EMBEDDING_API_ENDPOINT=https://models.inference.ai.azure.com/embeddings \
+EMBEDDING_API_KEY=$GITHUB_TOKEN \
+EMBEDDING_DIMENSIONS=768 \
+INDEXER_SKIP_VECTORS=false \
+go test -v -run Example ./internal/indexer
+```
+
 ### Test Helpers
 
 Use setup/teardown helpers for integration tests:
