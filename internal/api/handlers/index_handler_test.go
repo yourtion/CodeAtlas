@@ -77,8 +77,8 @@ func TestIndexHandler_Index_InvalidRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create handler with nil DB (won't be used for validation errors)
-			handler := NewIndexHandler(nil)
+			// Create handler with nil DB and embedder config (won't be used for validation errors)
+			handler := NewIndexHandler(nil, nil)
 
 			// Create test router
 			router := gin.New()

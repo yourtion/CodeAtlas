@@ -13,12 +13,16 @@ import (
 
 // IndexHandler handles indexing operations
 type IndexHandler struct {
-	db *models.DB
+	db             *models.DB
+	embedderConfig *EmbedderConfig
 }
 
-// NewIndexHandler creates a new index handler
-func NewIndexHandler(db *models.DB) *IndexHandler {
-	return &IndexHandler{db: db}
+// NewIndexHandler creates a new index handler with embedder configuration
+func NewIndexHandler(db *models.DB, embedderConfig *EmbedderConfig) *IndexHandler {
+	return &IndexHandler{
+		db:             db,
+		embedderConfig: embedderConfig,
+	}
 }
 
 // IndexRequest represents the request body for POST /api/v1/index
@@ -114,8 +118,16 @@ func (h *IndexHandler) Index(c *gin.Context) {
 		config.WorkerCount = 4
 	}
 
-	// Create indexer
-	idx := indexer.NewIndexer(h.db, config)
+	// Create indexer with embedder config if available
+	var idx *indexer.Indexer
+	if h.embedderConfig != nil && !config.SkipVectors {
+		// Create embedder with handler's config
+		vectorRepo := models.NewVectorRepository(h.db)
+		embedder := indexer.NewOpenAIEmbedder(h.embedderConfig, vectorRepo)
+		idx = indexer.NewIndexerWithEmbedder(h.db, config, embedder)
+	} else {
+		idx = indexer.NewIndexer(h.db, config)
+	}
 
 	// Run indexing
 	ctx := context.Background()

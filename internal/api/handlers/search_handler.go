@@ -9,6 +9,9 @@ import (
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
+// EmbedderConfig is an alias for indexer.EmbedderConfig for easier imports
+type EmbedderConfig = indexer.EmbedderConfig
+
 // SearchHandler handles search operations
 type SearchHandler struct {
 	vectorRepo *models.VectorRepository
@@ -17,13 +20,18 @@ type SearchHandler struct {
 	embedder   indexer.Embedder
 }
 
-// NewSearchHandler creates a new search handler
-func NewSearchHandler(db *models.DB) *SearchHandler {
+// NewSearchHandler creates a new search handler with embedder configuration
+func NewSearchHandler(db *models.DB, embedderConfig *EmbedderConfig) *SearchHandler {
+	// Use default config if none provided
+	if embedderConfig == nil {
+		embedderConfig = indexer.DefaultEmbedderConfig()
+	}
+	
 	return &SearchHandler{
 		vectorRepo: models.NewVectorRepository(db),
 		symbolRepo: models.NewSymbolRepository(db),
 		fileRepo:   models.NewFileRepository(db),
-		embedder:   indexer.NewOpenAIEmbedder(indexer.DefaultEmbedderConfig(), models.NewVectorRepository(db)),
+		embedder:   indexer.NewOpenAIEmbedder(embedderConfig, models.NewVectorRepository(db)),
 	}
 }
 

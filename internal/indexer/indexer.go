@@ -82,8 +82,18 @@ func NewIndexer(db *models.DB, config *IndexerConfig) *Indexer {
 	return NewIndexerWithLogger(db, config, &noOpLogger{})
 }
 
+// NewIndexerWithEmbedder creates a new indexer instance with a custom embedder
+func NewIndexerWithEmbedder(db *models.DB, config *IndexerConfig, embedder Embedder) *Indexer {
+	return newIndexerInternal(db, config, &noOpLogger{}, embedder)
+}
+
 // NewIndexerWithLogger creates a new indexer instance with a custom logger
 func NewIndexerWithLogger(db *models.DB, config *IndexerConfig, logger IndexerLogger) *Indexer {
+	return newIndexerInternal(db, config, logger, nil)
+}
+
+// newIndexerInternal is the internal constructor with all options
+func newIndexerInternal(db *models.DB, config *IndexerConfig, logger IndexerLogger, embedder Embedder) *Indexer {
 	if config == nil {
 		config = DefaultIndexerConfig()
 	}
@@ -111,9 +121,8 @@ func NewIndexerWithLogger(db *models.DB, config *IndexerConfig, logger IndexerLo
 	}
 	graphBuilder := NewGraphBuilder(db, graphConfig)
 
-	// Create embedder with config (if not skipping vectors)
-	var embedder Embedder
-	if !config.SkipVectors {
+	// Create embedder with config (if not skipping vectors and not provided)
+	if embedder == nil && !config.SkipVectors {
 		embedderConfig := DefaultEmbedderConfig()
 		if config.EmbeddingModel != "" {
 			embedderConfig.Model = config.EmbeddingModel

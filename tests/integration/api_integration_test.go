@@ -11,11 +11,39 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/yourtionguo/CodeAtlas/internal/api/handlers"
+	"github.com/yourtionguo/CodeAtlas/internal/indexer"
+	"github.com/yourtionguo/CodeAtlas/internal/schema"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
 func init() {
 	gin.SetMode(gin.TestMode)
+}
+
+// mockEmbedder is a test embedder that returns a fixed embedding
+type mockEmbedder struct {
+	embedding []float32
+}
+
+func (m *mockEmbedder) GenerateEmbedding(ctx context.Context, content string) ([]float32, error) {
+	return m.embedding, nil
+}
+
+func (m *mockEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symbol) (*indexer.EmbedResult, error) {
+	result := &indexer.EmbedResult{
+		VectorsCreated: len(symbols),
+		Duration:       0,
+		Errors:         []indexer.EmbedError{},
+	}
+	return result, nil
+}
+
+func (m *mockEmbedder) BatchEmbed(ctx context.Context, texts []string) ([][]float32, error) {
+	embeddings := make([][]float32, len(texts))
+	for i := range texts {
+		embeddings[i] = m.embedding
+	}
+	return embeddings, nil
 }
 
 // TestIndexHandlerIntegration tests the index handler with real database
@@ -27,8 +55,8 @@ func TestIndexHandlerIntegration(t *testing.T) {
 	testDB := SetupTestDB(t)
 	defer testDB.TeardownTestDB(t)
 
-	// Create handler
-	handler := handlers.NewIndexHandler(testDB.DB)
+	// Create handler with nil embedder config (will skip vectors)
+	handler := handlers.NewIndexHandler(testDB.DB, nil)
 
 	// Create test request
 	parseOutput := createTestParseOutput()
@@ -167,8 +195,8 @@ func TestSearchHandlerIntegration(t *testing.T) {
 		t.Fatalf("Failed to create vector: %v", err)
 	}
 
-	// Create handler
-	handler := handlers.NewSearchHandler(testDB.DB)
+	// Use custom handler with mock embedder that returns our test embedding
+	handler := handlers.NewSearchHandlerWithEmbedder(testDB.DB, &mockEmbedder{embedding: embedding})
 
 	// Create search request
 	reqBody := handlers.SearchRequest{
@@ -369,7 +397,7 @@ func TestInvalidRequests(t *testing.T) {
 	testDB := SetupTestDB(t)
 	defer testDB.TeardownTestDB(t)
 
-	handler := handlers.NewIndexHandler(testDB.DB)
+	handler := handlers.NewIndexHandler(testDB.DB, nil)
 
 	tests := []struct {
 		name           string

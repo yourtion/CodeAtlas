@@ -8,6 +8,7 @@ import (
 
 	"github.com/yourtionguo/CodeAtlas/internal/api"
 	"github.com/yourtionguo/CodeAtlas/internal/config"
+	"github.com/yourtionguo/CodeAtlas/internal/indexer"
 	"github.com/yourtionguo/CodeAtlas/internal/utils"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
@@ -92,16 +93,34 @@ func main() {
 		)
 	}
 
+	// Convert config.EmbedderConfig to indexer.EmbedderConfig
+	embedderConfig := &indexer.EmbedderConfig{
+		Backend:              cfg.Embedder.Backend,
+		APIEndpoint:          cfg.Embedder.APIEndpoint,
+		APIKey:               cfg.Embedder.APIKey,
+		Model:                cfg.Embedder.Model,
+		Dimensions:           cfg.Embedder.Dimensions,
+		BatchSize:            cfg.Embedder.BatchSize,
+		MaxRequestsPerSecond: cfg.Embedder.MaxRequestsPerSecond,
+		MaxRetries:           cfg.Embedder.MaxRetries,
+		BaseRetryDelay:       cfg.Embedder.BaseRetryDelay,
+		MaxRetryDelay:        cfg.Embedder.MaxRetryDelay,
+		Timeout:              cfg.Embedder.Timeout,
+	}
+
 	// Create server configuration from loaded config
 	serverConfig := &api.ServerConfig{
-		EnableAuth:  cfg.API.EnableAuth,
-		AuthTokens:  cfg.API.AuthTokens,
-		CORSOrigins: cfg.API.CORSOrigins,
+		EnableAuth:     cfg.API.EnableAuth,
+		AuthTokens:     cfg.API.AuthTokens,
+		CORSOrigins:    cfg.API.CORSOrigins,
+		EmbedderConfig: embedderConfig,
 	}
 	logger.InfoWithFields("Server configuration",
 		utils.Field{Key: "auth_enabled", Value: serverConfig.EnableAuth},
 		utils.Field{Key: "cors_origins", Value: serverConfig.CORSOrigins},
 		utils.Field{Key: "auth_tokens_count", Value: len(serverConfig.AuthTokens)},
+		utils.Field{Key: "embedder_backend", Value: embedderConfig.Backend},
+		utils.Field{Key: "embedder_model", Value: embedderConfig.Model},
 	)
 
 	// Create API server
