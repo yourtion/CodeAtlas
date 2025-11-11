@@ -96,3 +96,87 @@ func TestListRepositoriesResponse_Structure(t *testing.T) {
 		t.Errorf("Expected total to be 2, got %d", response.Total)
 	}
 }
+
+func TestNewRepositoryHandler(t *testing.T) {
+	// Test creating handler with nil DB
+	handler := NewRepositoryHandler(nil)
+	if handler == nil {
+		t.Error("Expected handler to be created, got nil")
+	}
+	if handler.repoRepository == nil {
+		t.Error("Expected repoRepository to be initialized")
+	}
+}
+
+func TestRepositoryResponse_JSONSerialization(t *testing.T) {
+	response := RepositoryResponse{
+		RepoID:     "test-id",
+		Name:       "test-repo",
+		URL:        "https://github.com/test/repo",
+		Branch:     "main",
+		CommitHash: "abc123",
+		Metadata: map[string]interface{}{
+			"language": "Go",
+			"stars":    100,
+		},
+		CreatedAt: "2024-01-01T00:00:00Z",
+		UpdatedAt: "2024-01-01T00:00:00Z",
+	}
+
+	// Test that all fields are set
+	if response.RepoID == "" {
+		t.Error("Expected RepoID to be set")
+	}
+	if response.Name == "" {
+		t.Error("Expected Name to be set")
+	}
+	if response.Branch == "" {
+		t.Error("Expected Branch to be set")
+	}
+	if response.CreatedAt == "" {
+		t.Error("Expected CreatedAt to be set")
+	}
+	if response.UpdatedAt == "" {
+		t.Error("Expected UpdatedAt to be set")
+	}
+	if response.Metadata == nil {
+		t.Error("Expected Metadata to be set")
+	}
+}
+
+func TestListRepositoriesResponse_EmptyList(t *testing.T) {
+	response := ListRepositoriesResponse{
+		Repositories: []RepositoryResponse{},
+		Total:        0,
+	}
+
+	// Validate empty list
+	if len(response.Repositories) != 0 {
+		t.Errorf("Expected 0 repositories, got %d", len(response.Repositories))
+	}
+	if response.Total != 0 {
+		t.Errorf("Expected total to be 0, got %d", response.Total)
+	}
+}
+
+func TestRepositoryResponse_OptionalFields(t *testing.T) {
+	// Test with minimal fields
+	response := RepositoryResponse{
+		RepoID:    "test-id",
+		Name:      "test-repo",
+		Branch:    "main",
+		CreatedAt: "2024-01-01T00:00:00Z",
+		UpdatedAt: "2024-01-01T00:00:00Z",
+	}
+
+	// Optional fields should be empty
+	if response.URL != "" {
+		t.Errorf("Expected URL to be empty, got '%s'", response.URL)
+	}
+	if response.CommitHash != "" {
+		t.Errorf("Expected CommitHash to be empty, got '%s'", response.CommitHash)
+	}
+	if response.Metadata != nil {
+		t.Error("Expected Metadata to be nil")
+	}
+}

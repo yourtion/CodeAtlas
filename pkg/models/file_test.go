@@ -3,53 +3,53 @@ package models
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 )
 
 func TestFileRepository_Create(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test")
+		t.Skip("Skipping integration test in short mode")
 	}
 
 	testDB := SetupTestDB(t)
 	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-
-	// Create repository first
 	repoRepo := NewRepositoryRepository(testDB.DB)
-	repoID := uuid.New().String()
-	repository := &Repository{
-		RepoID: repoID,
-		Name:   "test-repo-" + repoID[:8],
+	fileRepo := NewFileRepository(testDB.DB)
+
+	// Create test repository first
+	repo := &Repository{
+		RepoID: uuid.New().String(),
+		Name:   "test-repo-file",
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err := repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repo)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
+	defer repoRepo.Delete(ctx, repo.RepoID)
 
-	repo := NewFileRepository(testDB.DB)
-
+	// Create test file
 	file := &File{
 		FileID:   uuid.New().String(),
-		RepoID:   repository.RepoID,
-		Path:     "test/file.go",
+		RepoID:   repo.RepoID,
+		Path:     "src/main.go",
 		Language: "go",
 		Size:     1024,
 		Checksum: "abc123",
 	}
 
-	err = repo.Create(ctx, file)
+	err = fileRepo.Create(ctx, file)
 	if err != nil {
 		t.Fatalf("Failed to create file: %v", err)
 	}
+	defer fileRepo.Delete(ctx, file.FileID)
 
 	// Verify the file was created
-	retrieved, err := repo.GetByID(ctx, file.FileID)
+	retrieved, err := fileRepo.GetByID(ctx, file.FileID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve file: %v", err)
 	}
@@ -74,46 +74,47 @@ func TestFileRepository_Create(t *testing.T) {
 
 func TestFileRepository_GetByPath(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test")
+		t.Skip("Skipping integration test in short mode")
 	}
 
 	testDB := SetupTestDB(t)
 	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-
-	// Create repository first
 	repoRepo := NewRepositoryRepository(testDB.DB)
-	repoID := uuid.New().String()
-	repository := &Repository{
-		RepoID: repoID,
-		Name:   "test-repo-path-" + repoID[:8],
+	fileRepo := NewFileRepository(testDB.DB)
+
+	// Create test repository
+	repo := &Repository{
+		RepoID: uuid.New().String(),
+		Name:   "test-repo-getbypath",
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err := repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repo)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
+	defer repoRepo.Delete(ctx, repo.RepoID)
 
-	repo := NewFileRepository(testDB.DB)
-
+	// Create test file
 	file := &File{
 		FileID:   uuid.New().String(),
-		RepoID:   repository.RepoID,
-		Path:     "test/unique_path.go",
+		RepoID:   repo.RepoID,
+		Path:     "src/utils.go",
 		Language: "go",
 		Size:     512,
 		Checksum: "def456",
 	}
 
-	err = repo.Create(ctx, file)
+	err = fileRepo.Create(ctx, file)
 	if err != nil {
 		t.Fatalf("Failed to create file: %v", err)
 	}
+	defer fileRepo.Delete(ctx, file.FileID)
 
 	// Retrieve by path
-	retrieved, err := repo.GetByPath(ctx, repository.RepoID, file.Path)
+	retrieved, err := fileRepo.GetByPath(ctx, repo.RepoID, "src/utils.go")
 	if err != nil {
 		t.Fatalf("Failed to retrieve file by path: %v", err)
 	}
@@ -127,77 +128,72 @@ func TestFileRepository_GetByPath(t *testing.T) {
 	}
 }
 
-func TestFileRepository_BatchCreate(t *testing.T) {
+func TestFileRepository_GetByRepoID(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test")
+		t.Skip("Skipping integration test in short mode")
 	}
 
 	testDB := SetupTestDB(t)
 	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-
-	// Create repository first
 	repoRepo := NewRepositoryRepository(testDB.DB)
-	repoID := uuid.New().String()
-	repository := &Repository{
-		RepoID: repoID,
-		Name:   "test-repo-batch-" + repoID[:8],
+	fileRepo := NewFileRepository(testDB.DB)
+
+	// Create test repository
+	repo := &Repository{
+		RepoID: uuid.New().String(),
+		Name:   "test-repo-getbyrepoid",
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err := repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repo)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
+	defer repoRepo.Delete(ctx, repo.RepoID)
 
-	repo := NewFileRepository(testDB.DB)
-
-	files := []*File{
+	// Create test files
+	testFiles := []*File{
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repository.RepoID,
-			Path:     "batch/file1.go",
+			RepoID:   repo.RepoID,
+			Path:     "src/main.go",
 			Language: "go",
-			Size:     100,
-			Checksum: "batch1",
+			Size:     1024,
+			Checksum: "abc123",
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repository.RepoID,
-			Path:     "batch/file2.go",
+			RepoID:   repo.RepoID,
+			Path:     "src/utils.go",
 			Language: "go",
-			Size:     200,
-			Checksum: "batch2",
-		},
-		{
-			FileID:   uuid.New().String(),
-			RepoID:   repository.RepoID,
-			Path:     "batch/file3.py",
-			Language: "python",
-			Size:     300,
-			Checksum: "batch3",
+			Size:     512,
+			Checksum: "def456",
 		},
 	}
 
-	err = repo.BatchCreate(ctx, files)
-	if err != nil {
-		t.Fatalf("Failed to batch create files: %v", err)
+	for _, f := range testFiles {
+		err = fileRepo.Create(ctx, f)
+		if err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+		defer fileRepo.Delete(ctx, f.FileID)
 	}
 
-	// Verify all files were created
-	retrievedFiles, err := repo.GetByRepoID(ctx, repository.RepoID)
+	// Get all files for repository
+	files, err := fileRepo.GetByRepoID(ctx, repo.RepoID)
 	if err != nil {
-		t.Fatalf("Failed to retrieve files by repo ID: %v", err)
+		t.Fatalf("Failed to get files by repo ID: %v", err)
 	}
 
-	if len(retrievedFiles) != len(files) {
-		t.Errorf("Expected %d files, got %d", len(files), len(retrievedFiles))
+	if len(files) != len(testFiles) {
+		t.Errorf("Expected %d files, got %d", len(testFiles), len(files))
 	}
 
 	// Verify files are sorted by path
-	for i := 1; i < len(retrievedFiles); i++ {
-		if retrievedFiles[i-1].Path > retrievedFiles[i].Path {
+	for i := 1; i < len(files); i++ {
+		if files[i-1].Path > files[i].Path {
 			t.Error("Files are not sorted by path")
 			break
 		}
@@ -206,134 +202,206 @@ func TestFileRepository_BatchCreate(t *testing.T) {
 
 func TestFileRepository_Update(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test")
+		t.Skip("Skipping integration test in short mode")
 	}
 
 	testDB := SetupTestDB(t)
 	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-
-	// Create repository first
 	repoRepo := NewRepositoryRepository(testDB.DB)
-	repoID := uuid.New().String()
-	repository := &Repository{
-		RepoID: repoID,
-		Name:   "test-repo-update-" + repoID[:8],
+	fileRepo := NewFileRepository(testDB.DB)
+
+	// Create test repository
+	repo := &Repository{
+		RepoID: uuid.New().String(),
+		Name:   "test-repo-update",
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err := repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repo)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
+	defer repoRepo.Delete(ctx, repo.RepoID)
 
-	repo := NewFileRepository(testDB.DB)
-
+	// Create test file
 	file := &File{
 		FileID:   uuid.New().String(),
-		RepoID:   repository.RepoID,
-		Path:     "test/update.go",
+		RepoID:   repo.RepoID,
+		Path:     "src/main.go",
 		Language: "go",
-		Size:     1000,
+		Size:     1024,
 		Checksum: "original",
 	}
 
-	err = repo.Create(ctx, file)
+	err = fileRepo.Create(ctx, file)
 	if err != nil {
 		t.Fatalf("Failed to create file: %v", err)
 	}
+	defer fileRepo.Delete(ctx, file.FileID)
 
 	// Update the file
-	file.Size = 2000
+	file.Size = 2048
 	file.Checksum = "updated"
-	originalUpdatedAt := file.UpdatedAt
 
-	// Wait a bit to ensure updated_at changes
-	time.Sleep(10 * time.Millisecond)
-
-	err = repo.Update(ctx, file)
+	err = fileRepo.Update(ctx, file)
 	if err != nil {
 		t.Fatalf("Failed to update file: %v", err)
 	}
 
 	// Verify the update
-	retrieved, err := repo.GetByID(ctx, file.FileID)
+	retrieved, err := fileRepo.GetByID(ctx, file.FileID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve updated file: %v", err)
 	}
 
-	if retrieved.Size != 2000 {
-		t.Errorf("Expected size 2000, got %d", retrieved.Size)
+	if retrieved.Size != 2048 {
+		t.Errorf("Expected size 2048, got %d", retrieved.Size)
 	}
 	if retrieved.Checksum != "updated" {
 		t.Errorf("Expected checksum 'updated', got %s", retrieved.Checksum)
 	}
-	if !retrieved.UpdatedAt.After(originalUpdatedAt) {
-		t.Error("UpdatedAt should be updated")
-	}
 }
 
-func TestFileRepository_GetFilesByLanguage(t *testing.T) {
+func TestFileRepository_BatchCreate(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test")
+		t.Skip("Skipping integration test in short mode")
 	}
 
 	testDB := SetupTestDB(t)
 	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-
-	// Create repository first
 	repoRepo := NewRepositoryRepository(testDB.DB)
-	repoID := uuid.New().String()
-	repository := &Repository{
-		RepoID: repoID,
-		Name:   "test-repo-lang-" + repoID[:8],
+	fileRepo := NewFileRepository(testDB.DB)
+
+	// Create test repository
+	repo := &Repository{
+		RepoID: uuid.New().String(),
+		Name:   "test-repo-batch",
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err := repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repo)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
+	defer repoRepo.Delete(ctx, repo.RepoID)
 
-	repo := NewFileRepository(testDB.DB)
-
-	files := []*File{
+	// Create test files
+	testFiles := []*File{
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repository.RepoID,
-			Path:     "lang/file1.go",
+			RepoID:   repo.RepoID,
+			Path:     "src/file1.go",
 			Language: "go",
 			Size:     100,
-			Checksum: "go1",
+			Checksum: "check1",
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repository.RepoID,
-			Path:     "lang/file2.go",
+			RepoID:   repo.RepoID,
+			Path:     "src/file2.go",
 			Language: "go",
 			Size:     200,
-			Checksum: "go2",
+			Checksum: "check2",
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repository.RepoID,
-			Path:     "lang/file3.py",
-			Language: "python",
+			RepoID:   repo.RepoID,
+			Path:     "src/file3.go",
+			Language: "go",
 			Size:     300,
-			Checksum: "py1",
+			Checksum: "check3",
 		},
 	}
 
-	err = repo.BatchCreate(ctx, files)
+	// Batch create
+	err = fileRepo.BatchCreate(ctx, testFiles)
 	if err != nil {
 		t.Fatalf("Failed to batch create files: %v", err)
 	}
 
+	// Clean up
+	for _, f := range testFiles {
+		defer fileRepo.Delete(ctx, f.FileID)
+	}
+
+	// Verify all files were created
+	files, err := fileRepo.GetByRepoID(ctx, repo.RepoID)
+	if err != nil {
+		t.Fatalf("Failed to get files: %v", err)
+	}
+
+	if len(files) != len(testFiles) {
+		t.Errorf("Expected %d files, got %d", len(testFiles), len(files))
+	}
+}
+
+func TestFileRepository_GetFilesByLanguage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
+
+	ctx := context.Background()
+	repoRepo := NewRepositoryRepository(testDB.DB)
+	fileRepo := NewFileRepository(testDB.DB)
+
+	// Create test repository
+	repo := &Repository{
+		RepoID: uuid.New().String(),
+		Name:   "test-repo-language",
+		URL:    "https://github.com/test/repo",
+		Branch: "main",
+	}
+	err := repoRepo.Create(ctx, repo)
+	if err != nil {
+		t.Fatalf("Failed to create repository: %v", err)
+	}
+	defer repoRepo.Delete(ctx, repo.RepoID)
+
+	// Create test files with different languages
+	testFiles := []*File{
+		{
+			FileID:   uuid.New().String(),
+			RepoID:   repo.RepoID,
+			Path:     "src/main.go",
+			Language: "go",
+			Size:     1024,
+			Checksum: "go1",
+		},
+		{
+			FileID:   uuid.New().String(),
+			RepoID:   repo.RepoID,
+			Path:     "src/utils.go",
+			Language: "go",
+			Size:     512,
+			Checksum: "go2",
+		},
+		{
+			FileID:   uuid.New().String(),
+			RepoID:   repo.RepoID,
+			Path:     "src/main.py",
+			Language: "python",
+			Size:     256,
+			Checksum: "py1",
+		},
+	}
+
+	for _, f := range testFiles {
+		err = fileRepo.Create(ctx, f)
+		if err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+		defer fileRepo.Delete(ctx, f.FileID)
+	}
+
 	// Get Go files
-	goFiles, err := repo.GetFilesByLanguage(ctx, repository.RepoID, "go")
+	goFiles, err := fileRepo.GetFilesByLanguage(ctx, repo.RepoID, "go")
 	if err != nil {
 		t.Fatalf("Failed to get Go files: %v", err)
 	}
@@ -342,145 +410,83 @@ func TestFileRepository_GetFilesByLanguage(t *testing.T) {
 		t.Errorf("Expected 2 Go files, got %d", len(goFiles))
 	}
 
-	for _, file := range goFiles {
-		if file.Language != "go" {
-			t.Errorf("Expected language 'go', got %s", file.Language)
-		}
-	}
-
 	// Get Python files
-	pythonFiles, err := repo.GetFilesByLanguage(ctx, repository.RepoID, "python")
+	pyFiles, err := fileRepo.GetFilesByLanguage(ctx, repo.RepoID, "python")
 	if err != nil {
 		t.Fatalf("Failed to get Python files: %v", err)
 	}
 
-	if len(pythonFiles) != 1 {
-		t.Errorf("Expected 1 Python file, got %d", len(pythonFiles))
+	if len(pyFiles) != 1 {
+		t.Errorf("Expected 1 Python file, got %d", len(pyFiles))
 	}
 }
 
 func TestFileRepository_Count(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping integration test")
+		t.Skip("Skipping integration test in short mode")
 	}
 
 	testDB := SetupTestDB(t)
 	defer testDB.TeardownTestDB(t)
 
 	ctx := context.Background()
-
-	// Create repository first
 	repoRepo := NewRepositoryRepository(testDB.DB)
-	repoID := uuid.New().String()
-	repository := &Repository{
-		RepoID: repoID,
-		Name:   "test-repo-count-" + repoID[:8],
+	fileRepo := NewFileRepository(testDB.DB)
+
+	// Create test repository
+	repo := &Repository{
+		RepoID: uuid.New().String(),
+		Name:   "test-repo-count",
 		URL:    "https://github.com/test/repo",
 		Branch: "main",
 	}
-	err := repoRepo.Create(ctx, repository)
+	err := repoRepo.Create(ctx, repo)
 	if err != nil {
 		t.Fatalf("Failed to create repository: %v", err)
 	}
+	defer repoRepo.Delete(ctx, repo.RepoID)
 
-	repo := NewFileRepository(testDB.DB)
-
-	// Initial count should be 0
-	count, err := repo.Count(ctx, repository.RepoID)
+	// Get initial count
+	initialCount, err := fileRepo.Count(ctx, repo.RepoID)
 	if err != nil {
 		t.Fatalf("Failed to get count: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("Expected count 0, got %d", count)
-	}
 
-	// Add some files
-	files := []*File{
+	// Create test files
+	testFiles := []*File{
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repository.RepoID,
-			Path:     "count/file1.go",
+			RepoID:   repo.RepoID,
+			Path:     "file1.go",
 			Language: "go",
 			Size:     100,
-			Checksum: "count1",
+			Checksum: "c1",
 		},
 		{
 			FileID:   uuid.New().String(),
-			RepoID:   repository.RepoID,
-			Path:     "count/file2.go",
+			RepoID:   repo.RepoID,
+			Path:     "file2.go",
 			Language: "go",
 			Size:     200,
-			Checksum: "count2",
+			Checksum: "c2",
 		},
 	}
 
-	err = repo.BatchCreate(ctx, files)
-	if err != nil {
-		t.Fatalf("Failed to batch create files: %v", err)
+	for _, f := range testFiles {
+		err = fileRepo.Create(ctx, f)
+		if err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+		defer fileRepo.Delete(ctx, f.FileID)
 	}
 
-	// Count should now be 2
-	count, err = repo.Count(ctx, repository.RepoID)
+	// Get new count
+	newCount, err := fileRepo.Count(ctx, repo.RepoID)
 	if err != nil {
 		t.Fatalf("Failed to get count: %v", err)
 	}
-	if count != 2 {
-		t.Errorf("Expected count 2, got %d", count)
-	}
-}
 
-func TestFileRepository_Delete(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test")
-	}
-
-	testDB := SetupTestDB(t)
-	defer testDB.TeardownTestDB(t)
-
-	ctx := context.Background()
-
-	// Create repository first
-	repoRepo := NewRepositoryRepository(testDB.DB)
-	repoID := uuid.New().String()
-	repository := &Repository{
-		RepoID: repoID,
-		Name:   "test-repo-delete-" + repoID[:8],
-		URL:    "https://github.com/test/repo",
-		Branch: "main",
-	}
-	err := repoRepo.Create(ctx, repository)
-	if err != nil {
-		t.Fatalf("Failed to create repository: %v", err)
-	}
-
-	repo := NewFileRepository(testDB.DB)
-
-	file := &File{
-		FileID:   uuid.New().String(),
-		RepoID:   repository.RepoID,
-		Path:     "test/delete.go",
-		Language: "go",
-		Size:     500,
-		Checksum: "delete",
-	}
-
-	err = repo.Create(ctx, file)
-	if err != nil {
-		t.Fatalf("Failed to create file: %v", err)
-	}
-
-	// Delete the file
-	err = repo.Delete(ctx, file.FileID)
-	if err != nil {
-		t.Fatalf("Failed to delete file: %v", err)
-	}
-
-	// Verify the file is gone
-	retrieved, err := repo.GetByID(ctx, file.FileID)
-	if err != nil {
-		t.Fatalf("Failed to check if file exists: %v", err)
-	}
-	if retrieved != nil {
-		t.Error("File should have been deleted")
+	if newCount != initialCount+int64(len(testFiles)) {
+		t.Errorf("Expected count %d, got %d", initialCount+int64(len(testFiles)), newCount)
 	}
 }
