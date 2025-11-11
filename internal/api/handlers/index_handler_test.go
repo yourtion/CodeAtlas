@@ -229,3 +229,151 @@ func TestConvertIndexErrors(t *testing.T) {
 		t.Errorf("Expected message 'test error', got '%s'", result[0].Message)
 	}
 }
+
+func TestNewIndexHandler(t *testing.T) {
+	// Test creating handler with nil DB
+	handler := NewIndexHandler(nil, nil)
+	if handler == nil {
+		t.Error("Expected handler to be created, got nil")
+	}
+	if handler.db != nil {
+		t.Error("Expected db to be nil")
+	}
+	if handler.embedderConfig != nil {
+		t.Error("Expected embedderConfig to be nil")
+	}
+
+	// Test creating handler with embedder config
+	embedderConfig := &EmbedderConfig{
+		Backend:     "openai",
+		APIEndpoint: "https://api.openai.com/v1/embeddings",
+		Model:       "text-embedding-ada-002",
+		Dimensions:  1536,
+	}
+	handler = NewIndexHandler(nil, embedderConfig)
+	if handler == nil {
+		t.Error("Expected handler to be created, got nil")
+	}
+	if handler.embedderConfig == nil {
+		t.Error("Expected embedderConfig to be set")
+	}
+	if handler.embedderConfig.Backend != "openai" {
+		t.Errorf("Expected backend 'openai', got '%s'", handler.embedderConfig.Backend)
+	}
+}
+
+func TestIndexRequest_DefaultValues(t *testing.T) {
+	req := IndexRequest{
+		RepoName: "test-repo",
+		ParseOutput: schema.ParseOutput{
+			Files: []schema.File{
+				{
+					FileID:   "file-1",
+					Path:     "main.go",
+					Language: "go",
+				},
+			},
+		},
+	}
+
+	// Test default values
+	if req.RepoID != "" {
+		t.Errorf("Expected empty RepoID, got '%s'", req.RepoID)
+	}
+	if req.Branch != "" {
+		t.Errorf("Expected empty Branch, got '%s'", req.Branch)
+	}
+	if req.Options.BatchSize != 0 {
+		t.Errorf("Expected BatchSize 0, got %d", req.Options.BatchSize)
+	}
+	if req.Options.WorkerCount != 0 {
+		t.Errorf("Expected WorkerCount 0, got %d", req.Options.WorkerCount)
+	}
+}
+
+func TestIndexResponse_Structure(t *testing.T) {
+	response := IndexResponse{
+		RepoID:         "test-repo-id",
+		Status:         "success",
+		FilesProcessed: 10,
+		SymbolsCreated: 50,
+		EdgesCreated:   100,
+		VectorsCreated: 50,
+		Duration:       "5s",
+		Errors:         nil,
+	}
+
+	// Validate structure
+	if response.RepoID == "" {
+		t.Error("Expected RepoID to be set")
+	}
+	if response.Status == "" {
+		t.Error("Expected Status to be set")
+	}
+	if response.FilesProcessed <= 0 {
+		t.Error("Expected FilesProcessed to be positive")
+	}
+	if response.SymbolsCreated <= 0 {
+		t.Error("Expected SymbolsCreated to be positive")
+	}
+	if response.EdgesCreated <= 0 {
+		t.Error("Expected EdgesCreated to be positive")
+	}
+}
+
+func TestIndexError_Structure(t *testing.T) {
+	err := IndexError{
+		Type:      "validation",
+		Message:   "test error",
+		EntityID:  "entity-1",
+		FilePath:  "test.go",
+		Retryable: false,
+	}
+
+	// Validate structure
+	if err.Type == "" {
+		t.Error("Expected Type to be set")
+	}
+	if err.Message == "" {
+		t.Error("Expected Message to be set")
+	}
+	if err.EntityID == "" {
+		t.Error("Expected EntityID to be set")
+	}
+	if err.FilePath == "" {
+		t.Error("Expected FilePath to be set")
+	}
+}
+
+func TestEmbedderConfig_Structure(t *testing.T) {
+	config := &EmbedderConfig{
+		Backend:              "openai",
+		APIEndpoint:          "https://api.openai.com/v1/embeddings",
+		APIKey:               "sk-test-key",
+		Model:                "text-embedding-ada-002",
+		Dimensions:           1536,
+		BatchSize:            100,
+		MaxRequestsPerSecond: 10,
+		MaxRetries:           3,
+		BaseRetryDelay:       time.Second,
+		MaxRetryDelay:        30 * time.Second,
+		Timeout:              30 * time.Second,
+	}
+
+	// Validate structure
+	if config.Backend == "" {
+		t.Error("Expected Backend to be set")
+	}
+	if config.APIEndpoint == "" {
+		t.Error("Expected APIEndpoint to be set")
+	}
+	if config.Model == "" {
+		t.Error("Expected Model to be set")
+	}
+	if config.Dimensions <= 0 {
+		t.Error("Expected Dimensions to be positive")
+	}
+	if config.BatchSize <= 0 {
+		t.Error("Expected BatchSize to be positive")
+	}
+}
