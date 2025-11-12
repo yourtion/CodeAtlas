@@ -252,40 +252,176 @@ func determineLanguage(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
 
 	languageMap := map[string]string{
-		".go":    "Go",
-		".js":    "JavaScript",
-		".ts":    "TypeScript",
-		".jsx":   "JavaScript",
-		".tsx":   "TypeScript",
-		".py":    "Python",
-		".java":  "Java",
-		".cpp":   "C++",
-		".cc":    "C++",
-		".cxx":   "C++",
-		".c":     "C",
-		".h":     "C",
-		".hpp":   "C++",
-		".rs":    "Rust",
-		".php":   "PHP",
-		".rb":    "Ruby",
+		// Existing languages
+		".go":  "Go",
+		".js":  "JavaScript",
+		".ts":  "TypeScript",
+		".jsx": "JavaScript",
+		".tsx": "TypeScript",
+		".py":  "Python",
+
+		// Mobile languages - Kotlin
+		".kt":  "Kotlin",
+		".kts": "Kotlin",
+
+		// Mobile languages - Java
+		".java": "Java",
+
+		// Mobile languages - Swift
 		".swift": "Swift",
-		".kt":    "Kotlin",
-		".sql":   "SQL",
-		".html":  "HTML",
-		".css":   "CSS",
-		".scss":  "SCSS",
-		".sass":  "Sass",
-		".md":    "Markdown",
-		".txt":   "Text",
-		".json":  "JSON",
-		".xml":   "XML",
-		".yaml":  "YAML",
-		".yml":   "YAML",
+
+		// Mobile languages - Objective-C
+		".m": "Objective-C",
+
+		// Mobile languages - C
+		".c": "C",
+
+		// Mobile languages - C++
+		".cpp": "C++",
+		".cc":  "C++",
+		".cxx": "C++",
+		".hpp": "C++",
+		".hh":  "C++",
+		".hxx": "C++",
+
+		// Other languages
+		".rs":   "Rust",
+		".php":  "PHP",
+		".rb":   "Ruby",
+		".sql":  "SQL",
+		".html": "HTML",
+		".css":  "CSS",
+		".scss": "SCSS",
+		".sass": "Sass",
+		".md":   "Markdown",
+		".txt":  "Text",
+		".json": "JSON",
+		".xml":  "XML",
+		".yaml": "YAML",
+		".yml":  "YAML",
 	}
 
 	if lang, exists := languageMap[ext]; exists {
+		// Special handling for .h extension - requires content analysis
+		if ext == ".h" {
+			return detectHeaderLanguage(path)
+		}
 		return lang
 	}
 
+	// Ambiguous .h extension requires content analysis
+	if ext == ".h" {
+		return detectHeaderLanguage(path)
+	}
+
 	return "Unknown"
+}
+
+// detectHeaderLanguage distinguishes between C, C++, and Objective-C for .h files
+func detectHeaderLanguage(path string) string {
+	// Read first few KB of file for analysis
+	content, err := readFileHeader(path, 4096)
+	if err != nil {
+		// Default to C on error
+		return "C"
+	}
+
+	// Check for Objective-C indicators first (most specific)
+	if containsObjCIndicators(content) {
+		return "Objective-C"
+	}
+
+	// Check for C++ indicators
+	if containsCppIndicators(content) {
+		return "C++"
+	}
+
+	// Default to C
+	return "C"
+}
+
+// readFileHeader reads the first n bytes of a file for content-based detection
+func readFileHeader(path string, maxBytes int) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// Read up to maxBytes
+	buffer := make([]byte, maxBytes)
+	n, err := file.Read(buffer)
+	if err != nil && err.Error() != "EOF" {
+		return "", err
+	}
+
+	return string(buffer[:n]), nil
+}
+
+// containsObjCIndicators checks for Objective-C specific syntax
+func containsObjCIndicators(content string) bool {
+	// Objective-C specific keywords and patterns
+	objcPatterns := []string{
+		"@interface",
+		"@implementation",
+		"@protocol",
+		"@property",
+		"@synthesize",
+		"@dynamic",
+		"@class",
+		"@selector",
+		"@end",
+		"#import <Foundation/",
+		"#import <UIKit/",
+		"#import <Cocoa/",
+		"NS_ASSUME_NONNULL_BEGIN",
+		"NS_ASSUME_NONNULL_END",
+		"NSString",
+		"NSArray",
+		"NSDictionary",
+		"NSObject",
+	}
+
+	for _, pattern := range objcPatterns {
+		if strings.Contains(content, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// containsCppIndicators checks for C++ specific syntax
+func containsCppIndicators(content string) bool {
+	// C++ specific keywords and patterns
+	cppPatterns := []string{
+		"class ",
+		"namespace ",
+		"template<",
+		"template <",
+		"std::",
+		"public:",
+		"private:",
+		"protected:",
+		"virtual ",
+		"override",
+		"nullptr",
+		"constexpr",
+		"#include <iostream>",
+		"#include <string>",
+		"#include <vector>",
+		"#include <map>",
+		"using namespace",
+		"::operator",
+		"operator<<",
+		"operator>>",
+	}
+
+	for _, pattern := range cppPatterns {
+		if strings.Contains(content, pattern) {
+			return true
+		}
+	}
+
+	return false
 }

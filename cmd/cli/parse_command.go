@@ -40,7 +40,7 @@ func createParseCommand() *cli.Command {
    - Symbols with signatures and docstrings
    - Dependency relationships between code entities
 
-   Supports Go, JavaScript, TypeScript, and Python languages.
+   Supports Go, JavaScript, TypeScript, Python, Kotlin, Java, Swift, Objective-C, C, and C++ languages.
 
 EXAMPLES:
    # Parse entire repository and output to stdout
@@ -90,7 +90,7 @@ ENVIRONMENT VARIABLES:
 			&cli.StringFlag{
 				Name:    "language",
 				Aliases: []string{"l"},
-				Usage:   "Filter files by language (go, javascript, typescript, python)",
+				Usage:   "Filter files by language (go, javascript, typescript, python, kotlin, java, swift, objective-c, c, c++)",
 			},
 			&cli.IntFlag{
 				Name:    "workers",
@@ -408,7 +408,20 @@ func (cmd *ParseCommand) scanSingleFile(logger *utils.Logger) ([]parser.ScannedF
 	language := parser.DetermineLanguage(cmd.File)
 
 	// Check if language is supported
-	if language != "Go" && language != "JavaScript" && language != "TypeScript" && language != "Python" {
+	supportedLanguages := map[string]bool{
+		"Go":          true,
+		"JavaScript":  true,
+		"TypeScript":  true,
+		"Python":      true,
+		"Kotlin":      true,
+		"Java":        true,
+		"Swift":       true,
+		"Objective-C": true,
+		"C":           true,
+		"C++":         true,
+	}
+	
+	if !supportedLanguages[language] {
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
 
