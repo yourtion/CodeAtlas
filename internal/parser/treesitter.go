@@ -5,22 +5,44 @@ import (
 	"fmt"
 
 	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/c"
+	"github.com/smacker/go-tree-sitter/cpp"
 	"github.com/smacker/go-tree-sitter/golang"
+	"github.com/smacker/go-tree-sitter/java"
 	"github.com/smacker/go-tree-sitter/javascript"
+	"github.com/smacker/go-tree-sitter/kotlin"
 	"github.com/smacker/go-tree-sitter/python"
+	"github.com/smacker/go-tree-sitter/swift"
 	"github.com/smacker/go-tree-sitter/typescript/typescript"
 )
 
 // TreeSitterParser wraps Tree-sitter parsers for multiple languages
 type TreeSitterParser struct {
+	// Existing parsers
 	goParser     *sitter.Parser
 	jsParser     *sitter.Parser
 	tsParser     *sitter.Parser
 	pythonParser *sitter.Parser
-	goLang       *sitter.Language
-	jsLang       *sitter.Language
-	tsLang       *sitter.Language
-	pyLang       *sitter.Language
+
+	// Mobile language parsers
+	kotlinParser *sitter.Parser
+	javaParser   *sitter.Parser
+	swiftParser  *sitter.Parser
+	cParser      *sitter.Parser
+	cppParser    *sitter.Parser
+
+	// Existing languages
+	goLang *sitter.Language
+	jsLang *sitter.Language
+	tsLang *sitter.Language
+	pyLang *sitter.Language
+
+	// Mobile languages
+	kotlinLang *sitter.Language
+	javaLang   *sitter.Language
+	swiftLang  *sitter.Language
+	cLang      *sitter.Language
+	cppLang    *sitter.Language
 }
 
 // NewTreeSitterParser initializes Tree-sitter parsers for all supported languages
@@ -47,6 +69,34 @@ func NewTreeSitterParser() (*TreeSitterParser, error) {
 	tsp.pythonParser = sitter.NewParser()
 	tsp.pythonParser.SetLanguage(tsp.pyLang)
 
+	// Initialize Kotlin parser (smacker/go-tree-sitter)
+	tsp.kotlinLang = kotlin.GetLanguage()
+	tsp.kotlinParser = sitter.NewParser()
+	tsp.kotlinParser.SetLanguage(tsp.kotlinLang)
+
+	// Initialize Java parser (smacker/go-tree-sitter)
+	tsp.javaLang = java.GetLanguage()
+	tsp.javaParser = sitter.NewParser()
+	tsp.javaParser.SetLanguage(tsp.javaLang)
+
+	// Initialize Swift parser (smacker/go-tree-sitter)
+	tsp.swiftLang = swift.GetLanguage()
+	tsp.swiftParser = sitter.NewParser()
+	tsp.swiftParser.SetLanguage(tsp.swiftLang)
+
+	// Initialize C parser (smacker/go-tree-sitter)
+	tsp.cLang = c.GetLanguage()
+	tsp.cParser = sitter.NewParser()
+	tsp.cParser.SetLanguage(tsp.cLang)
+
+	// Initialize C++ parser (smacker/go-tree-sitter)
+	tsp.cppLang = cpp.GetLanguage()
+	tsp.cppParser = sitter.NewParser()
+	tsp.cppParser.SetLanguage(tsp.cppLang)
+
+	// Note: Objective-C is not currently supported in smacker/go-tree-sitter
+	// This will be added in a future task when compatible bindings are available
+
 	return tsp, nil
 }
 
@@ -66,6 +116,16 @@ func (p *TreeSitterParser) Parse(content []byte, language string) (*sitter.Node,
 		parser = p.tsParser
 	case "python", "py":
 		parser = p.pythonParser
+	case "kotlin", "kt":
+		parser = p.kotlinParser
+	case "java":
+		parser = p.javaParser
+	case "swift":
+		parser = p.swiftParser
+	case "c":
+		parser = p.cParser
+	case "cpp", "c++", "cc", "cxx":
+		parser = p.cppParser
 	default:
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
@@ -118,6 +178,16 @@ func (p *TreeSitterParser) Query(node *sitter.Node, queryString string, language
 		lang = p.tsLang
 	case "python", "py":
 		lang = p.pyLang
+	case "kotlin", "kt":
+		lang = p.kotlinLang
+	case "java":
+		lang = p.javaLang
+	case "swift":
+		lang = p.swiftLang
+	case "c":
+		lang = p.cLang
+	case "cpp", "c++", "cc", "cxx":
+		lang = p.cppLang
 	default:
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
