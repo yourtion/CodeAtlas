@@ -782,3 +782,511 @@ func TestScanRepository_ReadError(t *testing.T) {
 		t.Logf("Got expected error: %v", err)
 	}
 }
+
+// Tests for mobile language detection
+
+func TestDetermineLanguage_MobileLanguages(t *testing.T) {
+	testCases := []struct {
+		filename string
+		expected string
+	}{
+		// Kotlin
+		{"MainActivity.kt", "Kotlin"},
+		{"build.gradle.kts", "Kotlin"},
+		
+		// Java
+		{"MainActivity.java", "Java"},
+		{"Utils.java", "Java"},
+		
+		// Swift
+		{"ViewController.swift", "Swift"},
+		{"AppDelegate.swift", "Swift"},
+		
+		// Objective-C
+		{"AppDelegate.m", "Objective-C"},
+		
+		// C
+		{"utils.c", "C"},
+		
+		// C++
+		{"Engine.cpp", "C++"},
+		{"Engine.cc", "C++"},
+		{"Engine.cxx", "C++"},
+		{"Engine.hpp", "C++"},
+		{"Engine.hh", "C++"},
+		{"Engine.hxx", "C++"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.filename, func(t *testing.T) {
+			result := determineLanguage(tc.filename)
+			if result != tc.expected {
+				t.Errorf("File %s: expected language %s, got %s", tc.filename, tc.expected, result)
+			}
+		})
+	}
+}
+
+func TestDetectHeaderLanguage_ObjectiveC(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create Objective-C header file
+	objcHeader := `
+#import <Foundation/Foundation.h>
+
+@interface MyClass : NSObject
+
+@property (nonatomic, strong) NSString *name;
+
+- (void)doSomething;
+
+@end
+`
+	headerFile := filepath.Join(tempDir, "MyClass.h")
+	if err := os.WriteFile(headerFile, []byte(objcHeader), 0644); err != nil {
+		t.Fatalf("Failed to create Objective-C header: %v", err)
+	}
+
+	result := detectHeaderLanguage(headerFile)
+	if result != "Objective-C" {
+		t.Errorf("Expected Objective-C, got %s", result)
+	}
+}
+
+func TestDetectHeaderLanguage_Cpp(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create C++ header file
+	cppHeader := `
+#include <iostream>
+#include <string>
+
+namespace MyNamespace {
+    class MyClass {
+    public:
+        virtual void doSomething();
+        std::string getName() const;
+    private:
+        std::string name;
+    };
+}
+`
+	headerFile := filepath.Join(tempDir, "MyClass.h")
+	if err := os.WriteFile(headerFile, []byte(cppHeader), 0644); err != nil {
+		t.Fatalf("Failed to create C++ header: %v", err)
+	}
+
+	result := detectHeaderLanguage(headerFile)
+	if result != "C++" {
+		t.Errorf("Expected C++, got %s", result)
+	}
+}
+
+func TestDetectHeaderLanguage_C(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create C header file
+	cHeader := `
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef struct {
+    int x;
+    int y;
+} Point;
+
+void print_point(Point *p);
+int calculate_distance(Point *p1, Point *p2);
+`
+	headerFile := filepath.Join(tempDir, "point.h")
+	if err := os.WriteFile(headerFile, []byte(cHeader), 0644); err != nil {
+		t.Fatalf("Failed to create C header: %v", err)
+	}
+
+	result := detectHeaderLanguage(headerFile)
+	if result != "C" {
+		t.Errorf("Expected C, got %s", result)
+	}
+}
+
+func TestContainsObjCIndicators(t *testing.T) {
+	testCases := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{
+			name:     "Interface declaration",
+			content:  "@interface MyClass : NSObject\n@end",
+			expected: true,
+		},
+		{
+			name:     "Implementation",
+			content:  "@implementation MyClass\n@end",
+			expected: true,
+		},
+		{
+			name:     "Protocol",
+			content:  "@protocol MyProtocol\n@end",
+			expected: true,
+		},
+		{
+			name:     "Property",
+			content:  "@property (nonatomic, strong) NSString *name;",
+			expected: true,
+		},
+		{
+			name:     "Foundation import",
+			content:  "#import <Foundation/Foundation.h>",
+			expected: true,
+		},
+		{
+			name:     "UIKit import",
+			content:  "#import <UIKit/UIKit.h>",
+			expected: true,
+		},
+		{
+			name:     "NSString usage",
+			content:  "NSString *str = @\"hello\";",
+			expected: true,
+		},
+		{
+			name:     "NSArray usage",
+			content:  "NSArray *array = @[];",
+			expected: true,
+		},
+		{
+			name:     "Plain C code",
+			content:  "#include <stdio.h>\nint main() { return 0; }",
+			expected: false,
+		},
+		{
+			name:     "C++ code",
+			content:  "class MyClass { public: void method(); };",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := containsObjCIndicators(tc.content)
+			if result != tc.expected {
+				t.Errorf("Expected %v, got %v for content: %s", tc.expected, result, tc.content)
+			}
+		})
+	}
+}
+
+func TestContainsCppIndicators(t *testing.T) {
+	testCases := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{
+			name:     "Class declaration",
+			content:  "class MyClass { public: void method(); };",
+			expected: true,
+		},
+		{
+			name:     "Namespace",
+			content:  "namespace MyNamespace { }",
+			expected: true,
+		},
+		{
+			name:     "Template",
+			content:  "template<typename T> class MyClass { };",
+			expected: true,
+		},
+		{
+			name:     "Template with space",
+			content:  "template <typename T> class MyClass { };",
+			expected: true,
+		},
+		{
+			name:     "std namespace",
+			content:  "std::string name;",
+			expected: true,
+		},
+		{
+			name:     "Public access specifier",
+			content:  "class MyClass { public: int x; };",
+			expected: true,
+		},
+		{
+			name:     "Private access specifier",
+			content:  "class MyClass { private: int x; };",
+			expected: true,
+		},
+		{
+			name:     "Protected access specifier",
+			content:  "class MyClass { protected: int x; };",
+			expected: true,
+		},
+		{
+			name:     "Virtual method",
+			content:  "virtual void method();",
+			expected: true,
+		},
+		{
+			name:     "Override keyword",
+			content:  "void method() override;",
+			expected: true,
+		},
+		{
+			name:     "nullptr",
+			content:  "int *ptr = nullptr;",
+			expected: true,
+		},
+		{
+			name:     "constexpr",
+			content:  "constexpr int MAX = 100;",
+			expected: true,
+		},
+		{
+			name:     "iostream include",
+			content:  "#include <iostream>",
+			expected: true,
+		},
+		{
+			name:     "string include",
+			content:  "#include <string>",
+			expected: true,
+		},
+		{
+			name:     "vector include",
+			content:  "#include <vector>",
+			expected: true,
+		},
+		{
+			name:     "using namespace",
+			content:  "using namespace std;",
+			expected: true,
+		},
+		{
+			name:     "operator overload",
+			content:  "MyClass operator<<(const MyClass& other);",
+			expected: true,
+		},
+		{
+			name:     "Plain C code",
+			content:  "#include <stdio.h>\nint main() { return 0; }",
+			expected: false,
+		},
+		{
+			name:     "Objective-C code",
+			content:  "@interface MyClass : NSObject\n@end",
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := containsCppIndicators(tc.content)
+			if result != tc.expected {
+				t.Errorf("Expected %v, got %v for content: %s", tc.expected, result, tc.content)
+			}
+		})
+	}
+}
+
+func TestReadFileHeader(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a test file with known content
+	content := "This is a test file with some content that we want to read."
+	testFile := filepath.Join(tempDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Read the header
+	result, err := readFileHeader(testFile, 100)
+	if err != nil {
+		t.Fatalf("readFileHeader failed: %v", err)
+	}
+
+	if result != content {
+		t.Errorf("Expected content %q, got %q", content, result)
+	}
+}
+
+func TestReadFileHeader_LargeFile(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a large file
+	largeContent := make([]byte, 10000)
+	for i := range largeContent {
+		largeContent[i] = 'a'
+	}
+	testFile := filepath.Join(tempDir, "large.txt")
+	if err := os.WriteFile(testFile, largeContent, 0644); err != nil {
+		t.Fatalf("Failed to create large file: %v", err)
+	}
+
+	// Read only first 100 bytes
+	result, err := readFileHeader(testFile, 100)
+	if err != nil {
+		t.Fatalf("readFileHeader failed: %v", err)
+	}
+
+	if len(result) != 100 {
+		t.Errorf("Expected 100 bytes, got %d", len(result))
+	}
+}
+
+func TestReadFileHeader_NonExistent(t *testing.T) {
+	_, err := readFileHeader("/nonexistent/file.txt", 100)
+	if err == nil {
+		t.Error("Expected error for non-existent file")
+	}
+}
+
+func TestFileScanner_Scan_MobileLanguages(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create mobile language test files
+	testFiles := map[string]string{
+		"MainActivity.kt":      "package com.example",
+		"Utils.java":           "public class Utils {}",
+		"ViewController.swift": "import UIKit",
+		"AppDelegate.m":        "#import <Foundation/Foundation.h>",
+		"utils.c":              "#include <stdio.h>",
+		"Engine.cpp":           "#include <iostream>",
+	}
+
+	for path, content := range testFiles {
+		fullPath := filepath.Join(tempDir, path)
+		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to create test file %s: %v", path, err)
+		}
+	}
+
+	scanner := NewFileScanner(tempDir, nil)
+	files, err := scanner.Scan()
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	if len(files) != len(testFiles) {
+		t.Errorf("Expected %d files, got %d", len(testFiles), len(files))
+	}
+
+	// Verify languages
+	expectedLanguages := map[string]string{
+		"MainActivity.kt":      "Kotlin",
+		"Utils.java":           "Java",
+		"ViewController.swift": "Swift",
+		"AppDelegate.m":        "Objective-C",
+		"utils.c":              "C",
+		"Engine.cpp":           "C++",
+	}
+
+	fileMap := make(map[string]ScannedFile)
+	for _, file := range files {
+		fileMap[file.Path] = file
+	}
+
+	for path, expectedLang := range expectedLanguages {
+		file, exists := fileMap[path]
+		if !exists {
+			t.Errorf("Expected file %s not found", path)
+			continue
+		}
+		if file.Language != expectedLang {
+			t.Errorf("File %s: expected language %s, got %s", path, expectedLang, file.Language)
+		}
+	}
+}
+
+func TestFileScanner_Scan_HeaderFileDetection(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create different types of .h files
+	objcHeader := `#import <Foundation/Foundation.h>
+@interface MyClass : NSObject
+@end`
+
+	cppHeader := `#include <iostream>
+class MyClass {
+public:
+    virtual void method();
+};`
+
+	cHeader := `#include <stdio.h>
+typedef struct {
+    int x;
+} Point;`
+
+	testFiles := map[string]struct {
+		content  string
+		expected string
+	}{
+		"ObjCClass.h": {objcHeader, "Objective-C"},
+		"CppClass.h":  {cppHeader, "C++"},
+		"CUtils.h":    {cHeader, "C"},
+	}
+
+	for path, data := range testFiles {
+		fullPath := filepath.Join(tempDir, path)
+		if err := os.WriteFile(fullPath, []byte(data.content), 0644); err != nil {
+			t.Fatalf("Failed to create test file %s: %v", path, err)
+		}
+	}
+
+	scanner := NewFileScanner(tempDir, nil)
+	files, err := scanner.Scan()
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	if len(files) != len(testFiles) {
+		t.Errorf("Expected %d files, got %d", len(testFiles), len(files))
+	}
+
+	fileMap := make(map[string]ScannedFile)
+	for _, file := range files {
+		fileMap[file.Path] = file
+	}
+
+	for path, data := range testFiles {
+		file, exists := fileMap[path]
+		if !exists {
+			t.Errorf("Expected file %s not found", path)
+			continue
+		}
+		if file.Language != data.expected {
+			t.Errorf("File %s: expected language %s, got %s", path, data.expected, file.Language)
+		}
+	}
+}
+
+func TestDetermineLanguage_AllMobileExtensions(t *testing.T) {
+	testCases := []struct {
+		extension string
+		expected  string
+	}{
+		{".kt", "Kotlin"},
+		{".kts", "Kotlin"},
+		{".java", "Java"},
+		{".swift", "Swift"},
+		{".m", "Objective-C"},
+		{".c", "C"},
+		{".cpp", "C++"},
+		{".cc", "C++"},
+		{".cxx", "C++"},
+		{".hpp", "C++"},
+		{".hh", "C++"},
+		{".hxx", "C++"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.extension, func(t *testing.T) {
+			filename := "test" + tc.extension
+			result := determineLanguage(filename)
+			if result != tc.expected {
+				t.Errorf("Extension %s: expected %s, got %s", tc.extension, tc.expected, result)
+			}
+		})
+	}
+}
