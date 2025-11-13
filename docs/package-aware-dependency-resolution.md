@@ -2,7 +2,9 @@
 
 ## Overview
 
-Java and Kotlin parsers have been enhanced to handle package-based dependency resolution and cross-language interoperability. This is critical for JVM projects where package names must match directory structures, and Kotlin/Java code often coexist.
+Java, Kotlin, and Go parsers have been enhanced to handle package/module-based dependency resolution. This is critical for:
+- **JVM projects**: Package names must match directory structures, Kotlin/Java interoperability
+- **Go projects**: Module-based imports, distinguishing internal vs external dependencies
 
 ## Key Features
 
@@ -160,7 +162,9 @@ tests/fixtures/
 - Cross-language fixtures demonstrate Kotlin-Java interop
 - Internal dependencies correctly identified within `com.example.myapp.*`
 
-## Kotlin-Java Interoperability
+## Language-Specific Features
+
+### Kotlin-Java Interoperability
 
 Both parsers recognize each other's standard libraries and handle cross-language imports:
 
@@ -176,6 +180,28 @@ import com.example.myapp.service.UserService;  // Internal (could be Kotlin or J
 ```
 
 The parsers don't distinguish between Kotlin and Java when classifying imports - they only check if imports share the same base package.
+
+### Go Module-Based Resolution
+
+Go parser uses a two-tier approach:
+
+1. **Read go.mod**: Searches for `go.mod` file and extracts module path
+2. **Path inference**: Falls back to inferring from common patterns (github.com/user/project)
+
+**Example:**
+```go
+// go.mod: module github.com/user/project
+
+import (
+    "fmt"                                    // Internal (stdlib)
+    "github.com/user/project/pkg/service"    // Internal (same module)
+    "github.com/other/library"               // External (different module)
+)
+```
+
+**New Functions:**
+- `findModulePathFromGoMod(filePath string) string` - Reads go.mod
+- `inferModulePath(filePath string) string` - Infers from path patterns
 
 ## Running Tests
 
@@ -206,7 +232,11 @@ go test -v ./internal/parser -run TestCrossLanguageStructure
 **All tests passing:** ✅
 - Java Parser: 21 tests (16 original + 5 new)
 - Kotlin Parser: 10 tests (5 original + 5 new)
+- Go Parser: 3 new tests (module path inference, go.mod parsing)
 - Cross-language: 1 test
 - No diagnostics or errors
 
-These enhancements make the parsers production-ready for real-world JVM projects with accurate dependency tracking and knowledge graph construction.
+These enhancements make the parsers production-ready for real-world projects:
+- **JVM projects**: Accurate Kotlin/Java dependency tracking
+- **Go projects**: Module-aware import classification
+- **Knowledge graphs**: Correct internal vs external dependency identification
