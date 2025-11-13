@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -231,10 +232,89 @@ func (p *GoParser) isExternalImport(importPath string, currentFilePath string) b
 		return false // Standard library is considered internal
 	}
 	
-	// Extract module path from current file to determine internal imports
-	// For now, treat all imports with dots as external (third-party)
-	// A more sophisticated approach would parse go.mod to determine the module path
+	// Try to infer module path from current file path
+	modulePath := p.inferModulePath(currentFilePath)
+	if modulePath != "" {
+		// If import starts with module path, it's internal to the project
+		if strings.HasPrefix(importPath, modulePath) {
+			return false
+		}
+	}
+	
+	// Everything else is external (third-party)
 	return true
+}
+
+// inferModulePath tries to infer the Go module path from the file path
+// This is a heuristic approach - ideally we should parse go.mod
+func (p *GoParser) inferModulePath(filePath string) string {
+	// First, try to find and parse go.mod
+	modulePath := p.findModulePathFromGoMod(filePath)
+	if modulePath != "" {
+		return modulePath
+	}
+	
+	// Fallback: infer from file path patterns
+	// Normalize path separators
+	filePath = strings.ReplaceAll(filePath, "\\", "/")
+	
+	// Common patterns for Go module paths
+	// Look for patterns like: github.com/user/project, gitlab.com/user/project, etc.
+	patterns := []string{
+		"github.com/",
+		"gitlab.com/",
+		"bitbucket.org/",
+		"go.googlesource.com/",
+	}
+	
+	for _, pattern := range patterns {
+		if idx := strings.Index(filePath, pattern); idx != -1 {
+			// Extract from pattern to the next few path segments
+			remaining := filePath[idx:]
+			parts := strings.Split(remaining, "/")
+			
+			// Typically: github.com/user/project
+			if len(parts) >= 3 {
+				modulePath := strings.Join(parts[:3], "/")
+				return modulePath
+			}
+		}
+	}
+	
+	// If we can't infer from path, return empty
+	// This means we'll treat all imports with dots as external
+	return ""
+}
+
+// findModulePathFromGoMod searches for go.mod file and extracts module path
+func (p *GoParser) findModulePathFromGoMod(filePath string) string {
+	// Start from the file's directory and walk up to find go.mod
+	dir := filepath.Dir(filePath)
+	
+	for {
+		goModPath := filepath.Join(dir, "go.mod")
+		if content, err := os.ReadFile(goModPath); err == nil {
+			// Parse go.mod to extract module path
+			lines := strings.Split(string(content), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "module ") {
+					modulePath := strings.TrimSpace(strings.TrimPrefix(line, "module"))
+					return modulePath
+				}
+			}
+		}
+		
+		// Move up one directory
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root, stop
+			break
+		}
+		dir = parent
+	}
+	
+	return ""
 }
 
 // extractFunctions extracts function declarations
