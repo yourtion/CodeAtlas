@@ -14,6 +14,7 @@ import (
 	"github.com/smacker/go-tree-sitter/python"
 	"github.com/smacker/go-tree-sitter/swift"
 	"github.com/smacker/go-tree-sitter/typescript/typescript"
+	tree_sitter_objc "github.com/tree-sitter-grammars/tree-sitter-objc/bindings/go"
 )
 
 // TreeSitterParser wraps Tree-sitter parsers for multiple languages
@@ -28,6 +29,7 @@ type TreeSitterParser struct {
 	kotlinParser *sitter.Parser
 	javaParser   *sitter.Parser
 	swiftParser  *sitter.Parser
+	objcParser   *sitter.Parser
 	cParser      *sitter.Parser
 	cppParser    *sitter.Parser
 
@@ -41,6 +43,7 @@ type TreeSitterParser struct {
 	kotlinLang *sitter.Language
 	javaLang   *sitter.Language
 	swiftLang  *sitter.Language
+	objcLang   *sitter.Language
 	cLang      *sitter.Language
 	cppLang    *sitter.Language
 }
@@ -94,8 +97,10 @@ func NewTreeSitterParser() (*TreeSitterParser, error) {
 	tsp.cppParser = sitter.NewParser()
 	tsp.cppParser.SetLanguage(tsp.cppLang)
 
-	// Note: Objective-C is not currently supported in smacker/go-tree-sitter
-	// This will be added in a future task when compatible bindings are available
+	// Initialize Objective-C parser (tree-sitter-grammars)
+	tsp.objcLang = sitter.NewLanguage(tree_sitter_objc.Language())
+	tsp.objcParser = sitter.NewParser()
+	tsp.objcParser.SetLanguage(tsp.objcLang)
 
 	return tsp, nil
 }
@@ -122,6 +127,8 @@ func (p *TreeSitterParser) Parse(content []byte, language string) (*sitter.Node,
 		parser = p.javaParser
 	case "swift":
 		parser = p.swiftParser
+	case "objc", "objective-c":
+		parser = p.objcParser
 	case "c":
 		parser = p.cParser
 	case "cpp", "c++", "cc", "cxx":
@@ -184,6 +191,8 @@ func (p *TreeSitterParser) Query(node *sitter.Node, queryString string, language
 		lang = p.javaLang
 	case "swift":
 		lang = p.swiftLang
+	case "objc", "objective-c":
+		lang = p.objcLang
 	case "c":
 		lang = p.cLang
 	case "cpp", "c++", "cc", "cxx":
