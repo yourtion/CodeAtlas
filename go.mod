@@ -8,6 +8,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
 	github.com/stretchr/testify v1.10.0
+	github.com/tree-sitter-grammars/tree-sitter-objc v1.2.1-0.20250131075517-181a81b8f23a
 	github.com/urfave/cli/v2 v2.25.7
 )
 
