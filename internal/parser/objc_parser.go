@@ -759,9 +759,9 @@ func (p *ObjCParser) extractProtocolConformance(interfaceNode *sitter.Node, cont
 	return protocols
 }
 
-// extractCallRelationships extracts message sends (method calls)
+// extractCallRelationships extracts message sends (method calls) and C function calls
 func (p *ObjCParser) extractCallRelationships(rootNode *sitter.Node, parsedFile *ParsedFile, content []byte) error {
-	// Query for all message expressions
+	// Query for all message expressions (Objective-C method calls)
 	callQuery := `(message_expression) @call.expr`
 
 	matches, err := p.tsParser.Query(rootNode, callQuery, "objc")
@@ -808,6 +808,33 @@ func (p *ObjCParser) extractCallRelationships(rootNode *sitter.Node, parsedFile 
 
 					parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
 				}
+			}
+		}
+	}
+
+	// Also extract C function calls
+	cCallQuery := `(call_expression
+		function: (identifier) @call.target)`
+
+	matches, err = p.tsParser.Query(rootNode, cCallQuery, "objc")
+	if err != nil {
+		return err
+	}
+
+	for _, match := range matches {
+		for _, capture := range match.Captures {
+			callTarget := capture.Node.Content(content)
+
+			// Find the containing method for this call
+			caller := p.findContainingMethod(capture.Node, parsedFile)
+			if caller != "" {
+				dependency := ParsedDependency{
+					Type:   "call",
+					Source: caller,
+					Target: callTarget,
+				}
+
+				parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
 			}
 		}
 	}
