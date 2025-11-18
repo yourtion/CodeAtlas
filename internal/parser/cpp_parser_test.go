@@ -648,3 +648,151 @@ func TestCppParser_DoxygenComments(t *testing.T) {
 		t.Error("Expected to find at least one symbol with a docstring")
 	}
 }
+
+func TestCppParser_CallsToC(t *testing.T) {
+	tsParser, err := NewTreeSitterParser()
+	if err != nil {
+		t.Fatalf("Failed to create TreeSitterParser: %v", err)
+	}
+
+	parser := NewCppParser(tsParser)
+
+	absPath, err := filepath.Abs("../../tests/fixtures/cpp/cpp_calls_c.cpp")
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		t.Skip("Test file does not exist")
+	}
+
+	scannedFile := ScannedFile{
+		Path:     "../../tests/fixtures/cpp/cpp_calls_c.cpp",
+		AbsPath:  absPath,
+		Language: "cpp",
+	}
+
+	parsedFile, err := parser.Parse(scannedFile)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// Check for C++ class that wraps C functions
+	foundCWrapper := false
+	for _, sym := range parsedFile.Symbols {
+		if sym.Kind == "class" && sym.Name == "CWrapper" {
+			foundCWrapper = true
+			break
+		}
+	}
+
+	if !foundCWrapper {
+		t.Error("Expected to find class 'CWrapper'")
+	}
+
+	// Check for calls to C functions
+	cFunctionCalls := []string{
+		"c_init",
+		"c_cleanup",
+		"c_free",
+		"c_process_string",
+		"c_add",
+		"c_multiply",
+		"c_init_struct",
+		"c_process_struct",
+		"c_free_struct",
+		"c_log_message",
+		"c_validate_input",
+	}
+
+	// Also check for standard C library calls
+	stdCCalls := []string{
+		"strlen",
+		"malloc",
+		"strcpy",
+		"printf",
+	}
+
+	foundCCalls := 0
+	foundStdCCalls := 0
+
+	for _, dep := range parsedFile.Dependencies {
+		if dep.Type == "call" {
+			// Check custom C function calls
+			for _, cFunc := range cFunctionCalls {
+				if dep.Target == cFunc {
+					foundCCalls++
+					break
+				}
+			}
+
+			// Check standard C library calls
+			for _, stdFunc := range stdCCalls {
+				if dep.Target == stdFunc {
+					foundStdCCalls++
+					break
+				}
+			}
+		}
+	}
+
+	if foundCCalls < 3 {
+		t.Errorf("Expected to find at least 3 C function calls, found %d", foundCCalls)
+	}
+
+	if foundStdCCalls < 2 {
+		t.Errorf("Expected to find at least 2 standard C library calls, found %d", foundStdCCalls)
+	}
+
+	// Check for include of C header
+	foundCInclude := false
+	for _, dep := range parsedFile.Dependencies {
+		if dep.Type == "import" && dep.Target == "c_library.h" {
+			foundCInclude = true
+			break
+		}
+	}
+
+	if !foundCInclude {
+		t.Error("Expected to find #include \"c_library.h\"")
+	}
+}
+
+func TestCppParser_ExternC(t *testing.T) {
+	tsParser, err := NewTreeSitterParser()
+	if err != nil {
+		t.Fatalf("Failed to create TreeSitterParser: %v", err)
+	}
+
+	parser := NewCppParser(tsParser)
+
+	absPath, err := filepath.Abs("../../tests/fixtures/cpp/cpp_calls_c.cpp")
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		t.Skip("Test file does not exist")
+	}
+
+	scannedFile := ScannedFile{
+		Path:     "../../tests/fixtures/cpp/cpp_calls_c.cpp",
+		AbsPath:  absPath,
+		Language: "cpp",
+	}
+
+	parsedFile, err := parser.Parse(scannedFile)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	// The file should parse successfully and extract symbols
+	if len(parsedFile.Symbols) == 0 {
+		t.Error("Expected to find symbols in C++ file with extern C")
+	}
+
+	// Check that we have dependencies (includes and calls)
+	if len(parsedFile.Dependencies) == 0 {
+		t.Error("Expected to find dependencies in C++ file with extern C")
+	}
+}
