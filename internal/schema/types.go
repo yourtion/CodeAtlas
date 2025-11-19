@@ -115,9 +115,12 @@ type DependencyEdge struct {
 type EdgeType string
 
 const (
-	EdgeImport     EdgeType = "import"
-	EdgeCall       EdgeType = "call"
-	EdgeExtends    EdgeType = "extends"
-	EdgeImplements EdgeType = "implements"
-	EdgeReference  EdgeType = "reference"
+	EdgeImport                EdgeType = "import"
+	EdgeCall                  EdgeType = "call"
+	EdgeExtends               EdgeType = "extends"
+	EdgeImplements            EdgeType = "implements"
+	EdgeReference             EdgeType = "reference"
+	EdgeImplementsHeader      EdgeType = "implements_header"      // File-level: implementation file implements header file
+	EdgeImplementsDeclaration EdgeType = "implements_declaration" // Symbol-level: implementation symbol implements declaration
+	EdgeCallsDeclaration      EdgeType = "calls_declaration"      // Call to header declaration
 )
