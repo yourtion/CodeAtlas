@@ -437,6 +437,12 @@ func (gb *GraphBuilder) mapEdgeTypeToRelationship(edgeType schema.EdgeType) stri
 		return "IMPLEMENTS"
 	case schema.EdgeReference:
 		return "REFERENCES"
+	case schema.EdgeImplementsHeader:
+		return "IMPLEMENTS_HEADER"
+	case schema.EdgeImplementsDeclaration:
+		return "IMPLEMENTS_DECLARATION"
+	case schema.EdgeCallsDeclaration:
+		return "CALLS_DECLARATION"
 	default:
 		return "RELATES_TO"
 	}

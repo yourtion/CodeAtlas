@@ -313,6 +313,32 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		))
 	}
 
+	// Step 4.5: Associate header and implementation files (for C/C++/Objective-C)
+	idx.logger.Info("associating header and implementation files")
+	headerImplAssociator := NewHeaderImplAssociator(idx.db, idx.logger)
+	assocResult, err := headerImplAssociator.AssociateHeadersAndImplementations(ctx, filesToProcess)
+	if err != nil {
+		idx.logger.WarnWithFields("header-implementation association failed", LogField{Key: "error", Value: err})
+		// Non-fatal, continue
+	} else {
+		result.Summary["header_impl_pairs"] = assocResult.PairsFound
+		result.Summary["header_impl_edges"] = assocResult.EdgesCreated
+		result.EdgesCreated += assocResult.EdgesCreated
+		
+		idx.logger.InfoWithFields("header-implementation association completed",
+			LogField{Key: "pairs_found", Value: assocResult.PairsFound},
+			LogField{Key: "edges_created", Value: assocResult.EdgesCreated},
+		)
+		
+		// Collect association errors (non-fatal)
+		for _, assocErr := range assocResult.Errors {
+			idx.logger.WarnWithFields("association error occurred",
+				LogField{Key: "file", Value: assocErr.File},
+				LogField{Key: "message", Value: assocErr.Message},
+			)
+		}
+	}
+
 	// Step 5: Build graph (async, non-blocking)
 	if idx.graphBuilder != nil {
 		idx.logger.Info("building knowledge graph")
