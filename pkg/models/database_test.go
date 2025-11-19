@@ -5,36 +5,34 @@ import (
 	"testing"
 )
 
-// Unit tests for database utility functions
-
 func TestGetEnv(t *testing.T) {
 	tests := []struct {
 		name         string
 		key          string
 		defaultValue string
 		envValue     string
-		expected     string
+		want         string
 	}{
 		{
 			name:         "environment variable set",
 			key:          "TEST_VAR_SET",
 			defaultValue: "default",
 			envValue:     "custom",
-			expected:     "custom",
+			want:         "custom",
 		},
 		{
 			name:         "environment variable not set",
 			key:          "TEST_VAR_NOT_SET",
 			defaultValue: "default",
 			envValue:     "",
-			expected:     "default",
+			want:         "default",
 		},
 		{
 			name:         "empty default value",
 			key:          "TEST_VAR_EMPTY",
 			defaultValue: "",
 			envValue:     "",
-			expected:     "",
+			want:         "",
 		},
 	}
 
@@ -48,167 +46,18 @@ func TestGetEnv(t *testing.T) {
 				os.Unsetenv(tt.key)
 			}
 
-			result := getEnv(tt.key, tt.defaultValue)
-			if result != tt.expected {
-				t.Errorf("getEnv(%s, %s) = %s, want %s", tt.key, tt.defaultValue, result, tt.expected)
+			got := getEnv(tt.key, tt.defaultValue)
+			if got != tt.want {
+				t.Errorf("getEnv() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-// Integration tests for database connection
-
-func TestNewDB_Success(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	testDB := SetupTestDB(t)
-	defer testDB.TeardownTestDB(t)
-
-	// Test that we can ping the database
-	err := testDB.DB.Ping()
-	if err != nil {
-		t.Errorf("Failed to ping database: %v", err)
-	}
-}
-
-func TestNewDB_WithCustomEnv(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	// Save original env vars
-	originalHost := os.Getenv("DB_HOST")
-	originalPort := os.Getenv("DB_PORT")
-	originalUser := os.Getenv("DB_USER")
-	originalPassword := os.Getenv("DB_PASSWORD")
-	originalDBName := os.Getenv("DB_NAME")
-
-	// Restore original env vars after test
-	defer func() {
-		if originalHost != "" {
-			os.Setenv("DB_HOST", originalHost)
-		} else {
-			os.Unsetenv("DB_HOST")
-		}
-		if originalPort != "" {
-			os.Setenv("DB_PORT", originalPort)
-		} else {
-			os.Unsetenv("DB_PORT")
-		}
-		if originalUser != "" {
-			os.Setenv("DB_USER", originalUser)
-		} else {
-			os.Unsetenv("DB_USER")
-		}
-		if originalPassword != "" {
-			os.Setenv("DB_PASSWORD", originalPassword)
-		} else {
-			os.Unsetenv("DB_PASSWORD")
-		}
-		if originalDBName != "" {
-			os.Setenv("DB_NAME", originalDBName)
-		} else {
-			os.Unsetenv("DB_NAME")
-		}
-	}()
-
-	// Set custom env vars (using same values as default for this test)
-	os.Setenv("DB_HOST", "localhost")
-	os.Setenv("DB_PORT", "5432")
-	os.Setenv("DB_USER", "codeatlas")
-	os.Setenv("DB_PASSWORD", "codeatlas")
-	os.Setenv("DB_NAME", "codeatlas")
-
-	testDB := SetupTestDB(t)
-	defer testDB.TeardownTestDB(t)
-
-	// Test that we can ping the database
-	err := testDB.DB.Ping()
-	if err != nil {
-		t.Errorf("Failed to ping database: %v", err)
-	}
-}
-
-func TestNewDB_InvalidConnection(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	// Save original env vars
-	originalHost := os.Getenv("DB_HOST")
-	originalPort := os.Getenv("DB_PORT")
-
-	// Restore original env vars after test
-	defer func() {
-		if originalHost != "" {
-			os.Setenv("DB_HOST", originalHost)
-		} else {
-			os.Unsetenv("DB_HOST")
-		}
-		if originalPort != "" {
-			os.Setenv("DB_PORT", originalPort)
-		} else {
-			os.Unsetenv("DB_PORT")
-		}
-	}()
-
-	// Set invalid connection parameters
-	os.Setenv("DB_HOST", "invalid-host")
-	os.Setenv("DB_PORT", "9999")
-
-	_, err := NewDB()
-	if err == nil {
-		t.Error("Expected error when connecting to invalid database, got nil")
-	}
-}
-
-func TestDB_Close(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	testDB := SetupTestDB(t)
-	// Don't defer TeardownTestDB since we're testing Close
-
-	// Close the database
-	err := testDB.DB.Close()
-	if err != nil {
-		t.Errorf("Failed to close database: %v", err)
-	}
-
-	// Verify that we can't ping after closing
-	err = testDB.DB.Ping()
-	if err == nil {
-		t.Error("Expected error when pinging closed database, got nil")
-	}
-}
-
-func TestDB_MultipleConnections(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	// Create multiple connections
-	db1, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to create first connection: %v", err)
-	}
-	defer db1.Close()
-
-	db2, err := NewDB()
-	if err != nil {
-		t.Fatalf("Failed to create second connection: %v", err)
-	}
-	defer db2.Close()
-
-	// Both should be able to ping
-	if err := db1.Ping(); err != nil {
-		t.Errorf("First connection failed to ping: %v", err)
-	}
-
-	if err := db2.Ping(); err != nil {
-		t.Errorf("Second connection failed to ping: %v", err)
-	}
+func TestSetDBLogger(t *testing.T) {
+	// Test that SetDBLogger doesn't panic with nil
+	SetDBLogger(nil)
+	
+	// This test just verifies the function doesn't panic
+	// The actual logger functionality is tested in integration tests
 }

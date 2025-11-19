@@ -267,8 +267,17 @@ func (r *EdgeRepository) BatchCreate(ctx context.Context, edges []*Edge) error {
 	insertedCount := 0
 	for i, edge := range edges {
 		edge.CreatedAt = now
+		// Safely truncate IDs for debug output
+		edgeIDShort := edge.EdgeID
+		if len(edgeIDShort) > 8 {
+			edgeIDShort = edgeIDShort[:8]
+		}
+		sourceIDShort := edge.SourceID
+		if len(sourceIDShort) > 8 {
+			sourceIDShort = sourceIDShort[:8]
+		}
 		fmt.Printf("DEBUG BatchCreate: inserting edge %d: EdgeID=%s, SourceID=%s, TargetID=%v, EdgeType=%s\n", 
-			i, edge.EdgeID[:8], edge.SourceID[:8], edge.TargetID, edge.EdgeType)
+			i, edgeIDShort, sourceIDShort, edge.TargetID, edge.EdgeType)
 		
 		_, err := stmt.ExecContext(ctx,
 			edge.EdgeID, edge.SourceID, edge.TargetID, edge.EdgeType,

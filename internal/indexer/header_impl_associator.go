@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/yourtionguo/CodeAtlas/internal/schema"
+	"github.com/yourtionguo/CodeAtlas/internal/utils"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
@@ -189,16 +190,29 @@ func (a *HeaderImplAssociator) matchSymbolsAndCreateEdges(ctx context.Context, p
 		return nil, fmt.Errorf("could not find header or implementation file")
 	}
 	
-	// Create file-level implements_header edge
-	fileEdge := schema.DependencyEdge{
-		EdgeID:     generateEdgeID(),
-		SourceID:   "",  // File-level edge, no source symbol
-		TargetID:   "",  // File-level edge, no target symbol
-		EdgeType:   schema.EdgeImplementsHeader,
-		SourceFile: implFile.Path,
-		TargetFile: headerFile.Path,
+	// Create file-level implements_header edge using virtual file symbols
+	// We create virtual symbols to represent the files themselves, similar to external modules
+	headerFileSymbol := a.createVirtualFileSymbol(headerFile)
+	implFileSymbol := a.createVirtualFileSymbol(implFile)
+	
+	// Write virtual symbols to database first
+	if err := a.writeVirtualSymbols(ctx, []schema.Symbol{headerFileSymbol, implFileSymbol}); err != nil {
+		a.logger.WarnWithFields("failed to write virtual file symbols",
+			LogField{Key: "error", Value: err},
+		)
+		// Non-fatal, continue with symbol-level edges
+	} else {
+		// Create file-level edge using virtual symbol IDs
+		fileEdge := schema.DependencyEdge{
+			EdgeID:     generateEdgeID(),
+			SourceID:   implFileSymbol.SymbolID,
+			TargetID:   headerFileSymbol.SymbolID,
+			EdgeType:   schema.EdgeImplementsHeader,
+			SourceFile: implFile.Path,
+			TargetFile: headerFile.Path,
+		}
+		edges = append(edges, fileEdge)
 	}
-	edges = append(edges, fileEdge)
 	
 	// Match symbols between header and implementation
 	symbolEdges := a.matchSymbols(headerFile, implFile)
@@ -307,6 +321,77 @@ func (a *HeaderImplAssociator) normalizeSignature(signature string) string {
 	sig = strings.ReplaceAll(sig, ", ", ",")
 	
 	return sig
+}
+
+// createVirtualFileSymbol creates a virtual symbol to represent a file
+// This allows us to create file-level edges while satisfying foreign key constraints
+func (a *HeaderImplAssociator) createVirtualFileSymbol(file *schema.File) schema.Symbol {
+	// Generate deterministic ID for file symbols
+	symbolID := generateDeterministicUUID("file:" + file.Path)
+	
+	return schema.Symbol{
+		SymbolID:  symbolID,
+		FileID:    file.FileID,
+		Name:      fmt.Sprintf("__file__:%s", filepath.Base(file.Path)),
+		Kind:      schema.SymbolModule, // Use module kind for file-level symbols
+		Signature: fmt.Sprintf("file: %s", file.Path),
+		Span: schema.Span{
+			StartLine: 1,
+			EndLine:   1,
+			StartByte: 0,
+			EndByte:   0,
+		},
+		Docstring: fmt.Sprintf("Virtual symbol representing file %s", file.Path),
+	}
+}
+
+// writeVirtualSymbols writes virtual symbols to the database
+func (a *HeaderImplAssociator) writeVirtualSymbols(ctx context.Context, symbols []schema.Symbol) error {
+	if len(symbols) == 0 {
+		return nil
+	}
+	
+	// Skip if no database connection (for testing)
+	if a.db == nil {
+		return nil
+	}
+	
+	symbolRepo := models.NewSymbolRepository(a.db)
+	
+	for _, symbol := range symbols {
+		// Check if symbol already exists
+		existing, err := symbolRepo.GetByID(ctx, symbol.SymbolID)
+		if err == nil && existing != nil {
+			// Symbol already exists, skip
+			continue
+		}
+		
+		// Create new symbol
+		modelSymbol := &models.Symbol{
+			SymbolID:  symbol.SymbolID,
+			FileID:    symbol.FileID,
+			Name:      symbol.Name,
+			Kind:      string(symbol.Kind),
+			Signature: symbol.Signature,
+			StartLine: symbol.Span.StartLine,
+			EndLine:   symbol.Span.EndLine,
+			StartByte: symbol.Span.StartByte,
+			EndByte:   symbol.Span.EndByte,
+			Docstring: symbol.Docstring,
+		}
+		
+		if err := symbolRepo.Create(ctx, modelSymbol); err != nil {
+			return fmt.Errorf("failed to create virtual symbol %s: %w", symbol.Name, err)
+		}
+	}
+	
+	return nil
+}
+
+// generateDeterministicUUID generates a deterministic UUID from a string
+func generateDeterministicUUID(input string) string {
+	// Use the same approach as external modules
+	return utils.GenerateDeterministicUUID(input)
 }
 
 // convertToModelEdges converts schema edges to model edges
