@@ -45,12 +45,26 @@ func TestHeaderImplAssociation(t *testing.T) {
 	// Run indexing
 	result, err := idx.Index(ctx, parseOutput)
 	if err != nil {
+		// Print detailed error information
+		t.Logf("Indexing error: %v", err)
+		if result != nil && len(result.Errors) > 0 {
+			t.Logf("Validation errors (%d):", len(result.Errors))
+			for i, e := range result.Errors {
+				t.Logf("  Error %d: %s", i+1, e.Error())
+			}
+		}
 		t.Fatalf("Indexing failed: %v", err)
 	}
 
 	// Verify result
 	if result.Status != "success" && result.Status != "success_with_warnings" {
 		t.Errorf("Expected success status, got: %s", result.Status)
+		if len(result.Errors) > 0 {
+			t.Logf("Result errors:")
+			for i, e := range result.Errors {
+				t.Logf("  Error %d: %s", i+1, e.Error())
+			}
+		}
 	}
 
 	// Verify header-impl association results
@@ -67,14 +81,14 @@ func TestHeaderImplAssociation(t *testing.T) {
 		t.Error("Expected header_impl_edges in summary")
 	} else {
 		edges := result.Summary["header_impl_edges"].(int)
-		// Should have 1 file-level edge + 1 symbol-level edge
+		// Should have 2 edges: 1 file-level (using virtual symbols) + 1 symbol-level
 		if edges != 2 {
-			t.Errorf("Expected 2 header-impl edges, got: %d", edges)
+			t.Errorf("Expected 2 header-impl edges (1 file-level + 1 symbol-level), got: %d", edges)
 		}
 	}
 
-	// Verify edges in database
-	t.Run("VerifyImplementsHeaderEdge", func(t *testing.T) {
+	// Verify file-level implements_header edge (using virtual file symbols)
+	t.Run("VerifyFileLevelImplementsHeaderEdge", func(t *testing.T) {
 		// Query for implements_header edges
 		query := `SELECT * FROM edges WHERE edge_type = 'implements_header'`
 		rows, err := testDB.DB.QueryContext(ctx, query)
@@ -112,6 +126,14 @@ func TestHeaderImplAssociation(t *testing.T) {
 			}
 			if targetFile == nil || *targetFile != "test.h" {
 				t.Errorf("Expected target file 'test.h', got: %v", targetFile)
+			}
+			
+			// Verify that source and target IDs are valid (virtual symbols)
+			if edge.SourceID == "" {
+				t.Error("Expected non-empty source_id (virtual file symbol)")
+			}
+			if targetID == nil || *targetID == "" {
+				t.Error("Expected non-empty target_id (virtual file symbol)")
 			}
 		}
 
@@ -195,7 +217,7 @@ func createHeaderImplParseOutput() *schema.ParseOutput {
 						SymbolID:  headerSymbolID,
 						FileID:    headerFileID,
 						Name:      "myFunction",
-						Kind:      "function_declaration",
+						Kind:      schema.SymbolFunction, // Use valid SymbolKind constant
 						Signature: "int myFunction(int x)",
 						Span: schema.Span{
 							StartLine: 1,
@@ -276,6 +298,14 @@ func TestMultipleHeaderImplPairs(t *testing.T) {
 	// Run indexing
 	result, err := idx.Index(ctx, parseOutput)
 	if err != nil {
+		// Print detailed error information
+		t.Logf("Indexing error: %v", err)
+		if result != nil && len(result.Errors) > 0 {
+			t.Logf("Validation errors (%d):", len(result.Errors))
+			for i, e := range result.Errors {
+				t.Logf("  Error %d: %s", i+1, e.Error())
+			}
+		}
 		t.Fatalf("Indexing failed: %v", err)
 	}
 
@@ -299,19 +329,26 @@ func TestMultipleHeaderImplPairs(t *testing.T) {
 		t.Error("Expected header_impl_edges in summary")
 	} else {
 		edges := result.Summary["header_impl_edges"].(int)
+		// Should have 4 edges: 2 file-level (using virtual symbols) + 2 symbol-level
 		if edges != 4 {
-			t.Errorf("Expected 4 header-impl edges, got: %d", edges)
+			t.Errorf("Expected 4 header-impl edges (2 file-level + 2 symbol-level), got: %d", edges)
 		}
 	}
 }
 
 // createMultipleHeaderImplParseOutput creates a test parse output with multiple header-impl pairs
 func createMultipleHeaderImplParseOutput() *schema.ParseOutput {
+	// Generate file IDs first
+	fooHeaderFileID := uuid.New().String()
+	fooImplFileID := uuid.New().String()
+	barHeaderFileID := uuid.New().String()
+	barImplFileID := uuid.New().String()
+
 	return &schema.ParseOutput{
 		Files: []schema.File{
 			// First pair: foo.hpp / foo.cpp
 			{
-				FileID:   uuid.New().String(),
+				FileID:   fooHeaderFileID,
 				Path:     "foo.hpp",
 				Language: "cpp",
 				Size:     100,
@@ -319,9 +356,9 @@ func createMultipleHeaderImplParseOutput() *schema.ParseOutput {
 				Symbols: []schema.Symbol{
 					{
 						SymbolID:  uuid.New().String(),
-						FileID:    uuid.New().String(),
+						FileID:    fooHeaderFileID, // Use parent file ID
 						Name:      "fooFunction",
-						Kind:      "function_declaration",
+						Kind:      schema.SymbolFunction,
 						Signature: "void fooFunction()",
 						Span: schema.Span{
 							StartLine: 1,
@@ -331,7 +368,7 @@ func createMultipleHeaderImplParseOutput() *schema.ParseOutput {
 				},
 			},
 			{
-				FileID:   uuid.New().String(),
+				FileID:   fooImplFileID,
 				Path:     "foo.cpp",
 				Language: "cpp",
 				Size:     200,
@@ -339,7 +376,7 @@ func createMultipleHeaderImplParseOutput() *schema.ParseOutput {
 				Symbols: []schema.Symbol{
 					{
 						SymbolID:  uuid.New().String(),
-						FileID:    uuid.New().String(),
+						FileID:    fooImplFileID, // Use parent file ID
 						Name:      "fooFunction",
 						Kind:      schema.SymbolFunction,
 						Signature: "void fooFunction()",
@@ -352,7 +389,7 @@ func createMultipleHeaderImplParseOutput() *schema.ParseOutput {
 			},
 			// Second pair: bar.h / bar.m (Objective-C)
 			{
-				FileID:   uuid.New().String(),
+				FileID:   barHeaderFileID,
 				Path:     "bar.h",
 				Language: "objc",
 				Size:     150,
@@ -360,9 +397,9 @@ func createMultipleHeaderImplParseOutput() *schema.ParseOutput {
 				Symbols: []schema.Symbol{
 					{
 						SymbolID:  uuid.New().String(),
-						FileID:    uuid.New().String(),
+						FileID:    barHeaderFileID, // Use parent file ID
 						Name:      "barMethod",
-						Kind:      "method_declaration",
+						Kind:      schema.SymbolFunction,
 						Signature: "- (void)barMethod",
 						Span: schema.Span{
 							StartLine: 1,
@@ -372,7 +409,7 @@ func createMultipleHeaderImplParseOutput() *schema.ParseOutput {
 				},
 			},
 			{
-				FileID:   uuid.New().String(),
+				FileID:   barImplFileID,
 				Path:     "bar.m",
 				Language: "objc",
 				Size:     250,
@@ -380,9 +417,9 @@ func createMultipleHeaderImplParseOutput() *schema.ParseOutput {
 				Symbols: []schema.Symbol{
 					{
 						SymbolID:  uuid.New().String(),
-						FileID:    uuid.New().String(),
+						FileID:    barImplFileID, // Use parent file ID
 						Name:      "barMethod",
-						Kind:      "method",
+						Kind:      schema.SymbolFunction, // Use valid SymbolKind
 						Signature: "- (void)barMethod",
 						Span: schema.Span{
 							StartLine: 5,

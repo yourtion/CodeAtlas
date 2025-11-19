@@ -405,7 +405,7 @@ func (p *KotlinParser) extractClasses(rootNode *sitter.Node, parsedFile *ParsedF
 			for _, superType := range superTypes {
 				dependency := ParsedDependency{
 					Type:   "extends",
-					Source: fullyQualifiedName, // Use fully qualified name
+					Source: className, // Use simple class name for dependency source
 					Target: superType,
 				}
 				parsedFile.Dependencies = append(parsedFile.Dependencies, dependency)
@@ -603,26 +603,34 @@ func (p *KotlinParser) extractClassMethods(classNode *sitter.Node, content []byt
 func (p *KotlinParser) extractSuperTypes(classNode *sitter.Node, content []byte) []string {
 	var superTypes []string
 
-	// Find delegation_specifiers (parent classes and interfaces)
+	// In Kotlin tree-sitter, delegation_specifier nodes are direct children of class_declaration
+	// Structure: class Dog : Animal() { ... }
+	//   - class_declaration
+	//     - type_identifier (Dog)
+	//     - : (colon)
+	//     - delegation_specifier (Animal())
+	//       - constructor_invocation
+	//         - user_type
+	//           - type_identifier (Animal)
+
 	for i := 0; i < int(classNode.ChildCount()); i++ {
 		child := classNode.Child(i)
-		if child.Type() == "delegation_specifiers" {
-			// Extract each delegation specifier
+		
+		// Direct delegation_specifier (most common case)
+		if child.Type() == "delegation_specifier" {
+			// Recursively search for type_identifier
+			typeIdent := findChildByTypeRecursive(child, "type_identifier")
+			if typeIdent != nil {
+				superTypes = append(superTypes, typeIdent.Content(content))
+			}
+		} else if child.Type() == "delegation_specifiers" {
+			// Sometimes there's a delegation_specifiers container (multiple inheritance)
 			for j := 0; j < int(child.ChildCount()); j++ {
 				specifier := child.Child(j)
-				if specifier.Type() == "delegation_specifier" || specifier.Type() == "user_type" {
-					// Find the type identifier
-					typeIdent := findChildByType(specifier, "type_identifier")
+				if specifier.Type() == "delegation_specifier" {
+					typeIdent := findChildByTypeRecursive(specifier, "type_identifier")
 					if typeIdent != nil {
 						superTypes = append(superTypes, typeIdent.Content(content))
-					} else {
-						// Sometimes it's directly a user_type
-						if specifier.Type() == "user_type" {
-							typeIdent = findChildByType(specifier, "type_identifier")
-							if typeIdent != nil {
-								superTypes = append(superTypes, typeIdent.Content(content))
-							}
-						}
 					}
 				}
 			}
@@ -630,6 +638,32 @@ func (p *KotlinParser) extractSuperTypes(classNode *sitter.Node, content []byte)
 	}
 
 	return superTypes
+}
+
+// findChildByTypeRecursive recursively searches for a child node of the given type
+func findChildByTypeRecursive(node *sitter.Node, nodeType string) *sitter.Node {
+	if node == nil {
+		return nil
+	}
+
+	// Check direct children first
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child.Type() == nodeType {
+			return child
+		}
+	}
+
+	// Recursively search in children
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		result := findChildByTypeRecursive(child, nodeType)
+		if result != nil {
+			return result
+		}
+	}
+
+	return nil
 }
 
 // extractFunctions extracts top-level and extension functions
@@ -661,13 +695,12 @@ func (p *KotlinParser) extractFunctions(rootNode *sitter.Node, parsedFile *Parse
 				continue
 			}
 
-			// Determine if it's an extension function
+			// Determine function kind (order matters: suspend takes precedence)
 			kind := "function"
-			if p.isExtensionFunction(funcNode, content) {
-				kind = "extension_function"
-			}
 			if p.isSuspendFunction(funcNode, content) {
 				kind = "suspend_function"
+			} else if p.isExtensionFunction(funcNode, content) {
+				kind = "extension_function"
 			}
 
 			signature := p.extractSignature(funcNode, content)
@@ -692,19 +725,61 @@ func (p *KotlinParser) extractFunctions(rootNode *sitter.Node, parsedFile *Parse
 // isExtensionFunction checks if a function is an extension function
 func (p *KotlinParser) isExtensionFunction(funcNode *sitter.Node, content []byte) bool {
 	// Extension functions have a receiver type before the function name
+	// In tree-sitter Kotlin, look for specific node types
 	for i := 0; i < int(funcNode.ChildCount()); i++ {
 		child := funcNode.Child(i)
-		if child.Type() == "function_value_parameters" {
-			// Check if there's a receiver type before parameters
-			// In Kotlin tree-sitter, extension functions have a receiver_type
-			return false // Will be detected by checking for receiver_type node
+		// receiver_type is the specific node type for extension function receivers
+		if child.Type() == "receiver_type" {
+			return true
 		}
 	}
 	
-	// Check for receiver_type in the function signature
+	// Fallback: Parse the function text more carefully
 	funcText := funcNode.Content(content)
-	// Extension functions have format: fun Type.functionName()
-	return strings.Contains(funcText, "fun ") && strings.Contains(strings.Split(funcText, "(")[0], ".")
+	
+	// Extension functions have format: fun Type.functionName() or fun <T> Type.functionName()
+	// Regular functions: fun functionName()
+	// We need to distinguish between:
+	//   - fun greet() -> NOT extension
+	//   - fun String.addExclamation() -> IS extension
+	
+	// Find the 'fun' keyword
+	funIndex := strings.Index(funcText, "fun ")
+	if funIndex == -1 {
+		return false
+	}
+	
+	// Skip past 'fun ' and any type parameters
+	afterFun := funcText[funIndex+4:]
+	afterFun = strings.TrimSpace(afterFun)
+	
+	// Skip type parameters if present: <T>
+	if strings.HasPrefix(afterFun, "<") {
+		closeAngle := strings.Index(afterFun, ">")
+		if closeAngle != -1 {
+			afterFun = strings.TrimSpace(afterFun[closeAngle+1:])
+		}
+	}
+	
+	// Now check if there's a dot before the opening parenthesis
+	// The pattern should be: Type.functionName(
+	parenIndex := strings.Index(afterFun, "(")
+	if parenIndex == -1 {
+		return false
+	}
+	
+	beforeParen := afterFun[:parenIndex]
+	// Count dots - if there's exactly one dot, it's likely an extension function
+	// (More than one might be a qualified name like com.example.func)
+	dotCount := strings.Count(beforeParen, ".")
+	
+	// Extension function: exactly one dot, and it's not at the start or end
+	if dotCount == 1 {
+		dotIndex := strings.Index(beforeParen, ".")
+		return dotIndex > 0 && dotIndex < len(beforeParen)-1
+	}
+	
+	return false
 }
 
 // isSuspendFunction checks if a function is a suspend function
@@ -967,69 +1042,61 @@ func (p *KotlinParser) extractAnnotations(rootNode *sitter.Node, parsedFile *Par
 }
 
 // extractKDoc extracts KDoc documentation comments
+// Note: Tree-sitter parsers typically don't include comments in the parse tree
+// We extract comments by searching the source text before the node
 func (p *KotlinParser) extractKDoc(node *sitter.Node, content []byte) string {
 	if node == nil {
 		return ""
 	}
 
-	// Look for comment nodes before this node
-	parent := node.Parent()
-	if parent == nil {
+	// Get the start position of the node
+	startByte := node.StartByte()
+	if startByte == 0 {
 		return ""
 	}
 
-	var comments []string
-
-	// Find the index of the current node
-	nodeIndex := -1
-	for i := 0; i < int(parent.ChildCount()); i++ {
-		if parent.Child(i) == node {
-			nodeIndex = i
-			break
-		}
-	}
-
-	if nodeIndex <= 0 {
+	// Search backwards in the source for KDoc comments
+	// Look for /** ... */ pattern before the node
+	beforeNode := string(content[:startByte])
+	
+	// Find the last occurrence of */ before the node
+	lastCommentEnd := strings.LastIndex(beforeNode, "*/")
+	if lastCommentEnd == -1 {
 		return ""
 	}
-
-	// Look backwards for comments
-	for i := nodeIndex - 1; i >= 0; i-- {
-		sibling := parent.Child(i)
-		if sibling.Type() == "comment" || sibling.Type() == "multiline_comment" {
-			commentText := sibling.Content(content)
-
-			// Handle KDoc comments (/** ... */)
-			if strings.HasPrefix(commentText, "/**") {
-				commentText = strings.TrimPrefix(commentText, "/**")
-				commentText = strings.TrimSuffix(commentText, "*/")
-				commentText = strings.TrimSpace(commentText)
-
-				// Clean up KDoc formatting
-				lines := strings.Split(commentText, "\n")
-				var cleanLines []string
-				for _, line := range lines {
-					line = strings.TrimSpace(line)
-					line = strings.TrimPrefix(line, "*")
-					line = strings.TrimSpace(line)
-					if line != "" {
-						cleanLines = append(cleanLines, line)
-					}
-				}
-				commentText = strings.Join(cleanLines, "\n")
-			} else {
-				// Handle single-line comments
-				commentText = strings.TrimPrefix(commentText, "//")
-				commentText = strings.TrimSpace(commentText)
-			}
-
-			comments = append([]string{commentText}, comments...)
-		} else if sibling.Type() != "comment" && sibling.Type() != "multiline_comment" {
-			break
+	
+	// Find the corresponding /** before it
+	commentStart := strings.LastIndex(beforeNode[:lastCommentEnd], "/**")
+	if commentStart == -1 {
+		return ""
+	}
+	
+	// Check if there's any non-whitespace between the comment and the node
+	betweenCommentAndNode := beforeNode[lastCommentEnd+2:]
+	if strings.TrimSpace(betweenCommentAndNode) != "" {
+		// There's code between the comment and the node, not a doc comment
+		return ""
+	}
+	
+	// Extract and clean the comment
+	commentText := beforeNode[commentStart : lastCommentEnd+2]
+	commentText = strings.TrimPrefix(commentText, "/**")
+	commentText = strings.TrimSuffix(commentText, "*/")
+	commentText = strings.TrimSpace(commentText)
+	
+	// Clean up KDoc formatting
+	lines := strings.Split(commentText, "\n")
+	var cleanLines []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "*")
+		line = strings.TrimSpace(line)
+		if line != "" {
+			cleanLines = append(cleanLines, line)
 		}
 	}
-
-	return strings.Join(comments, "\n")
+	
+	return strings.Join(cleanLines, "\n")
 }
 
 // extractCallRelationships extracts function calls and inheritance relationships
