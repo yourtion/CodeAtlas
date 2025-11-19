@@ -175,9 +175,16 @@ func (p *ParserPool) worker(id int, jobs <-chan ParseJob, results chan<- ParseRe
 		return
 	}
 
+	// Initialize all language parsers
 	goParser := NewGoParser(workerTSParser)
 	jsParser := NewJSParser(workerTSParser)
 	pyParser := NewPythonParser(workerTSParser)
+	kotlinParser := NewKotlinParser(workerTSParser)
+	javaParser := NewJavaParser(workerTSParser)
+	swiftParser := NewSwiftParser(workerTSParser)
+	objcParser := NewObjCParser(workerTSParser)
+	cParser := NewCParser(workerTSParser)
+	cppParser := NewCppParser(workerTSParser)
 
 	for job := range jobs {
 		file := job.File
@@ -193,6 +200,18 @@ func (p *ParserPool) worker(id int, jobs <-chan ParseJob, results chan<- ParseRe
 			parsedFile, parseErr = jsParser.Parse(file)
 		case "Python":
 			parsedFile, parseErr = pyParser.Parse(file)
+		case "Kotlin":
+			parsedFile, parseErr = kotlinParser.Parse(file)
+		case "Java":
+			parsedFile, parseErr = javaParser.Parse(file)
+		case "Swift":
+			parsedFile, parseErr = swiftParser.Parse(file)
+		case "Objective-C":
+			parsedFile, parseErr = objcParser.Parse(file)
+		case "C":
+			parsedFile, parseErr = cParser.Parse(file)
+		case "C++":
+			parsedFile, parseErr = cppParser.Parse(file)
 		default:
 			parseErr = fmt.Errorf("unsupported language: %s", file.Language)
 		}
