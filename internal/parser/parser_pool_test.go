@@ -613,3 +613,106 @@ func TestParserPoolProcessWithNilResult(t *testing.T) {
 		t.Error("Expected error to be logged")
 	}
 }
+
+// TestParserPoolMobileLanguages tests parsing mobile language files
+func TestParserPoolMobileLanguages(t *testing.T) {
+	tsParser, err := NewTreeSitterParser()
+	if err != nil {
+		t.Fatalf("Failed to create Tree-sitter parser: %v", err)
+	}
+
+	// Create temporary test files
+	tempDir := t.TempDir()
+
+	testFiles := []struct {
+		name     string
+		language string
+		content  string
+	}{
+		{
+			name:     "test.kt",
+			language: "Kotlin",
+			content:  "package com.example\n\nfun hello() {\n    println(\"Hello\")\n}\n",
+		},
+		{
+			name:     "test.java",
+			language: "Java",
+			content:  "package com.example;\n\npublic class Test {\n    public void hello() {}\n}\n",
+		},
+		{
+			name:     "test.swift",
+			language: "Swift",
+			content:  "import Foundation\n\nfunc hello() {\n    print(\"Hello\")\n}\n",
+		},
+		{
+			name:     "test.m",
+			language: "Objective-C",
+			content:  "#import <Foundation/Foundation.h>\n\n@implementation TestClass\n- (void)hello {\n    NSLog(@\"Hello\");\n}\n@end\n",
+		},
+		{
+			name:     "test.c",
+			language: "C",
+			content:  "#include <stdio.h>\n\nvoid hello() {\n    printf(\"Hello\");\n}\n",
+		},
+		{
+			name:     "test.cpp",
+			language: "C++",
+			content:  "#include <iostream>\n\nvoid hello() {\n    std::cout << \"Hello\";\n}\n",
+		},
+	}
+
+	var files []ScannedFile
+	for _, tf := range testFiles {
+		filepath := filepath.Join(tempDir, tf.name)
+		if err := os.WriteFile(filepath, []byte(tf.content), 0644); err != nil {
+			t.Fatalf("Failed to create test file %s: %v", tf.name, err)
+		}
+
+		files = append(files, ScannedFile{
+			Path:     tf.name,
+			AbsPath:  filepath,
+			Language: tf.language,
+			Size:     int64(len(tf.content)),
+		})
+	}
+
+	pool := NewParserPool(4, tsParser)
+	parsedFiles, errors := pool.Process(files)
+
+	// Verify all files were parsed successfully
+	if len(parsedFiles) != 6 {
+		t.Errorf("Expected 6 parsed files, got %d", len(parsedFiles))
+	}
+
+	if len(errors) != 0 {
+		t.Errorf("Expected 0 errors, got %d: %v", len(errors), errors)
+	}
+
+	// Verify language distribution
+	langCount := make(map[string]int)
+	for _, pf := range parsedFiles {
+		langCount[pf.Language]++
+	}
+
+	expectedLangs := map[string]int{
+		"kotlin": 1,
+		"java":   1,
+		"swift":  1,
+		"objc":   1,
+		"c":      1,
+		"cpp":    1,
+	}
+
+	for lang, expectedCount := range expectedLangs {
+		if langCount[lang] != expectedCount {
+			t.Errorf("Expected %d %s file(s), got %d", expectedCount, lang, langCount[lang])
+		}
+	}
+
+	// Verify each file has symbols extracted
+	for _, pf := range parsedFiles {
+		if len(pf.Symbols) == 0 {
+			t.Errorf("Expected symbols to be extracted from %s (%s)", pf.Path, pf.Language)
+		}
+	}
+}

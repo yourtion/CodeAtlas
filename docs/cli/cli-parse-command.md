@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `codeatlas parse` command analyzes source code files and outputs structured JSON AST (Abstract Syntax Tree) representations. It supports Go, JavaScript/TypeScript, and Python languages, leveraging Tree-sitter for accurate parsing.
+The `codeatlas parse` command analyzes source code files and outputs structured JSON AST (Abstract Syntax Tree) representations. It supports Go, JavaScript/TypeScript, Python, Kotlin, Java, Swift, Objective-C, C, and C++ languages, leveraging Tree-sitter for accurate parsing.
 
 ## Table of Contents
 
@@ -67,7 +67,7 @@ codeatlas parse --path /path/to/repository --output result.json
 | Flag | Description | Default | Example |
 |------|-------------|---------|---------|
 | `--output`, `-o` | Output file path (stdout if not specified) | stdout | `--output result.json` |
-| `--language`, `-l` | Filter files by language (go, javascript, typescript, python) | all | `--language go` |
+| `--language`, `-l` | Filter files by language (go, javascript, typescript, python, kotlin, java, swift, objective-c, c, c++) | all | `--language go` |
 | `--workers`, `-w` | Number of concurrent workers | CPU count | `--workers 4` |
 | `--verbose`, `-v` | Enable verbose logging | false | `--verbose` |
 | `--ignore-file` | Path to custom ignore file | none | `--ignore-file .customignore` |
@@ -183,7 +183,7 @@ The parse command outputs JSON conforming to the CodeAtlas Unified Schema.
 |-------|------|-------------|
 | `file_id` | string | Unique UUID for the file |
 | `path` | string | Relative path from repository root |
-| `language` | string | Programming language (go, javascript, typescript, python) |
+| `language` | string | Programming language (go, javascript, typescript, python, kotlin, java, swift, objc, c, cpp) |
 | `size` | integer | File size in bytes |
 | `checksum` | string | SHA256 checksum of file content |
 | `nodes` | array | AST nodes extracted from the file |
@@ -286,6 +286,48 @@ codeatlas parse --path ./project --no-ignore
 ```
 
 **Output**: Parses all files, including those in .gitignore, node_modules, etc.
+
+### Example 8: Parse Android Project (Kotlin/Java)
+
+```bash
+codeatlas parse --path ./android-app --language kotlin --output android-kotlin.json
+```
+
+**Output**: Parses only Kotlin files from an Android project
+
+```bash
+codeatlas parse --path ./android-app --output android-full.json
+```
+
+**Output**: Parses both Kotlin and Java files from an Android project
+
+### Example 9: Parse iOS Project (Swift/Objective-C)
+
+```bash
+codeatlas parse --path ./ios-app --language swift --output ios-swift.json
+```
+
+**Output**: Parses only Swift files from an iOS project
+
+```bash
+codeatlas parse --path ./ios-app --output ios-full.json
+```
+
+**Output**: Parses both Swift and Objective-C files from an iOS project
+
+### Example 10: Parse Native C/C++ Project
+
+```bash
+codeatlas parse --path ./native-lib --language c++ --output cpp-lib.json
+```
+
+**Output**: Parses only C++ files (.cpp, .hpp, etc.)
+
+```bash
+codeatlas parse --path ./native-lib --output native-full.json
+```
+
+**Output**: Parses both C and C++ files, with automatic header file detection
 
 ---
 
@@ -563,6 +605,12 @@ jobs:
 | JavaScript | .js, .jsx | ES6 modules, CommonJS, functions, classes, arrow functions |
 | TypeScript | .ts, .tsx | All JavaScript features + type annotations |
 | Python | .py | Imports, functions, classes, decorators, type hints, docstrings |
+| Kotlin | .kt, .kts | Packages, imports, classes, data classes, sealed classes, functions, properties, interfaces |
+| Java | .java | Packages, imports, classes, interfaces, enums, annotations, methods, fields |
+| Swift | .swift | Imports, classes, structs, enums, protocols, extensions, functions, properties |
+| Objective-C | .h, .m, .mm | Imports, interfaces, implementations, protocols, categories, properties, methods |
+| C | .c, .h | Includes, functions, structs, unions, enums, typedefs, macros, global variables |
+| C++ | .cpp, .cc, .cxx, .hpp, .hh, .hxx | Includes, namespaces, classes, templates, functions, methods, operators, inheritance |
 
 ---
 
