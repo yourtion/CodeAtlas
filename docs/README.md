@@ -78,6 +78,12 @@
 
 - **[数据库 Schema](reference/schema.md)** - 数据库结构说明
 - **[HTTP 请求示例](../example.http)** - 可直接使用的 API 请求示例
+- **[解析器文档](parser/README.md)** - 多语言代码解析器参考
+  - 支持的语言（Go, JS/TS, Python, Kotlin, Java, Swift, Objective-C, C, C++）
+  - 语言特定解析器文档
+  - 头文件-实现文件关联算法
+  - 边类型参考
+  - 迁移指南
 
 ### 🔧 故障排除
 
@@ -116,6 +122,12 @@
 
 #### 我想运行测试
 → [测试指南](development/testing.md)
+
+#### 我想了解支持的编程语言
+→ [解析器文档](parser/README.md)
+
+#### 我想了解代码关系类型
+→ [边类型参考](parser/edge-types.md)
 
 ### 按角色查找
 
