@@ -21,6 +21,11 @@ CodeAtlas 是一个结合 **RAG (Retrieval-Augmented Generation)**、**代码知
   - 可选 Git 历史追踪，用于演化分析
 - **多模态扩展**
   - 支持集成 issue、PR、设计文档等企业内知识源
+- **多语言支持**
+  - 支持 Go, JavaScript/TypeScript, Python
+  - 支持移动开发语言：Kotlin, Java, Swift, Objective-C
+  - 支持原生代码：C, C++
+  - 智能头文件-实现文件关联（C/C++/Objective-C）
 
 ---
 
@@ -152,6 +157,7 @@ curl http://localhost:8080/api/v1/repositories
 
 - [x] CLI 上传文件与 Git 基础信息
 - [x] 服务端解析与入库
+- [x] 多语言解析支持（Go, JS/TS, Python, Kotlin, Java, Swift, Objective-C, C, C++）
 - [ ] 基础语义检索和问答
 
 ### **Phase 2 - 知识图谱增强**
