@@ -50,16 +50,18 @@ git checkout -b fix/your-bug-fix
 ### 3. 运行测试
 
 ```bash
-# 运行所有测试
+# 快速单元测试（无需数据库）
 make test
 
-# 运行特定测试
-make test-api
-make test-cli
-make test-models
+# 集成测试（需要数据库）
+make db                  # 启动数据库
+make test-integration    # 运行所有测试
 
 # 生成覆盖率报告
 make test-coverage
+
+# 完整验证（清理 + 测试）
+make verify
 ```
 
 ### 4. 提交代码

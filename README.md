@@ -112,7 +112,10 @@ docker-compose ps
 
 ```bash
 # 启动数据库
-make docker-up
+make db
+
+# 初始化数据库
+make db-init
 
 # 运行 API 服务
 make run-api
