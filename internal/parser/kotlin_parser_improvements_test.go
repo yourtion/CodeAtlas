@@ -262,7 +262,9 @@ func TestKotlinParser_FullyQualifiedNames(t *testing.T) {
 	}
 
 	if _, err := os.Stat(absPath); os.IsNotExist(err) {
-		t.Skip("Test fixture not found")
+		// TODO: Create missing test fixture file tests/fixtures/kotlin/simple_class.kt
+		t.Skip("Test fixture not found: tests/fixtures/kotlin/simple_class.kt - " +
+			"create this fixture file to enable the test")
 	}
 
 	file := ScannedFile{

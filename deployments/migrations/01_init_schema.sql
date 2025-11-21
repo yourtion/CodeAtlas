@@ -124,11 +124,13 @@ CREATE INDEX IF NOT EXISTS idx_edges_target_type ON edges(target_id, edge_type);
 -- ============================================================================
 
 -- Vectors table for semantic embeddings
+-- Using 1024 dimensions to match default embedder (text-embedding-qwen3-embedding-0.6b)
+-- Adjust if using different models: nomic-embed-text (768), text-embedding-3-small (1536)
 CREATE TABLE IF NOT EXISTS vectors (
     vector_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_id UUID NOT NULL,
     entity_type VARCHAR(50) NOT NULL,
-    embedding vector(768),
+    embedding vector(1024),
     content TEXT NOT NULL,
     model VARCHAR(100) NOT NULL,
     chunk_index INT DEFAULT 0,

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -13,7 +15,20 @@ import (
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
+// getEnvInt retrieves an integer environment variable with a default value
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
+}
+
 func TestOpenAIEmbedder_GenerateEmbedding(t *testing.T) {
+	// Get vector dimensions from environment (same as database schema)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify request
@@ -40,7 +55,7 @@ func TestOpenAIEmbedder_GenerateEmbedding(t *testing.T) {
 			}{
 				{
 					Object:    "embedding",
-					Embedding: make([]float32, 1024),
+					Embedding: make([]float32, vectorDim),
 					Index:     0,
 				},
 			},
@@ -68,7 +83,7 @@ func TestOpenAIEmbedder_GenerateEmbedding(t *testing.T) {
 		Backend:              "openai",
 		APIEndpoint:          server.URL,
 		Model:                "test-model",
-		Dimensions:           1024,
+		Dimensions:           vectorDim,
 		BatchSize:            10,
 		MaxRequestsPerSecond: 100,
 		MaxRetries:           3,
@@ -88,12 +103,15 @@ func TestOpenAIEmbedder_GenerateEmbedding(t *testing.T) {
 		t.Fatalf("Failed to generate embedding: %v", err)
 	}
 
-	if len(embedding) != 1024 {
-		t.Errorf("Expected embedding length 1024, got %d", len(embedding))
+	if len(embedding) != vectorDim {
+		t.Errorf("Expected embedding length %d, got %d", vectorDim, len(embedding))
 	}
 }
 
 func TestOpenAIEmbedder_BatchEmbed(t *testing.T) {
+	// Get vector dimensions from environment (same as database schema)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Create mock server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Parse request
@@ -113,7 +131,7 @@ func TestOpenAIEmbedder_BatchEmbed(t *testing.T) {
 		}
 
 		for i := 0; i < numInputs; i++ {
-			embedding := make([]float32, 1024)
+			embedding := make([]float32, vectorDim)
 			for j := range embedding {
 				// Use simpler values to avoid floating-point precision issues
 				embedding[j] = float32(j) / 1000.0
@@ -145,7 +163,7 @@ func TestOpenAIEmbedder_BatchEmbed(t *testing.T) {
 		Backend:              "openai",
 		APIEndpoint:          server.URL,
 		Model:                "test-model",
-		Dimensions:           1024,
+		Dimensions:           vectorDim,
 		BatchSize:            10,
 		MaxRequestsPerSecond: 100,
 		MaxRetries:           3,
@@ -175,13 +193,16 @@ func TestOpenAIEmbedder_BatchEmbed(t *testing.T) {
 	}
 
 	for i, embedding := range embeddings {
-		if len(embedding) != 1024 {
-			t.Errorf("Embedding %d: expected length 1024, got %d", i, len(embedding))
+		if len(embedding) != vectorDim {
+			t.Errorf("Embedding %d: expected length %d, got %d", i, vectorDim, len(embedding))
 		}
 	}
 }
 
 func TestOpenAIEmbedder_EmbedSymbols(t *testing.T) {
+	// Get vector dimensions from environment (same as database schema)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Create mock server
 	requestCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +225,7 @@ func TestOpenAIEmbedder_EmbedSymbols(t *testing.T) {
 		}
 
 		for i := 0; i < numInputs; i++ {
-			embedding := make([]float32, 1024)
+			embedding := make([]float32, vectorDim)
 			for j := range embedding {
 				// Use simpler values to avoid floating-point precision issues
 				embedding[j] = float32(j) / 1000.0
@@ -236,7 +257,7 @@ func TestOpenAIEmbedder_EmbedSymbols(t *testing.T) {
 		Backend:              "openai",
 		APIEndpoint:          server.URL,
 		Model:                "test-model",
-		Dimensions:           1024,
+		Dimensions:           vectorDim,
 		BatchSize:            2,
 		MaxRequestsPerSecond: 100,
 		MaxRetries:           3,
@@ -313,6 +334,9 @@ func TestOpenAIEmbedder_EmbedSymbols(t *testing.T) {
 }
 
 func TestOpenAIEmbedder_RetryLogic(t *testing.T) {
+	// Get vector dimensions from environment (same as database schema)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Create mock server that fails first 2 times
 	attemptCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -334,7 +358,7 @@ func TestOpenAIEmbedder_RetryLogic(t *testing.T) {
 			}{
 				{
 					Object:    "embedding",
-					Embedding: make([]float32, 1024),
+					Embedding: make([]float32, vectorDim),
 					Index:     0,
 				},
 			},
@@ -357,7 +381,7 @@ func TestOpenAIEmbedder_RetryLogic(t *testing.T) {
 		Backend:              "openai",
 		APIEndpoint:          server.URL,
 		Model:                "test-model",
-		Dimensions:           1024,
+		Dimensions:           vectorDim,
 		BatchSize:            10,
 		MaxRequestsPerSecond: 100,
 		MaxRetries:           3,
@@ -377,8 +401,8 @@ func TestOpenAIEmbedder_RetryLogic(t *testing.T) {
 		t.Fatalf("Failed to generate embedding after retries: %v", err)
 	}
 
-	if len(embedding) != 1024 {
-		t.Errorf("Expected embedding length 1024, got %d", len(embedding))
+	if len(embedding) != vectorDim {
+		t.Errorf("Expected embedding length %d, got %d", vectorDim, len(embedding))
 	}
 
 	if attemptCount != 3 {
@@ -387,6 +411,9 @@ func TestOpenAIEmbedder_RetryLogic(t *testing.T) {
 }
 
 func TestOpenAIEmbedder_RateLimiting(t *testing.T) {
+	// Get vector dimensions from environment (same as database schema)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Create mock server
 	requestTimes := []time.Time{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -401,7 +428,7 @@ func TestOpenAIEmbedder_RateLimiting(t *testing.T) {
 			}{
 				{
 					Object:    "embedding",
-					Embedding: make([]float32, 1024),
+					Embedding: make([]float32, vectorDim),
 					Index:     0,
 				},
 			},
@@ -424,7 +451,7 @@ func TestOpenAIEmbedder_RateLimiting(t *testing.T) {
 		Backend:              "openai",
 		APIEndpoint:          server.URL,
 		Model:                "test-model",
-		Dimensions:           1024,
+		Dimensions:           vectorDim,
 		BatchSize:            1,
 		MaxRequestsPerSecond: 2, // 2 requests per second
 		MaxRetries:           3,
@@ -477,6 +504,9 @@ func TestOpenAIEmbedder_EmptyContent(t *testing.T) {
 }
 
 func TestOpenAIEmbedder_DimensionValidation(t *testing.T) {
+	// Get vector dimensions from environment (same as database schema)
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
 	// Create mock server that returns wrong dimensions
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resp := OpenAIEmbeddingResponse{
@@ -506,12 +536,12 @@ func TestOpenAIEmbedder_DimensionValidation(t *testing.T) {
 
 	vectorRepo := models.NewVectorRepository(db)
 
-	// Create embedder expecting 1024 dimensions
+	// Create embedder expecting correct dimensions
 	config := &EmbedderConfig{
 		Backend:              "openai",
 		APIEndpoint:          server.URL,
 		Model:                "test-model",
-		Dimensions:           1024,
+		Dimensions:           vectorDim,
 		BatchSize:            10,
 		MaxRequestsPerSecond: 100,
 		MaxRetries:           3,
