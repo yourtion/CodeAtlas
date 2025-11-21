@@ -1271,8 +1271,13 @@ func TestTransactionOperations(t *testing.T) {
 	})
 
 	t.Run("WithTransactionRollback", func(t *testing.T) {
+		// TODO: Refactor repository methods to support transaction-aware operations
+		// Current architecture: repositories use db.DB directly, not transaction-aware
+		// Required change: Add optional *sql.Tx parameter to repository methods
+		// This would enable proper transaction rollback testing
 		t.Skip("Skipping: Repository methods don't support transaction-aware operations yet. " +
-			"This requires refactoring repository methods to accept optional *sql.Tx parameter.")
+			"This requires refactoring repository methods to accept optional *sql.Tx parameter. " +
+			"See TODO in pkg/models for transaction-aware repository pattern")
 
 		repoRepo := models.NewRepositoryRepository(testDB.DB)
 

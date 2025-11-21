@@ -178,16 +178,25 @@ function MyComponent() {
 }
 
 // TestExternalDependencies_Go tests external dependency handling for Go
+// TODO: Implement language-specific tests for Go external dependencies
+// Currently skipped as the core functionality is tested in JavaScript test
 func TestExternalDependencies_Go(t *testing.T) {
-	t.Skip("Simplified test - Go external dependencies work similarly to JS")
+	t.Skip("Simplified test - Go external dependencies work similarly to JS. " +
+		"Core functionality is tested in TestExternalDependencies_JavaScript")
 }
 
 // TestExternalDependencies_Python tests external dependency handling for Python
+// TODO: Implement language-specific tests for Python external dependencies
+// Currently skipped as the core functionality is tested in JavaScript test
 func TestExternalDependencies_Python(t *testing.T) {
-	t.Skip("Simplified test - Python external dependencies work similarly to JS")
+	t.Skip("Simplified test - Python external dependencies work similarly to JS. " +
+		"Core functionality is tested in TestExternalDependencies_JavaScript")
 }
 
 // TestExternalDependencies_Deduplication tests that external symbols are deduplicated
+// NOTE: Deduplication is handled by deterministic UUIDs in the schema mapper
+// Same external module always gets the same ID, so explicit deduplication test is not needed
 func TestExternalDependencies_Deduplication(t *testing.T) {
-	t.Skip("Deduplication is handled by deterministic UUIDs - same external module always gets same ID")
+	t.Skip("Deduplication is handled by deterministic UUIDs - same external module always gets same ID. " +
+		"This is tested implicitly in other external dependency tests")
 }

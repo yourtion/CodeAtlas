@@ -41,16 +41,5 @@ func TestHealthCheck(t *testing.T) {
 	}
 }
 
-func TestCreateRepository(t *testing.T) {
-	// This test would require a mock database
-	// We'll need to refactor the server to accept a database interface
-	// that can be mocked for testing purposes
-	t.Skip("Skipping test that requires database mock")
-}
-
-func TestGetRepository(t *testing.T) {
-	// This test would require a mock database
-	// We'll need to refactor the server to accept a database interface
-	// that can be mocked for testing purposes
-	t.Skip("Skipping test that requires database mock")
-}
+// Note: API integration tests with real database are in tests/integration/api_integration_test.go
+// These placeholder tests have been removed as they were never implemented and are redundant.
