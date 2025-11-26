@@ -36,7 +36,74 @@ total=0
 passed=0
 failed=0
 
-echo "1. 运行基于 Fixture 的测试（推荐）"
+echo "1. 单语言内部调用测试"
+echo "-------------------------------------------"
+
+# C
+total=$((total + 1))
+if run_test "C 内部调用" "TestCallAnalysis_C_InternalCalls"; then
+    passed=$((passed + 1))
+else
+    failed=$((failed + 1))
+fi
+echo ""
+
+# C++
+total=$((total + 1))
+if run_test "C++ 内部调用" "TestCallAnalysis_CPP_InternalCalls"; then
+    passed=$((passed + 1))
+else
+    failed=$((failed + 1))
+fi
+echo ""
+
+# Java
+total=$((total + 1))
+if run_test "Java 内部调用" "TestCallAnalysis_Java_InternalCalls"; then
+    passed=$((passed + 1))
+else
+    failed=$((failed + 1))
+fi
+echo ""
+
+# Go
+total=$((total + 1))
+if run_test "Go 内部调用" "TestCallAnalysis_Go_InternalCalls"; then
+    passed=$((passed + 1))
+else
+    failed=$((failed + 1))
+fi
+echo ""
+
+# Python
+total=$((total + 1))
+if run_test "Python 内部调用" "TestCallAnalysis_Python_InternalCalls"; then
+    passed=$((passed + 1))
+else
+    failed=$((failed + 1))
+fi
+echo ""
+
+# Swift
+total=$((total + 1))
+if run_test "Swift 内部调用" "TestCallAnalysis_Swift_InternalCalls"; then
+    passed=$((passed + 1))
+else
+    failed=$((failed + 1))
+fi
+echo ""
+
+# Objective-C
+total=$((total + 1))
+if run_test "Objective-C 内部调用" "TestCallAnalysis_ObjC_InternalCalls"; then
+    passed=$((passed + 1))
+else
+    failed=$((failed + 1))
+fi
+echo ""
+
+echo ""
+echo "2. 跨语言调用测试"
 echo "-------------------------------------------"
 
 # C++ → C

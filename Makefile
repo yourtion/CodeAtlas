@@ -66,6 +66,15 @@ test-call-analysis:
 test-call-analysis-fixtures:
 	@go test -v ./tests/integration -run TestCallAnalysis_AllFixtures -timeout 60s
 
+# Single language call analysis tests
+test-call-analysis-single:
+	@go test -v ./tests/integration -run TestCallAnalysis_AllSingleLanguage -timeout 60s
+
+# All call analysis tests (single + cross-language)
+test-call-analysis-all:
+	@echo "Running all call analysis tests..."
+	@go test -v ./tests/integration -run "TestCallAnalysis_AllSingleLanguage|TestCallAnalysis_AllFixtures" -timeout 90s
+
 #==============================================================================
 # Database
 #==============================================================================
