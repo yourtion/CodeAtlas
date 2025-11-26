@@ -302,8 +302,104 @@ bash scripts/test_ci.sh go test ./... -v
 bash scripts/verify_test_setup.sh
 ```
 
+## 调用分析测试
+
+### 概述
+
+调用分析测试验证解析器能够准确识别代码中的调用关系，包括：
+- 从调用方找到被调用方（caller → callee）
+- 从被调用方找到调用方（callee → caller）
+- 跨语言调用（如 Kotlin → Java, Swift → Objective-C）
+
+### 运行调用分析测试
+
+```bash
+# 运行所有调用分析测试
+go test -v ./tests/integration -run TestCallAnalysis
+
+# 运行特定语言测试
+go test -v ./tests/integration -run TestCallAnalysis_Go
+go test -v ./tests/integration -run TestCallAnalysis_Java
+go test -v ./tests/integration -run TestCallAnalysis_Python
+
+# 运行跨语言测试
+go test -v ./tests/integration -run TestCallAnalysis_CrossLanguage
+
+# 运行精度和召回率测试
+go test -v ./tests/integration -run TestCallAnalysisMetrics
+```
+
+### 测试覆盖的语言
+
+**单语言测试：**
+- Go, Java, Python, JavaScript/TypeScript
+- C, C++, Objective-C, Swift
+- Kotlin
+
+**跨语言测试：**
+- Kotlin → Java (JVM 互操作)
+- Swift → Objective-C (iOS/macOS 互操作)
+- TypeScript → JavaScript (模块导入)
+- C++ → C (extern "C")
+- Objective-C++ → Objective-C (混合代码)
+
+### 测试指标
+
+**精度（Precision）和召回率（Recall）目标：**
+- 单语言：≥90% 精度，≥90% 召回率
+- 跨语言：≥75% 精度，≥65% 召回率
+
+**测试内容：**
+1. **完整性**：确保找到所有真实的调用关系
+2. **精确性**：确保没有误报（如注释中的函数名）
+3. **特殊场景**：递归调用、间接调用、接口调用、嵌套调用
+
+### 测试结果
+
+查看详细测试结果：
+```bash
+cat tests/integration/CALL_ANALYSIS_TEST_RESULTS.md
+```
+
+### 编写调用分析测试
+
+```go
+func TestCallAnalysis_MyLanguage(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping integration test in short mode")
+    }
+
+    tsParser, err := parser.NewTreeSitterParser()
+    require.NoError(t, err)
+
+    myParser := parser.NewMyLanguageParser(tsParser)
+
+    // 创建测试文件
+    testFile := filepath.Join(t.TempDir(), "test.ext")
+    content := `// 测试代码`
+    err = os.WriteFile(testFile, []byte(content), 0644)
+    require.NoError(t, err)
+
+    // 解析文件
+    parsedFile, err := myParser.Parse(file)
+    require.NoError(t, err)
+
+    // 验证调用关系
+    callsFromCaller := []string{}
+    for _, dep := range parsedFile.Dependencies {
+        if dep.Type == "call" && dep.Source == "caller" {
+            callsFromCaller = append(callsFromCaller, dep.Target)
+        }
+    }
+
+    // 断言
+    assert.Contains(t, callsFromCaller, "expectedCallee")
+}
+```
+
 ## 参考资料
 
 - [Go 测试文档](https://golang.org/pkg/testing/)
 - [表驱动测试](https://github.com/golang/go/wiki/TableDrivenTests)
 - [集成测试 README](../../tests/integration/README.md)
+- [调用分析测试结果](../../tests/integration/CALL_ANALYSIS_TEST_RESULTS.md)

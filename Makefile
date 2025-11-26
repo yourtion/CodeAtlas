@@ -58,6 +58,14 @@ verify:
 clean-test-dbs:
 	@bash scripts/cleanup_test_databases.sh
 
+# Call analysis tests (cross-language interop)
+test-call-analysis:
+	@bash scripts/run_call_analysis_tests.sh
+
+# Call analysis tests (fixture-based, recommended)
+test-call-analysis-fixtures:
+	@go test -v ./tests/integration -run TestCallAnalysis_AllFixtures -timeout 60s
+
 #==============================================================================
 # Database
 #==============================================================================

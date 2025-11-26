@@ -151,6 +151,36 @@ curl http://localhost:8080/api/v1/repositories
 - **[配置指南](docs/configuration/README.md)** - 所有配置选项说明
 - **[部署指南](docs/deployment/README.md)** - 生产环境部署
 - **[开发指南](docs/development/testing.md)** - 测试和开发最佳实践
+- **[调用分析测试](tests/integration/CALL_ANALYSIS_SUMMARY.md)** - 跨语言调用分析测试结果
+
+---
+
+## 🧪 测试
+
+### 快速测试
+```bash
+# 单元测试（快速，无需数据库）
+make test
+
+# 集成测试（需要数据库）
+make test-integration
+
+# 调用分析测试（跨语言互操作）
+go test -v ./tests/integration -run TestCallAnalysis_AllFixtures
+```
+
+### 测试覆盖率
+- **目标**: 90% 代码覆盖率
+- **当前**: 查看 [测试文档](docs/development/testing.md)
+
+### 跨语言调用分析测试 ✅
+CodeAtlas 支持检测跨语言调用关系，包括：
+- C++ → C (100% 检测率)
+- Kotlin → Java (100% 检测率)
+- Swift → Objective-C (100% 检测率)
+- TypeScript → JavaScript (62.5% 检测率)
+
+详见 [调用分析测试总结](tests/integration/CALL_ANALYSIS_SUMMARY.md)
 
 ---
 
