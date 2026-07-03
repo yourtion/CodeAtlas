@@ -11,6 +11,19 @@ import (
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
+// pipelineExecutor 抽象索引管道中产生数据库副作用的四个阶段，
+// 使其可被测试 fake 接管以做行为断言（例如钉住 IndexWithProgress
+// 不应重复执行整个管道）。
+//
+// Indexer 自身实现该接口（方法已存在）；测试可注入 fakeExecutor
+// 来记录各阶段调用次数而无需真实数据库。
+type pipelineExecutor interface {
+	writeRepository(ctx context.Context) error
+	writeData(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) (*WriteResult, error)
+	buildGraph(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) *GraphBuildResult
+	generateEmbeddings(ctx context.Context, files []schema.File) *EmbedResult
+}
+
 // Indexer orchestrates the indexing pipeline
 type Indexer struct {
 	validator       Validator
@@ -23,6 +36,10 @@ type Indexer struct {
 	streamProcessor *StreamProcessor
 	workerPool      *WorkerPool
 	batchOptimizer  *BatchOptimizer
+
+	// executor 是管道副作用的执行入口，默认指向 Indexer 自身。
+	// 测试中可替换为 fakeExecutor 以断言调用行为，无需真实数据库。
+	executor pipelineExecutor
 }
 
 // IndexerLogger defines the logging interface for the indexer
@@ -154,6 +171,24 @@ func newIndexerInternal(db *models.DB, config *IndexerConfig, logger IndexerLogg
 	}
 }
 
+// SetExecutor 替换管道执行入口，仅供测试注入 fake。
+// 传入 nil 等价于恢复默认（Indexer 自身执行）。
+func (idx *Indexer) SetExecutor(e pipelineExecutor) {
+	if e == nil {
+		idx.executor = idx
+	} else {
+		idx.executor = e
+	}
+}
+
+// ensureExecutor 确保 executor 已初始化（默认指向自身）。
+// 在每个使用 executor 的方法入口调用。
+func (idx *Indexer) ensureExecutor() {
+	if idx.executor == nil {
+		idx.executor = idx
+	}
+}
+
 // noOpLogger is a no-op logger implementation
 type noOpLogger struct{}
 
@@ -182,6 +217,7 @@ type IndexResult struct {
 
 // Index coordinates the validation → write → graph → embeddings pipeline
 func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*IndexResult, error) {
+	idx.ensureExecutor()
 	startTime := time.Now()
 	result := &IndexResult{
 		RepoID:  idx.config.RepoID,
@@ -226,7 +262,7 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 
 	// Step 2: Write repository metadata
 	idx.logger.Debug("writing repository metadata")
-	if err := idx.writeRepository(ctx); err != nil {
+	if err := idx.executor.writeRepository(ctx); err != nil {
 		idx.logger.ErrorWithFields("failed to write repository metadata", err,
 			LogField{Key: "repo_id", Value: idx.config.RepoID},
 		)
@@ -270,7 +306,7 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		LogField{Key: "files_to_process", Value: len(filesToProcess)},
 		LogField{Key: "relationships", Value: len(input.Relationships)},
 	)
-	writeResult, err := idx.writeData(ctx, filesToProcess, input.Relationships)
+	writeResult, err := idx.executor.writeData(ctx, filesToProcess, input.Relationships)
 	if err != nil {
 		idx.logger.ErrorWithFields("failed to write data", err,
 			LogField{Key: "repo_id", Value: idx.config.RepoID},
@@ -315,8 +351,15 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 
 	// Step 4.5: Associate header and implementation files (for C/C++/Objective-C)
 	idx.logger.Info("associating header and implementation files")
-	headerImplAssociator := NewHeaderImplAssociator(idx.db, idx.logger)
-	assocResult, err := headerImplAssociator.AssociateHeadersAndImplementations(ctx, filesToProcess)
+	var assocResult *AssociationResult
+	if idx.db == nil {
+		// 测试环境（db 未注入，走 fake executor）下跳过；
+		// 该步骤为非致命的增强关联，真实路径中会执行。
+		assocResult = &AssociationResult{}
+	} else {
+		headerImplAssociator := NewHeaderImplAssociator(idx.db, idx.logger)
+		assocResult, err = headerImplAssociator.AssociateHeadersAndImplementations(ctx, filesToProcess)
+	}
 	if err != nil {
 		idx.logger.WarnWithFields("header-implementation association failed", LogField{Key: "error", Value: err})
 		// Non-fatal, continue
@@ -342,7 +385,7 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 	// Step 5: Build graph (async, non-blocking)
 	if idx.graphBuilder != nil {
 		idx.logger.Info("building knowledge graph")
-		graphResult := idx.buildGraph(ctx, filesToProcess, input.Relationships)
+		graphResult := idx.executor.buildGraph(ctx, filesToProcess, input.Relationships)
 		result.Summary["graph_nodes_created"] = graphResult.NodesCreated
 		result.Summary["graph_edges_created"] = graphResult.EdgesCreated
 
@@ -371,7 +414,7 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 	// Step 6: Generate embeddings (async, optional)
 	if idx.embedder != nil && !idx.config.SkipVectors {
 		idx.logger.Info("generating vector embeddings")
-		embedResult := idx.generateEmbeddings(ctx, filesToProcess)
+		embedResult := idx.executor.generateEmbeddings(ctx, filesToProcess)
 		result.VectorsCreated = embedResult.VectorsCreated
 
 		idx.logger.InfoWithFields("vector embeddings generated",
@@ -444,6 +487,7 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 
 // IndexWithProgress indexes with progress tracking
 func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOutput, progressChan chan<- IndexProgress) (*IndexResult, error) {
+	idx.ensureExecutor()
 	startTime := time.Now()
 
 	// Send initial progress
@@ -487,7 +531,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		}
 	}
 
-	if err := idx.writeRepository(ctx); err != nil {
+	if err := idx.executor.writeRepository(ctx); err != nil {
 		return nil, err
 	}
 
@@ -523,7 +567,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		}
 	}
 
-	writeResult, err := idx.writeData(ctx, filesToProcess, input.Relationships)
+	writeResult, err := idx.executor.writeData(ctx, filesToProcess, input.Relationships)
 	if err != nil {
 		return nil, err
 	}
@@ -548,7 +592,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 			}
 		}
 
-		graphResult := idx.buildGraph(ctx, filesToProcess, input.Relationships)
+		graphResult := idx.executor.buildGraph(ctx, filesToProcess, input.Relationships)
 		graphNodesCreated = graphResult.NodesCreated
 		graphEdgesCreated = graphResult.EdgesCreated
 
@@ -572,7 +616,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 			}
 		}
 
-		embedResult := idx.generateEmbeddings(ctx, filesToProcess)
+		embedResult := idx.executor.generateEmbeddings(ctx, filesToProcess)
 		vectorsCreated = embedResult.VectorsCreated
 
 		if progressChan != nil {
@@ -1185,6 +1229,11 @@ func (idx *Indexer) GetPerformanceStats() map[string]interface{} {
 
 // ensureExternalFile creates the special external file if it doesn't exist
 func (idx *Indexer) ensureExternalFile(ctx context.Context) error {
+	if idx.db == nil {
+		// 测试环境（db 未注入，走 fake executor）下跳过；
+		// 外部文件会在真实写入路径中按需创建。
+		return nil
+	}
 	fileRepo := models.NewFileRepository(idx.db)
 
 	// Check if external file exists
