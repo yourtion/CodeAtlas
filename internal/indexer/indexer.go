@@ -538,6 +538,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 	}
 
 	// Build graph
+	var graphNodesCreated, graphEdgesCreated int
 	if idx.graphBuilder != nil {
 		if progressChan != nil {
 			progressChan <- IndexProgress{
@@ -548,6 +549,8 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		}
 
 		graphResult := idx.buildGraph(ctx, filesToProcess, input.Relationships)
+		graphNodesCreated = graphResult.NodesCreated
+		graphEdgesCreated = graphResult.EdgesCreated
 
 		if progressChan != nil {
 			progressChan <- IndexProgress{
@@ -559,6 +562,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 	}
 
 	// Generate embeddings
+	var vectorsCreated int
 	if idx.embedder != nil && !idx.config.SkipVectors {
 		if progressChan != nil {
 			progressChan <- IndexProgress{
@@ -569,6 +573,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		}
 
 		embedResult := idx.generateEmbeddings(ctx, filesToProcess)
+		vectorsCreated = embedResult.VectorsCreated
 
 		if progressChan != nil {
 			progressChan <- IndexProgress{
@@ -589,7 +594,26 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		close(progressChan)
 	}
 
-	return idx.Index(ctx, input)
+	// 构造与 Index 等价的返回结果。
+	// 历史实现这里错误地调用了 idx.Index(ctx, input)，会把整个索引管道
+	// （写库、建图、生成 embedding）再执行一遍，导致数据重复写入。
+	// 本方法已在上文按序执行了全部阶段，这里只需汇总结果。
+	result := &IndexResult{
+		RepoID:         idx.config.RepoID,
+		Status:         "success",
+		FilesProcessed: writeResult.FilesProcessed,
+		SymbolsCreated: writeResult.SymbolsCreated,
+		NodesCreated:   writeResult.NodesCreated,
+		EdgesCreated:   writeResult.EdgesCreated,
+		VectorsCreated: vectorsCreated,
+		Duration:       time.Since(startTime),
+		Summary: map[string]interface{}{
+			"graph_nodes_created": graphNodesCreated,
+			"graph_edges_created": graphEdgesCreated,
+		},
+	}
+
+	return result, nil
 }
 
 // writeRepository writes repository metadata

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/yourtionguo/CodeAtlas/internal/schema"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
@@ -129,8 +130,13 @@ func (gb *GraphBuilder) createNodeBatch(ctx context.Context, symbols []schema.Sy
 	var errors []GraphError
 	created := 0
 
+	// 批量预加载本批 symbol 涉及的 file_id → path 映射，避免在 createNode
+	// 里逐个查询（N+1）。历史实现此处对每个 symbol 调 getFilePathFromSymbol
+	// 恒返回空串，导致图节点的 file_path 属性永远为空。
+	filePaths := gb.loadFilePaths(ctx, symbols)
+
 	for _, symbol := range symbols {
-		err := gb.createNode(ctx, symbol)
+		err := gb.createNode(ctx, symbol, filePaths)
 		if err != nil {
 			errors = append(errors, GraphError{
 				EntityType: "node",
@@ -145,15 +151,56 @@ func (gb *GraphBuilder) createNodeBatch(ctx context.Context, symbols []schema.Sy
 	return created, errors
 }
 
+// loadFilePaths 批量查询本批 symbols 的 file_id → path 映射。
+// 外部文件（ExternalFileID）直接映射到 ExternalFilePath，无需查库。
+// 查询失败时返回空映射（非致命，file_path 会留空，与历史行为一致但不再静默）。
+func (gb *GraphBuilder) loadFilePaths(ctx context.Context, symbols []schema.Symbol) map[string]string {
+	paths := make(map[string]string)
+	// 收集需要查库的唯一 file_id（排除外部文件）
+	seen := make(map[string]bool)
+	for _, s := range symbols {
+		if s.FileID == schema.ExternalFileID {
+			paths[s.FileID] = schema.ExternalFilePath
+			continue
+		}
+		if s.FileID != "" && !seen[s.FileID] {
+			seen[s.FileID] = true
+		}
+	}
+	if len(seen) == 0 {
+		return paths
+	}
+
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	query := `SELECT file_id, path FROM files WHERE file_id = ANY($1)`
+	rows, err := gb.db.QueryContext(ctx, query, pq.Array(ids))
+	if err != nil {
+		// 非致命：file_path 会留空，节点仍会创建
+		return paths
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var fileID, path string
+		if err := rows.Scan(&fileID, &path); err != nil {
+			continue
+		}
+		paths[fileID] = path
+	}
+	return paths
+}
+
 // createNode creates a single graph node for a symbol
-func (gb *GraphBuilder) createNode(ctx context.Context, symbol schema.Symbol) error {
+func (gb *GraphBuilder) createNode(ctx context.Context, symbol schema.Symbol, filePaths map[string]string) error {
 	// Map symbol kind to graph label
 	label := gb.mapSymbolKindToLabel(symbol.Kind)
 
 	// Escape single quotes in properties
 	name := escapeCypherString(symbol.Name)
 	signature := escapeCypherString(symbol.Signature)
-	filePath := escapeCypherString(getFilePathFromSymbol(symbol))
+	filePath := escapeCypherString(filePaths[symbol.FileID])
 
 	// Build Cypher query to create node
 	// AGE uses MERGE with SET for upsert behavior
@@ -451,11 +498,4 @@ func (gb *GraphBuilder) mapEdgeTypeToRelationship(edgeType schema.EdgeType) stri
 // escapeCypherString escapes single quotes in Cypher strings
 func escapeCypherString(s string) string {
 	return strings.ReplaceAll(s, "'", "\\'")
-}
-
-// getFilePathFromSymbol extracts file path from symbol (placeholder - needs actual implementation)
-func getFilePathFromSymbol(symbol schema.Symbol) string {
-	// In a real implementation, this would look up the file path from the file_id
-	// For now, return empty string as file_path will be set separately
-	return ""
 }

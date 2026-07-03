@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -78,7 +77,8 @@ type SymbolInfo struct {
 }
 
 // GetCallers handles GET /api/v1/symbols/:id/callers
-// Finds all functions that call the specified symbol using Cypher queries
+// Finds all functions that call the specified symbol via parameterized SQL.
+// (AGE Cypher 路径已停用，见方法内注释；图查询重写属于图谱主线工作。)
 func (h *RelationshipHandler) GetCallers(c *gin.Context) {
 	symbolID := c.Param("id")
 	if symbolID == "" {
@@ -106,54 +106,13 @@ func (h *RelationshipHandler) GetCallers(c *gin.Context) {
 		return
 	}
 
-	// Query using AGE Cypher to find callers
-	// This finds all symbols that have a CALLS edge pointing to this symbol
-	query := `
-		SELECT * FROM cypher('code_graph', $$
-			MATCH (caller)-[r:CALLS]->(callee)
-			WHERE callee.symbol_id = $symbol_id
-			RETURN caller.symbol_id as symbol_id, 
-			       caller.name as name,
-			       caller.kind as kind,
-			       caller.file_path as file_path,
-			       caller.signature as signature
-		$$) AS (symbol_id agtype, name agtype, kind agtype, file_path agtype, signature agtype)
-	`
-
-	rows, err := h.db.QueryContext(ctx, query)
-	if err != nil {
-		// If AGE is not available or graph doesn't exist, fall back to SQL
-		h.getCallersSQL(c, symbolID)
-		return
-	}
-	defer rows.Close()
-
-	results := make([]RelatedSymbol, 0)
-	for rows.Next() {
-		var result RelatedSymbol
-		var symbolIDAgtype, nameAgtype, kindAgtype, filePathAgtype, signatureAgtype sql.NullString
-		
-		err := rows.Scan(&symbolIDAgtype, &nameAgtype, &kindAgtype, &filePathAgtype, &signatureAgtype)
-		if err != nil {
-			continue
-		}
-
-		// Parse agtype values (they come as JSON strings)
-		result.SymbolID = parseAgtypeString(symbolIDAgtype.String)
-		result.Name = parseAgtypeString(nameAgtype.String)
-		result.Kind = parseAgtypeString(kindAgtype.String)
-		result.FilePath = parseAgtypeString(filePathAgtype.String)
-		result.Signature = parseAgtypeString(signatureAgtype.String)
-
-		results = append(results, result)
-	}
-
-	response := RelationshipResponse{
-		Symbols: results,
-		Total:   len(results),
-	}
-
-	c.JSON(http.StatusOK, response)
+	// NOTE: AGE Cypher 路径已停用。
+	// 历史实现通过 h.db.QueryContext 执行 Cypher，但查询里的 $symbol_id
+	// 是 dollar-quoted string 中的字面量，PostgreSQL 不会做参数绑定，
+	// 因此查询必然报错并触发 fallback；同时 Cypher 字符串拼接存在注入风险。
+	// 真正安全的图查询需要 AGE 1.5+ 的三参数形式 cypher(graph, $$...$$, params)，
+	// 这属于图谱主线的工作（见迭代计划），当前统一走参数化 SQL 路径。
+	h.getCallersSQL(c, symbolID)
 }
 
 // getCallersSQL is a fallback method using SQL when AGE is not available
@@ -231,52 +190,9 @@ func (h *RelationshipHandler) GetCallees(c *gin.Context) {
 		return
 	}
 
-	// Query using AGE Cypher to find callees
-	query := `
-		SELECT * FROM cypher('code_graph', $$
-			MATCH (caller)-[r:CALLS]->(callee)
-			WHERE caller.symbol_id = $symbol_id
-			RETURN callee.symbol_id as symbol_id,
-			       callee.name as name,
-			       callee.kind as kind,
-			       callee.file_path as file_path,
-			       callee.signature as signature
-		$$) AS (symbol_id agtype, name agtype, kind agtype, file_path agtype, signature agtype)
-	`
-
-	rows, err := h.db.QueryContext(ctx, query)
-	if err != nil {
-		// Fall back to SQL
-		h.getCalleesSQL(c, symbolID)
-		return
-	}
-	defer rows.Close()
-
-	results := make([]RelatedSymbol, 0)
-	for rows.Next() {
-		var result RelatedSymbol
-		var symbolIDAgtype, nameAgtype, kindAgtype, filePathAgtype, signatureAgtype sql.NullString
-		
-		err := rows.Scan(&symbolIDAgtype, &nameAgtype, &kindAgtype, &filePathAgtype, &signatureAgtype)
-		if err != nil {
-			continue
-		}
-
-		result.SymbolID = parseAgtypeString(symbolIDAgtype.String)
-		result.Name = parseAgtypeString(nameAgtype.String)
-		result.Kind = parseAgtypeString(kindAgtype.String)
-		result.FilePath = parseAgtypeString(filePathAgtype.String)
-		result.Signature = parseAgtypeString(signatureAgtype.String)
-
-		results = append(results, result)
-	}
-
-	response := RelationshipResponse{
-		Symbols: results,
-		Total:   len(results),
-	}
-
-	c.JSON(http.StatusOK, response)
+	// NOTE: AGE Cypher 路径已停用（同 GetCallers，详见其注释）。
+	// 当前统一走参数化 SQL 路径；Cypher 重写属于图谱主线工作。
+	h.getCalleesSQL(c, symbolID)
 }
 
 // getCalleesSQL is a fallback method using SQL when AGE is not available
@@ -358,55 +274,9 @@ func (h *RelationshipHandler) GetDependencies(c *gin.Context) {
 		return
 	}
 
-	// Query using AGE Cypher to find dependencies
-	query := `
-		SELECT * FROM cypher('code_graph', $$
-			MATCH (source)-[r]->(target)
-			WHERE source.symbol_id = $symbol_id
-			  AND type(r) IN ['IMPORTS', 'EXTENDS', 'IMPLEMENTS', 'REFERENCES']
-			RETURN target.symbol_id as symbol_id,
-			       target.name as name,
-			       target.kind as kind,
-			       target.file_path as file_path,
-			       target.signature as signature,
-			       type(r) as edge_type
-		$$) AS (symbol_id agtype, name agtype, kind agtype, file_path agtype, signature agtype, edge_type agtype)
-	`
-
-	rows, err := h.db.QueryContext(ctx, query)
-	if err != nil {
-		// Fall back to SQL
-		h.getDependenciesSQL(c, symbolID)
-		return
-	}
-	defer rows.Close()
-
-	results := make([]Dependency, 0)
-	for rows.Next() {
-		var dep Dependency
-		var symbolIDAgtype, nameAgtype, kindAgtype, filePathAgtype, signatureAgtype, edgeTypeAgtype sql.NullString
-		
-		err := rows.Scan(&symbolIDAgtype, &nameAgtype, &kindAgtype, &filePathAgtype, &signatureAgtype, &edgeTypeAgtype)
-		if err != nil {
-			continue
-		}
-
-		dep.SymbolID = parseAgtypeString(symbolIDAgtype.String)
-		dep.Name = parseAgtypeString(nameAgtype.String)
-		dep.Kind = parseAgtypeString(kindAgtype.String)
-		dep.FilePath = parseAgtypeString(filePathAgtype.String)
-		dep.Signature = parseAgtypeString(signatureAgtype.String)
-		dep.EdgeType = parseAgtypeString(edgeTypeAgtype.String)
-
-		results = append(results, dep)
-	}
-
-	response := DependencyResponse{
-		Dependencies: results,
-		Total:        len(results),
-	}
-
-	c.JSON(http.StatusOK, response)
+	// NOTE: AGE Cypher 路径已停用（同 GetCallers，详见其注释）。
+	// 当前统一走参数化 SQL 路径；Cypher 重写属于图谱主线工作。
+	h.getDependenciesSQL(c, symbolID)
 }
 
 // getDependenciesSQL is a fallback method using SQL when AGE is not available

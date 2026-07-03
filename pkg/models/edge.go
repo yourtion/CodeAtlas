@@ -238,8 +238,6 @@ func (r *EdgeRepository) Delete(ctx context.Context, edgeID string) error {
 
 // BatchCreate inserts multiple edges with proper foreign key handling
 func (r *EdgeRepository) BatchCreate(ctx context.Context, edges []*Edge) error {
-	fmt.Printf("DEBUG BatchCreate: received %d edges\n", len(edges))
-	
 	if len(edges) == 0 {
 		return nil
 	}
@@ -247,8 +245,8 @@ func (r *EdgeRepository) BatchCreate(ctx context.Context, edges []*Edge) error {
 	query := `
 		INSERT INTO edges (edge_id, source_id, target_id, edge_type, source_file, target_file, target_module, created_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		ON CONFLICT (edge_id) 
-		DO UPDATE SET 
+		ON CONFLICT (edge_id)
+		DO UPDATE SET
 			target_id = EXCLUDED.target_id,
 			edge_type = EXCLUDED.edge_type,
 			source_file = EXCLUDED.source_file,
@@ -258,38 +256,22 @@ func (r *EdgeRepository) BatchCreate(ctx context.Context, edges []*Edge) error {
 
 	stmt, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
-		fmt.Printf("DEBUG BatchCreate: failed to prepare statement: %v\n", err)
 		return fmt.Errorf("failed to prepare batch insert statement: %w", err)
 	}
 	defer stmt.Close()
 
 	now := time.Now()
-	insertedCount := 0
-	for i, edge := range edges {
+	for _, edge := range edges {
 		edge.CreatedAt = now
-		// Safely truncate IDs for debug output
-		edgeIDShort := edge.EdgeID
-		if len(edgeIDShort) > 8 {
-			edgeIDShort = edgeIDShort[:8]
-		}
-		sourceIDShort := edge.SourceID
-		if len(sourceIDShort) > 8 {
-			sourceIDShort = sourceIDShort[:8]
-		}
-		fmt.Printf("DEBUG BatchCreate: inserting edge %d: EdgeID=%s, SourceID=%s, TargetID=%v, EdgeType=%s\n", 
-			i, edgeIDShort, sourceIDShort, edge.TargetID, edge.EdgeType)
-		
+
 		_, err := stmt.ExecContext(ctx,
 			edge.EdgeID, edge.SourceID, edge.TargetID, edge.EdgeType,
 			edge.SourceFile, edge.TargetFile, edge.TargetModule, edge.CreatedAt)
 		if err != nil {
-			fmt.Printf("DEBUG BatchCreate: failed to insert edge %s: %v\n", edge.EdgeID, err)
 			return fmt.Errorf("failed to insert edge %s: %w", edge.EdgeID, err)
 		}
-		insertedCount++
 	}
 
-	fmt.Printf("DEBUG BatchCreate: successfully inserted %d edges\n", insertedCount)
 	return nil
 }
 
