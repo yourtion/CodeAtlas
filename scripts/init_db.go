@@ -1,3 +1,15 @@
+// CodeAtlas 数据库初始化工具。
+//
+// 连接数据库并执行 goose 迁移（真源：pkg/models/migrations/*.sql），
+// 随后进行健康检查并可选地打印统计信息。
+//
+// 用法：
+//
+//	go run scripts/init_db.go [-stats]
+//
+// 历史版本曾提供 -create-vector-index 标志手动创建 IVFFlat 索引；
+// 向量索引现已由迁移 20260101000002_vector_hnsw.sql 以 HNSW 方式创建，
+// 该标志已移除。
 package main
 
 import (
@@ -14,8 +26,6 @@ func main() {
 	// Parse command line flags
 	maxRetries := flag.Int("max-retries", 10, "Maximum number of connection retries")
 	retryDelay := flag.Int("retry-delay", 2, "Delay between retries in seconds")
-	createVectorIndex := flag.Bool("create-vector-index", false, "Create vector similarity index")
-	vectorIndexLists := flag.Int("vector-index-lists", 100, "Number of lists for IVFFlat vector index")
 	showStats := flag.Bool("stats", false, "Show database statistics")
 	flag.Parse()
 
@@ -33,8 +43,8 @@ func main() {
 	sm := models.NewSchemaManager(db)
 	ctx := context.Background()
 
-	// Initialize schema
-	log.Println("Initializing database schema...")
+	// Initialize schema (executes goose migrations)
+	log.Println("Initializing database schema (running goose migrations)...")
 	if err := sm.InitializeSchema(ctx); err != nil {
 		log.Fatalf("Failed to initialize schema: %v", err)
 	}
@@ -45,14 +55,6 @@ func main() {
 		log.Printf("Warning: failed to get schema version: %v", err)
 	} else {
 		log.Printf("Schema version: %s", version)
-	}
-
-	// Create vector index if requested
-	if *createVectorIndex {
-		log.Println("Creating vector similarity index...")
-		if err := sm.CreateVectorIndex(ctx, *vectorIndexLists); err != nil {
-			log.Fatalf("Failed to create vector index: %v", err)
-		}
 	}
 
 	// Run health check

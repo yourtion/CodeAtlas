@@ -25,34 +25,13 @@ go run scripts/init_db.go -create-vector-index -vector-index-lists 100
 **参数：**
 - `-max-retries`: 最大重试次数（默认 10）
 - `-retry-delay`: 重试延迟秒数（默认 2）
-- `-create-vector-index`: 创建向量相似度索引
-- `-vector-index-lists`: IVFFlat 索引的列表数（默认 100）
 - `-stats`: 显示数据库统计信息
 
-#### alter_vector_dimension.go - 向量维度管理
-
-更改向量表的维度以支持不同的嵌入模型。
-
-```bash
-# 通过 Makefile（推荐）
-make alter-vector-dimension VECTOR_DIM=1536
-make alter-vector-dimension-force VECTOR_DIM=768
-
-# 直接运行
-go run scripts/alter_vector_dimension.go -dimension 1536
-go run scripts/alter_vector_dimension.go -dimension 768 -force
-```
-
-**参数：**
-- `-dimension`: 新的向量维度（必需）
-- `-force`: 强制更改（清空 vectors 表）
-- `-dry-run`: 显示将执行的操作但不实际执行
-
-**常用维度：**
-- 768: nomic-embed-text
-- 1024: text-embedding-qwen3-embedding-0.6b
-- 1536: text-embedding-3-small (OpenAI)
-- 3072: text-embedding-3-large (OpenAI)
+> **注意：** 向量相似度索引（HNSW）与向量维度变更现在通过 goose 迁移管理
+> （`pkg/models/migrations/`），不再由本工具的 `-create-vector-index` 标志负责。
+> 如需切换嵌入维度，请新增一个迁移文件执行
+> `ALTER TABLE vectors ALTER COLUMN embedding TYPE vector(<dim>)`，
+> 并同步更新 `.env` 的 `EMBEDDING_DIMENSIONS`。
 
 ### 🧪 测试相关
 

@@ -1,30 +1,26 @@
--- CodeAtlas Knowledge Graph Database Schema
--- Migration: 01_init_schema
--- Description: Initial database schema with all core tables, extensions, and indexes
--- Version: 1.0.0
+-- CodeAtlas 初始数据库 Schema
+-- 合并自原 docker/initdb 与 deployments/migrations 两套并行定义，统一为唯一真源。
+-- 由 goose 嵌入二进制执行（pkg/models/migrations.go），goose 自动维护 goose_db_version 表。
+
+-- +goose Up
 
 -- ============================================================================
--- EXTENSIONS
+-- 扩展
 -- ============================================================================
 
--- Enable pgvector for semantic search
 CREATE EXTENSION IF NOT EXISTS vector;
-
--- Enable Apache AGE for graph database capabilities
 CREATE EXTENSION IF NOT EXISTS age;
 
--- Load AGE into search path
 LOAD 'age';
 SET search_path = ag_catalog, "$user", public;
 
 -- ============================================================================
--- CORE TABLES
+-- 核心表
 -- ============================================================================
 
--- Reset search path to create tables in public schema
 SET search_path = public, ag_catalog, "$user";
 
--- Repositories table
+-- repositories: 仓库元数据
 CREATE TABLE IF NOT EXISTS repositories (
     repo_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
@@ -40,7 +36,7 @@ CREATE TABLE IF NOT EXISTS repositories (
 CREATE INDEX IF NOT EXISTS idx_repositories_name ON repositories(name);
 CREATE INDEX IF NOT EXISTS idx_repositories_commit ON repositories(commit_hash);
 
--- Files table
+-- files: 源代码文件（checksum 用于增量索引）
 CREATE TABLE IF NOT EXISTS files (
     file_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     repo_id UUID NOT NULL REFERENCES repositories(repo_id) ON DELETE CASCADE,
@@ -58,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_files_checksum ON files(checksum);
 CREATE INDEX IF NOT EXISTS idx_files_language ON files(language);
 CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
 
--- Symbols table
+-- symbols: 代码符号（函数、类、变量等）
 CREATE TABLE IF NOT EXISTS symbols (
     symbol_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     file_id UUID NOT NULL REFERENCES files(file_id) ON DELETE CASCADE,
@@ -79,8 +75,9 @@ CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
 CREATE INDEX IF NOT EXISTS idx_symbols_location ON symbols(file_id, start_line, end_line);
+CREATE INDEX IF NOT EXISTS idx_symbols_file_kind ON symbols(file_id, kind);
 
--- AST Nodes table
+-- ast_nodes: 完整语法树
 CREATE TABLE IF NOT EXISTS ast_nodes (
     node_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     file_id UUID NOT NULL REFERENCES files(file_id) ON DELETE CASCADE,
@@ -100,7 +97,9 @@ CREATE INDEX IF NOT EXISTS idx_ast_nodes_parent ON ast_nodes(parent_id);
 CREATE INDEX IF NOT EXISTS idx_ast_nodes_type ON ast_nodes(type);
 CREATE INDEX IF NOT EXISTS idx_ast_nodes_location ON ast_nodes(file_id, start_line, end_line);
 
--- Dependency Edges table
+-- edges: 关系边（call, import, extends, implements）
+-- 注意：target_id 使用 ON DELETE SET NULL（保留边的 source 记录，便于追溯调用方），
+-- 此前 Go 内联 schema 误用 CASCADE，会丢失调用关系历史。
 CREATE TABLE IF NOT EXISTS edges (
     edge_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_id UUID NOT NULL REFERENCES symbols(symbol_id) ON DELETE CASCADE,
@@ -118,14 +117,15 @@ CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id);
 CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
 CREATE INDEX IF NOT EXISTS idx_edges_source_type ON edges(source_id, edge_type);
 CREATE INDEX IF NOT EXISTS idx_edges_target_type ON edges(target_id, edge_type);
+CREATE INDEX IF NOT EXISTS idx_edges_source_target ON edges(source_id, target_id);
 
 -- ============================================================================
--- VECTOR STORAGE TABLES
+-- 向量与摘要存储
 -- ============================================================================
 
--- Vectors table for semantic embeddings
--- Using 1024 dimensions to match default embedder (text-embedding-qwen3-embedding-0.6b)
--- Adjust if using different models: nomic-embed-text (768), text-embedding-3-small (1536)
+-- vectors: 语义嵌入向量（pgvector）
+-- 维度固定为 1024，匹配默认嵌入模型 text-embedding-qwen3-embedding-0.6b。
+-- 如需切换维度（如 nomic-embed-text 768），应编写新的 ALTER 迁移，不在此处参数化。
 CREATE TABLE IF NOT EXISTS vectors (
     vector_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_id UUID NOT NULL,
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS vectors (
 CREATE INDEX IF NOT EXISTS idx_vectors_entity ON vectors(entity_id, entity_type);
 CREATE INDEX IF NOT EXISTS idx_vectors_model ON vectors(model);
 
--- Docstrings table
+-- docstrings: 符号文档字符串
 CREATE TABLE IF NOT EXISTS docstrings (
     doc_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     symbol_id UUID NOT NULL REFERENCES symbols(symbol_id) ON DELETE CASCADE,
@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS docstrings (
 
 CREATE INDEX IF NOT EXISTS idx_docstrings_symbol ON docstrings(symbol_id);
 
--- Summaries table
+-- summaries: 实体摘要（部分索引用于带 docstring 的查询优化）
 CREATE TABLE IF NOT EXISTS summaries (
     summary_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_id UUID NOT NULL,
@@ -164,19 +164,23 @@ CREATE TABLE IF NOT EXISTS summaries (
 
 CREATE INDEX IF NOT EXISTS idx_summaries_entity ON summaries(entity_id, entity_type);
 CREATE INDEX IF NOT EXISTS idx_summaries_type ON summaries(summary_type);
+CREATE INDEX IF NOT EXISTS idx_symbols_with_docstring ON symbols(docstring) WHERE docstring IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_edges_with_target ON edges(target_id) WHERE target_id IS NOT NULL;
+
+-- 文件路径前缀搜索
+CREATE INDEX IF NOT EXISTS idx_files_path_prefix ON files(path text_pattern_ops);
 
 -- ============================================================================
--- AGE GRAPH SCHEMA
+-- AGE 图
 -- ============================================================================
 
--- Create the code graph if it doesn't exist
 SELECT * FROM ag_catalog.create_graph('code_graph');
 
 -- ============================================================================
--- HELPER FUNCTIONS
+-- updated_at 触发器（DB 为真源，应用层不再赋值）
 -- ============================================================================
 
--- Function to update the updated_at timestamp
+-- +goose StatementBegin
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -184,8 +188,8 @@ BEGIN
     RETURN NEW;
 END;
 $$ language 'plpgsql';
+-- +goose StatementEnd
 
--- Add triggers for updated_at columns
 DROP TRIGGER IF EXISTS update_repositories_updated_at ON repositories;
 CREATE TRIGGER update_repositories_updated_at BEFORE UPDATE ON repositories
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -195,12 +199,11 @@ CREATE TRIGGER update_files_updated_at BEFORE UPDATE ON files
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
--- VIEWS FOR COMMON QUERIES
+-- 视图
 -- ============================================================================
 
--- View for symbols with file information
 CREATE OR REPLACE VIEW symbols_with_files AS
-SELECT 
+SELECT
     s.symbol_id,
     s.name,
     s.kind,
@@ -217,9 +220,8 @@ FROM symbols s
 JOIN files f ON s.file_id = f.file_id
 JOIN repositories r ON f.repo_id = r.repo_id;
 
--- View for edges with symbol details
 CREATE OR REPLACE VIEW edges_with_symbols AS
-SELECT 
+SELECT
     e.edge_id,
     e.edge_type,
     e.source_file,
@@ -237,29 +239,39 @@ JOIN symbols s1 ON e.source_id = s1.symbol_id
 LEFT JOIN symbols s2 ON e.target_id = s2.symbol_id;
 
 -- ============================================================================
--- MIGRATION TRACKING
+-- 授权（应用用户 codeatlas）
 -- ============================================================================
 
--- Create migrations table to track applied migrations
-CREATE TABLE IF NOT EXISTS schema_migrations (
-    version VARCHAR(50) PRIMARY KEY,
-    description TEXT,
-    applied_at TIMESTAMP DEFAULT NOW()
-);
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO codeatlas;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO codeatlas;
+GRANT USAGE ON SCHEMA ag_catalog TO codeatlas;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ag_catalog TO codeatlas;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ag_catalog TO codeatlas;
 
--- Record this migration
-INSERT INTO schema_migrations (version, description)
-VALUES ('01_init_schema', 'Initial database schema with all core tables, extensions, and indexes')
-ON CONFLICT (version) DO NOTHING;
+-- 更新表统计信息，便于查询规划器
+ANALYZE repositories;
+ANALYZE files;
+ANALYZE symbols;
+ANALYZE ast_nodes;
+ANALYZE edges;
+ANALYZE vectors;
+ANALYZE docstrings;
+ANALYZE summaries;
 
--- ============================================================================
--- COMPLETION
--- ============================================================================
 
-DO $$
-BEGIN
-    RAISE NOTICE 'Migration 01_init_schema completed successfully';
-    RAISE NOTICE 'Extensions: pgvector, age';
-    RAISE NOTICE 'Tables: repositories, files, symbols, ast_nodes, edges, vectors, docstrings, summaries';
-    RAISE NOTICE 'Graph: code_graph';
-END $$;
+-- +goose Down
+
+DROP VIEW IF EXISTS edges_with_symbols;
+DROP VIEW IF EXISTS symbols_with_files;
+DROP TRIGGER IF EXISTS update_files_updated_at ON files;
+DROP TRIGGER IF EXISTS update_repositories_updated_at ON repositories;
+DROP FUNCTION IF EXISTS update_updated_at_column();
+
+DROP TABLE IF EXISTS summaries;
+DROP TABLE IF EXISTS docstrings;
+DROP TABLE IF EXISTS vectors;
+DROP TABLE IF EXISTS edges;
+DROP TABLE IF EXISTS ast_nodes;
+DROP TABLE IF EXISTS symbols;
+DROP TABLE IF EXISTS files;
+DROP TABLE IF EXISTS repositories;
