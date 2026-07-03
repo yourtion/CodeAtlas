@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/yourtionguo/CodeAtlas/internal/indexer"
+	"github.com/yourtionguo/CodeAtlas/internal/search"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
@@ -115,62 +116,54 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		return
 	}
 
-	// Fetch symbol details and apply additional filters
-	results := make([]SearchResult, 0)
+	// 收集候选结果：向量检索结果 + 符号/文件详情。
+	// NOTE: 过滤逻辑已抽出到 internal/search.InMemoryFilter，调用点集中于此。
+	// 下一站检索质量优化时，把过滤下沉到 SQL（在 SimilaritySearchWithFilters
+	// 阶段就应用 kind/language/repo 条件），此处改用 search.SQLFilter 即可，
+	// 无需改动 handler。
+	candidates := make([]search.Candidate, 0, len(vectorResults))
 	for _, vr := range vectorResults {
-		// Get symbol details
 		symbol, err := h.symbolRepo.GetByID(ctx, vr.EntityID)
-		if err != nil {
-			continue // Skip on error
-		}
-		if symbol == nil {
+		if err != nil || symbol == nil {
 			continue
 		}
-
-		// Apply kind filter
-		if len(req.Kind) > 0 {
-			kindMatch := false
-			for _, k := range req.Kind {
-				if symbol.Kind == k {
-					kindMatch = true
-					break
-				}
-			}
-			if !kindMatch {
-				continue
-			}
-		}
-
-		// Get file details for path and language filter
 		file, err := h.fileRepo.GetByID(ctx, symbol.FileID)
-		if err != nil {
+		if err != nil || file == nil {
 			continue
 		}
-		if file == nil {
-			continue
-		}
-
-		// Apply repo filter
-		if req.RepoID != "" && file.RepoID != req.RepoID {
-			continue
-		}
-
-		// Apply language filter
-		if req.Language != "" && file.Language != req.Language {
-			continue
-		}
-
-		// Build result
-		result := SearchResult{
+		candidates = append(candidates, search.Candidate{
 			SymbolID:   symbol.SymbolID,
 			Name:       symbol.Name,
 			Kind:       symbol.Kind,
 			Signature:  symbol.Signature,
 			FilePath:   file.Path,
+			Language:   file.Language,
+			RepoID:     file.RepoID,
 			Docstring:  symbol.Docstring,
 			Similarity: vr.Similarity,
-		}
-		results = append(results, result)
+		})
+	}
+
+	// 应用过滤（当前为内存实现，行为与原内联逻辑一致）
+	filter := search.NewInMemoryFilter(search.FilterCriteria{
+		Kind:     req.Kind,
+		Language: req.Language,
+		RepoID:   req.RepoID,
+	})
+	filtered := filter.Filter(candidates)
+
+	// 转换为响应类型
+	results := make([]SearchResult, 0, len(filtered))
+	for _, c := range filtered {
+		results = append(results, SearchResult{
+			SymbolID:   c.SymbolID,
+			Name:       c.Name,
+			Kind:       c.Kind,
+			Signature:  c.Signature,
+			FilePath:   c.FilePath,
+			Docstring:  c.Docstring,
+			Similarity: c.Similarity,
+		})
 	}
 
 	response := SearchResponse{

@@ -29,6 +29,63 @@ type Embedder interface {
 	BatchEmbed(ctx context.Context, texts []string) ([][]float32, error)
 }
 
+// EmbeddingInput 是单个待嵌入单元，由 Chunker 产出。
+// 一个 symbol 可被切分为多个 chunk（多粒度 embedding），每个 chunk
+// 携带归属的 entity_id（默认为 symbol_id）与 chunk_index。
+type EmbeddingInput struct {
+	EntityID   string
+	Content    string
+	ChunkIndex int
+}
+
+// Chunker 把符号切分为待嵌入的文本单元。
+//
+// 当前唯一实现 SymbolChunker 维持原有"逐 symbol 单向量"行为；
+// 下一站检索质量优化可新增 MultiGranularityChunker（按文件/按代码块），
+// 通过 SetChunker 注入，无需改动 EmbedSymbols 主流程。
+type Chunker interface {
+	// Chunk 将符号转换为待嵌入输入列表。
+	// 返回空 content 的项应被跳过（与原 buildSymbolContent 行为一致）。
+	Chunk(symbols []schema.Symbol) []EmbeddingInput
+}
+
+// SymbolChunker 是默认实现：每个有内容的 symbol 产出一条 EmbeddingInput，
+// 内容由 signature/docstring/semantic_summary 拼接（与原 buildSymbolContent 一致）。
+type SymbolChunker struct{}
+
+// Chunk 实现 Chunker 接口。
+func (SymbolChunker) Chunk(symbols []schema.Symbol) []EmbeddingInput {
+	out := make([]EmbeddingInput, 0, len(symbols))
+	for _, s := range symbols {
+		content := buildSymbolContent(s)
+		if content == "" {
+			continue
+		}
+		out = append(out, EmbeddingInput{
+			EntityID:   s.SymbolID,
+			Content:    content,
+			ChunkIndex: 0,
+		})
+	}
+	return out
+}
+
+// buildSymbolContent constructs content for embedding from symbol.
+// 从 OpenAIEmbedder 方法提取为包级函数，供 SymbolChunker 复用。
+func buildSymbolContent(symbol schema.Symbol) string {
+	var parts []string
+	if symbol.Signature != "" {
+		parts = append(parts, symbol.Signature)
+	}
+	if symbol.Docstring != "" {
+		parts = append(parts, symbol.Docstring)
+	}
+	if symbol.SemanticSummary != "" {
+		parts = append(parts, symbol.SemanticSummary)
+	}
+	return strings.Join(parts, "\n")
+}
+
 // EmbedderConfig contains configuration options for the embedder
 type EmbedderConfig struct {
 	// Backend type: "openai" or "local"
@@ -87,6 +144,7 @@ type OpenAIEmbedder struct {
 	httpClient  *http.Client
 	vectorRepo  *models.VectorRepository
 	rateLimiter *rateLimiter
+	chunker     Chunker
 	mu          sync.Mutex
 }
 
@@ -103,6 +161,17 @@ func NewOpenAIEmbedder(config *EmbedderConfig, vectorRepo *models.VectorReposito
 		},
 		vectorRepo:  vectorRepo,
 		rateLimiter: newRateLimiter(config.MaxRequestsPerSecond),
+		chunker:     SymbolChunker{},
+	}
+}
+
+// SetChunker 替换符号切分策略，仅供检索质量优化时注入多粒度实现。
+// 传入 nil 等价于恢复默认 SymbolChunker。
+func (e *OpenAIEmbedder) SetChunker(c Chunker) {
+	if c == nil {
+		e.chunker = SymbolChunker{}
+	} else {
+		e.chunker = c
 	}
 }
 
@@ -210,38 +279,34 @@ func (e *OpenAIEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symb
 		return result, nil
 	}
 
-	// Filter symbols that need embeddings (have docstrings or semantic summaries)
-	var symbolsToEmbed []schema.Symbol
-	var contents []string
-	for _, symbol := range symbols {
-		content := e.buildSymbolContent(symbol)
-		if content != "" {
-			symbolsToEmbed = append(symbolsToEmbed, symbol)
-			contents = append(contents, content)
-		}
-	}
-
-	if len(symbolsToEmbed) == 0 {
+	// 通过 Chunker 把符号切分为待嵌入单元。
+	// 默认 SymbolChunker 维持原"逐 symbol 单向量"行为；
+	// 下一站可通过 SetChunker 注入多粒度实现。
+	inputs := e.chunker.Chunk(symbols)
+	if len(inputs) == 0 {
 		return result, nil
 	}
 
 	// Process in batches
-	for i := 0; i < len(symbolsToEmbed); i += e.config.BatchSize {
+	for i := 0; i < len(inputs); i += e.config.BatchSize {
 		end := i + e.config.BatchSize
-		if end > len(symbolsToEmbed) {
-			end = len(symbolsToEmbed)
+		if end > len(inputs) {
+			end = len(inputs)
 		}
 
-		batchSymbols := symbolsToEmbed[i:end]
-		batchContents := contents[i:end]
+		batch := inputs[i:end]
+		batchContents := make([]string, len(batch))
+		for k, in := range batch {
+			batchContents[k] = in.Content
+		}
 
 		// Generate embeddings for batch
 		embeddings, err := e.BatchEmbed(ctx, batchContents)
 		if err != nil {
 			// Log error but continue with other batches
-			for _, symbol := range batchSymbols {
+			for _, in := range batch {
 				result.Errors = append(result.Errors, EmbedError{
-					EntityID: symbol.SymbolID,
+					EntityID: in.EntityID,
 					Message:  fmt.Sprintf("failed to generate embedding: %v", err),
 				})
 			}
@@ -252,7 +317,7 @@ func (e *OpenAIEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symb
 		for j, embedding := range embeddings {
 			if len(embedding) != e.config.Dimensions {
 				result.Errors = append(result.Errors, EmbedError{
-					EntityID: batchSymbols[j].SymbolID,
+					EntityID: batch[j].EntityID,
 					Message:  fmt.Sprintf("invalid embedding dimensions: expected %d, got %d", e.config.Dimensions, len(embedding)),
 				})
 				continue
@@ -261,18 +326,18 @@ func (e *OpenAIEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symb
 			// Store embedding
 			vector := &models.Vector{
 				VectorID:   uuid.New().String(),
-				EntityID:   batchSymbols[j].SymbolID,
+				EntityID:   batch[j].EntityID,
 				EntityType: "symbol",
 				Embedding:  embedding,
-				Content:    batchContents[j],
+				Content:    batch[j].Content,
 				Model:      e.config.Model,
-				ChunkIndex: 0,
+				ChunkIndex: batch[j].ChunkIndex,
 			}
 
 			err := e.vectorRepo.Create(ctx, vector)
 			if err != nil {
 				result.Errors = append(result.Errors, EmbedError{
-					EntityID: batchSymbols[j].SymbolID,
+					EntityID: batch[j].EntityID,
 					Message:  fmt.Sprintf("failed to store embedding: %v", err),
 				})
 			} else {
@@ -283,28 +348,6 @@ func (e *OpenAIEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symb
 
 	result.Duration = time.Since(startTime)
 	return result, nil
-}
-
-// buildSymbolContent constructs content for embedding from symbol
-func (e *OpenAIEmbedder) buildSymbolContent(symbol schema.Symbol) string {
-	var parts []string
-
-	// Add signature
-	if symbol.Signature != "" {
-		parts = append(parts, symbol.Signature)
-	}
-
-	// Add docstring
-	if symbol.Docstring != "" {
-		parts = append(parts, symbol.Docstring)
-	}
-
-	// Add semantic summary
-	if symbol.SemanticSummary != "" {
-		parts = append(parts, symbol.SemanticSummary)
-	}
-
-	return strings.Join(parts, "\n")
 }
 
 // callEmbeddingAPI makes the actual API call to generate embeddings
