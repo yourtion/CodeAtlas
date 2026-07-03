@@ -1,5 +1,6 @@
 docker/pgdata
 node_modules
+.kiro
 
 # Test coverage
 *.out

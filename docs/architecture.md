@@ -2,6 +2,21 @@
 
 > CodeAtlas 系统架构和设计决策
 
+## 目录
+
+- [系统概述](#系统概述)
+- [架构图](#架构图)
+- [核心组件](#核心组件)
+- [索引管道](#索引管道)
+- [数据流](#数据流)
+- [技术栈](#技术栈)
+- [部署架构](#部署架构)
+- [关键架构决策](#关键架构决策)
+- [实现状态](#实现状态)
+- [未来规划](#未来规划)
+
+---
+
 ## 系统概述
 
 CodeAtlas 是一个智能代码知识图谱平台，结合了：
@@ -10,20 +25,36 @@ CodeAtlas 是一个智能代码知识图谱平台，结合了：
 - **向量检索**：pgvector 语义搜索
 - **图查询**：PostgreSQL AGE 关系遍历
 
+### 核心能力
+
+| 功能 | 描述 | 状态 |
+|------|------|------|
+| **多语言解析** | 支持 9 种编程语言的精确语法解析 | ✅ 已实现 |
+| **语义检索** | 基于向量的自然语言代码搜索 | ✅ 已实现 |
+| **关系查询** | 调用图、继承链、依赖关系分析 | ✅ 已实现 |
+| **跨语言分析** | 自动检测跨语言调用关系 | ✅ 已实现 |
+| **增量索引** | 基于校验和的智能增量更新 | ✅ 已实现 |
+
+---
+
 ## 架构图
+
+### 系统架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         用户层                               │
 ├─────────────┬─────────────┬─────────────┬──────────────────┤
 │   CLI 工具   │   Web UI    │  REST API   │   第三方集成      │
+│   ✅ 已实现   │   ✅ 已实现  │  ✅ 已实现   │     🚧 计划中     │
 └─────────────┴─────────────┴─────────────┴──────────────────┘
                               │
 ┌─────────────────────────────┼─────────────────────────────┐
 │                         API 层                              │
 ├─────────────────────────────┴─────────────────────────────┤
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │  仓库管理 │  │  代码搜索 │  │  关系查询 │  │  索引管理 │  │
+│  │ 仓库管理  │  │ 代码搜索  │  │ 关系查询  │  │ 索引管理  │  │
+│  │ ✅ 已实现 │  │ ✅ 已实现 │  │ ✅ 已实现 │  │ ✅ 已实现 │  │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
 └───────────────────────────────────────────────────────────┘
                               │
@@ -31,8 +62,14 @@ CodeAtlas 是一个智能代码知识图谱平台，结合了：
 │                         服务层                              │
 ├─────────────────────────────┴─────────────────────────────┤
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │ 解析引擎  │  │ 图服务   │  │ 检索服务  │  │ QA 引擎  │  │
+│  │ 解析引擎  │  │ 索引管道  │  │ 嵌入服务  │  │ 图构建器  │  │
+│  │ ✅ 已实现 │  │ ✅ 已实现 │  │ ✅ 已实现 │  │ ✅ 已实现 │  │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
+│                                                               │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                   │
+│  │ 检索服务  │  │  图服务   │  │ QA 引擎  │                   │
+│  │ ❌ 未实现 │  │ ❌ 未实现│  │ ❌ 未实现 │                   │
+│  └──────────┘  └──────────┘  └──────────┘                   │
 └───────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────┼─────────────────────────────┐
@@ -41,20 +78,79 @@ CodeAtlas 是一个智能代码知识图谱平台，结合了：
 │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐ │
 │  │ PostgreSQL   │  │  pgvector    │  │  PostgreSQL AGE │ │
 │  │ (关系数据)    │  │  (向量检索)   │  │  (图查询)        │ │
+│  │ ✅ 已实现     │  │  ✅ 已实现    │  │  🚧 部分实现     │ │
 │  └──────────────┘  └──────────────┘  └─────────────────┘ │
 └───────────────────────────────────────────────────────────┘
+
+图例：
+✅ 已实现  🚧 部分实现/计划中  ❌ 未实现/待开发
 ```
+
+### 模块依赖图
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      cmd/                                │
+│  ┌────────────┐         ┌────────────┐                 │
+│  │    api     │         │    cli     │                 │
+│  │  (服务器)   │         │  (CLI工具)  │                 │
+│  └──────┬─────┘         └──────┬─────┘                 │
+└─────────┼──────────────────────┼───────────────────────┘
+          │                      │
+          ▼                      ▼
+┌─────────────────────────────────────────────────────────┐
+│                    internal/                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │    api   │  │  parser  │  │ indexer  │             │
+│  │ (API服务) │  │ (解析器)  │  │ (索引器)  │             │
+│  └─────┬────┘  └─────┬────┘  └─────┬────┘             │
+│        │             │              │                   │
+│  ┌─────┴────┐  ┌─────┴────┐  ┌─────┴────┐             │
+│  │ handler  │  │ treesitter│ │validator │             │
+│  │middleware│  │  scanner  │ │  writer  │             │
+│  └──────────┘  └──────────┘  │ embedder │             │
+│                               │ graph    │             │
+│                               └──────────┘             │
+│                                                           │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │   schema │  │  config  │  │  utils   │             │
+│  │ (数据结构) │  │ (配置管理) │  │ (工具函数) │             │
+│  └──────────┘  └──────────┘  └──────────┘             │
+│                                                           │
+│  ⚠️  以下模块目录存在但未实现：                            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │ retrieval│  │   graph  │  │    qa    │             │
+│  │ ❌ 未实现│  │ ❌ 未实现│  │ ❌ 未实现│             │
+│  └──────────┘  └──────────┘  └──────────┘             │
+└─────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────┐
+│                      pkg/                                │
+│  ┌──────────────────────────────────────────┐          │
+│  │              models/                      │          │
+│  │  (数据库模型、仓库、事务管理)              │          │
+│  └──────────────────────────────────────────┘          │
+│  ┌──────────────────────────────────────────┐          │
+│  │              utils/                       │          │
+│  │  (工具函数、辅助方法)                      │          │
+│  └──────────────────────────────────────────┘          │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
 
 ## 核心组件
 
-### 1. CLI 工具
+### 1. CLI 工具 (`cmd/cli/`)
 
 **职责**：本地代码解析和上传
 
 **主要功能**：
-- 代码解析（parse 命令）
-- 索引上传（index 命令）
-- 增量更新
+- 代码解析（`parse` 命令）
+- 索引上传（`index` 命令）
+- 仓库上传（`upload` 命令）
+- 代码搜索（`search` 命令）
 
 **技术栈**：
 - Go 1.25+
@@ -63,543 +159,561 @@ CodeAtlas 是一个智能代码知识图谱平台，结合了：
 
 **工作流程**：
 ```
-1. 扫描文件系统
-2. 过滤文件（语言、忽略规则）
-3. 并发解析文件
-4. 生成 JSON 输出
-5. 上传到 API 服务器
+1. 扫描文件系统 → Scanner
+2. 过滤文件（语言、忽略规则） → Ignore Rules
+3. 并发解析文件 → Parser Pool
+4. 生成 ParseOutput → Schema
+5. 上传到 API 服务器 → HTTP Client
 ```
 
-### 2. 解析引擎
+### 2. API 服务 (`internal/api/`)
+
+**职责**：REST API 服务和业务逻辑
+
+**主要功能**：
+- 仓库索引（`POST /api/v1/index`）
+- 代码搜索（`POST /api/v1/search`）
+- 关系查询（`GET /api/v1/symbols/:id/*`）
+- 仓库管理（CRUD）
+
+**技术栈**：
+- Gin (Web 框架)
+- pgx (PostgreSQL 驱动)
+
+**架构组件**：
+- `server.go` - 服务器配置和路由
+- `handlers/` - 请求处理器
+  - `index_handler.go` - 索引处理
+  - `search_handler.go` - 搜索处理
+  - `repository_handler.go` - 仓库管理
+  - `relationship_handler.go` - 关系查询
+- `middleware/` - 中间件
+  - `auth.go` - 认证
+  - `cors.go` - 跨域
+  - `logging.go` - 日志
+
+**详细文档**：[API 服务架构](../internal/api/README.md)
+
+### 3. 解析引擎 (`internal/parser/`)
 
 **职责**：代码静态分析和 AST 提取
 
 **支持语言**：
-- Go, JavaScript, TypeScript
-- Python, Java, Kotlin
-- Swift, Objective-C, C, C++
 
-**解析器架构**：
+| 语言 | 解析器 | 文件扩展名 | 跨语言检测 |
+|------|--------|------------|------------|
+| Go | `go_parser.go` | `.go` | - |
+| JavaScript/TypeScript | `js_parser.go` | `.js`, `.ts`, `.jsx`, `.tsx` | TS → JS |
+| Python | `python_parser.go` | `.py` | - |
+| Kotlin | `kotlin_parser.go` | `.kt`, `.kts` | Kotlin → Java |
+| Java | `java_parser.go` | `.java` | - |
+| Swift | `swift_parser.go` | `.swift` | Swift → Objective-C |
+| Objective-C | `objc_parser.go` | `.m`, `.h` | - |
+| C | `c_parser.go` | `.c`, `.h` (C) | - |
+| C++ | `cpp_parser.go` | `.cpp`, `.cc`, `.cxx`, `.hpp`, `.hh`, `.hxx` | C++ → C |
 
+**核心组件**：
+- `treesitter.go` - Tree-sitter 封装
+- `scanner.go` - 文件扫描器
+- `*_parser.go` - 各语言解析器
+- `ignore.go` - 忽略规则
+
+**解析器接口**：
 ```go
-// 解析器接口
 type Parser interface {
-    Parse(content []byte) (*ParseResult, error)
+    Parse(file ScannedFile) (*ParsedFile, error)
     Language() string
 }
-
-// 解析结果
-type ParseResult struct {
-    Files         []File
-    Symbols       []Symbol
-    Relationships []Relationship
-    Metadata      Metadata
-}
 ```
 
-**关键特性**：
-- Tree-sitter 精确解析
-- 增量解析支持
-- 错误恢复机制
-- 跨语言调用分析
+**详细文档**：[解析器开发指南](../docs/development/parsers.md)
 
-**示例：Go 解析器**
+### 4. 索引管道 (`internal/indexer/`)
 
+**职责**：编排数据写入、图构建和向量生成
+
+**索引流程**：
+```
+ParseOutput → Validator → Writer → HeaderImplAssociator
+                                           ↓
+                                     GraphBuilder
+                                           ↓
+                                      Embedder
+```
+
+**核心组件**：
+- `indexer.go` - 索引编排器
+- `validator.go` - 数据验证
+- `writer.go` - 数据库写入
+- `graph_builder.go` - 图构建
+- `embedder.go` - 向量嵌入
+- `stream_processor.go` - 流式处理
+- `batch_optimizer.go` - 批处理优化
+- `header_impl.go` - 头文件关联
+
+**配置选项**：
 ```go
-type GoParser struct {
-    parser *sitter.Parser
-}
-
-func (p *GoParser) Parse(content []byte) (*ParseResult, error) {
-    // 1. 解析 AST
-    tree := p.parser.Parse(nil, content)
-    
-    // 2. 提取符号
-    symbols := p.extractSymbols(tree.RootNode(), content)
-    
-    // 3. 提取关系
-    relationships := p.extractRelationships(tree.RootNode(), content)
-    
-    return &ParseResult{
-        Symbols:       symbols,
-        Relationships: relationships,
-    }, nil
+type IndexerConfig struct {
+    RepoID          string
+    RepoName        string
+    BatchSize       int  // 默认 100
+    WorkerCount     int  // 默认 4
+    SkipVectors     bool
+    Incremental     bool
+    UseTransactions bool
+    GraphName       string
 }
 ```
 
-### 3. API 服务
+**性能优化**：
+- 批量处理（可配置批次大小）
+- 工作池并发（可配置工作线程数）
+- 流式处理（处理大型 AST）
+- 自适应批处理（根据延迟调整）
+- 内存压力监控
 
-**职责**：提供 RESTful API
+### 5. Schema (`internal/schema/`)
+
+**职责**：内部数据表示
+
+**核心结构**：
+- `parse_output.go` - 解析输出
+- `file.go` - 文件模型
+- `symbol.go` - 符号模型
+- `edge.go` - 边模型
+
+### 6. 数据模型层 (`pkg/models/`)
+
+**职责**：数据库访问抽象
+
+**核心仓库**：
+- `RepositoryRepository` - 仓库管理
+- `FileRepository` - 文件管理
+- `SymbolRepository` - 符号管理
+- `EdgeRepository` - 边管理
+- `VectorRepository` - 向量管理
 
 **技术栈**：
-- Gin Web Framework
-- PostgreSQL 驱动
-- JWT 认证
+- PostgreSQL 15+
+- pgvector (向量检索)
+- Apache AGE (图查询)
+- pgx (驱动)
 
-**端点设计**：
+**详细文档**：[数据模型层](../pkg/models/README.md)
 
-```
-POST   /api/v1/repositories          # 创建仓库
-GET    /api/v1/repositories          # 列出仓库
-GET    /api/v1/repositories/:id      # 获取仓库
-DELETE /api/v1/repositories/:id      # 删除仓库
+---
 
-GET    /api/v1/search                # 搜索符号
-POST   /api/v1/search/semantic       # 语义搜索
+## 索引管道
 
-GET    /api/v1/relationships         # 查询关系
-GET    /api/v1/dependencies          # 查询依赖
-
-GET    /api/v1/files/:id             # 获取文件
-GET    /api/v1/symbols/:id           # 获取符号
-```
-
-**中间件**：
-- 日志记录
-- 错误处理
-- CORS
-- 认证
-- 速率限制
-
-### 4. 图服务
-
-**职责**：代码关系图构建和查询
-
-**使用 PostgreSQL AGE**：
-
-```sql
--- 创建图
-SELECT * FROM ag_catalog.create_graph('code_graph');
-
--- 添加顶点（符号）
-SELECT * FROM cypher('code_graph', $$
-    CREATE (s:Symbol {
-        id: 'uuid',
-        name: 'main',
-        kind: 'function'
-    })
-$$) as (v agtype);
-
--- 添加边（调用关系）
-SELECT * FROM cypher('code_graph', $$
-    MATCH (a:Symbol {id: 'uuid1'})
-    MATCH (b:Symbol {id: 'uuid2'})
-    CREATE (a)-[:CALLS]->(b)
-$$) as (e agtype);
-
--- 查询调用链
-SELECT * FROM cypher('code_graph', $$
-    MATCH path = (a:Symbol {name: 'main'})-[:CALLS*1..3]->(b:Symbol)
-    RETURN path
-$$) as (path agtype);
-```
-
-**关系类型**：
-- `CALLS` - 函数调用
-- `IMPORTS` - 模块导入
-- `EXTENDS` - 类继承
-- `IMPLEMENTS` - 接口实现
-- `REFERENCES` - 引用
-
-### 5. 检索服务
-
-**职责**：语义搜索和向量检索
-
-**使用 pgvector**：
-
-```sql
--- 创建向量表
-CREATE TABLE vectors (
-    id UUID PRIMARY KEY,
-    symbol_id UUID REFERENCES symbols(id),
-    embedding vector(1536),
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- 创建向量索引
-CREATE INDEX ON vectors USING ivfflat (embedding vector_cosine_ops);
-
--- 向量搜索
-SELECT symbol_id, 1 - (embedding <=> query_vector) as similarity
-FROM vectors
-ORDER BY embedding <=> query_vector
-LIMIT 10;
-```
-
-**向量生成**：
-
-```go
-// 使用 OpenAI API
-func GenerateEmbedding(text string) ([]float32, error) {
-    resp, err := openai.CreateEmbedding(
-        context.Background(),
-        openai.EmbeddingRequest{
-            Model: "text-embedding-3-small",
-            Input: text,
-        },
-    )
-    return resp.Data[0].Embedding, err
-}
-```
-
-## 数据模型
-
-### 核心表结构
-
-```sql
--- 仓库
-CREATE TABLE repositories (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    url TEXT,
-    branch TEXT,
-    commit_hash TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- 文件
-CREATE TABLE files (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    repo_id UUID REFERENCES repositories(id) ON DELETE CASCADE,
-    path TEXT NOT NULL,
-    language TEXT NOT NULL,
-    size INTEGER,
-    checksum TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(repo_id, path)
-);
-
--- 符号
-CREATE TABLE symbols (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    file_id UUID REFERENCES files(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    kind TEXT NOT NULL,  -- function, class, interface, variable
-    signature TEXT,
-    start_line INTEGER,
-    end_line INTEGER,
-    docstring TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- 关系
-CREATE TABLE relationships (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    source_id UUID REFERENCES symbols(id) ON DELETE CASCADE,
-    target_id UUID REFERENCES symbols(id) ON DELETE CASCADE,
-    edge_type TEXT NOT NULL,  -- call, import, extends, implements
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- 向量
-CREATE TABLE vectors (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    symbol_id UUID REFERENCES symbols(id) ON DELETE CASCADE,
-    embedding vector(1536),
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- 索引
-CREATE INDEX idx_files_repo_id ON files(repo_id);
-CREATE INDEX idx_symbols_file_id ON symbols(file_id);
-CREATE INDEX idx_symbols_name ON symbols(name);
-CREATE INDEX idx_relationships_source ON relationships(source_id);
-CREATE INDEX idx_relationships_target ON relationships(target_id);
-CREATE INDEX idx_vectors_symbol ON vectors(symbol_id);
-CREATE INDEX idx_vectors_embedding ON vectors USING ivfflat (embedding vector_cosine_ops);
-```
-
-### 数据流
+### 完整流程
 
 ```
-1. 解析阶段
-   CLI → 文件扫描 → Tree-sitter 解析 → JSON 输出
-
-2. 索引阶段
-   JSON → API 接收 → 数据库写入 → 向量生成 → 图构建
-
-3. 查询阶段
-   用户查询 → API 路由 → 服务处理 → 数据库查询 → 结果返回
+┌──────────────┐
+│ 扫描文件系统  │  Scanner
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  语言识别     │  getLanguageFromFile
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  并发解析     │  Parser Pool
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  生成        │  ParseOutput
+│  ParseOutput │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  数据验证     │  SchemaValidator
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  写入仓库     │  RepositoryRepository.Create
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  增量过滤     │  过滤未变更文件 (基于 checksum)
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  批量写入     │  Writer (Files, Symbols, Nodes, Edges)
+│  数据库       │  支持事务
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  关联头文件   │  HeaderImplAssociator
+│  (C/C++)     │  仅 C/C++/ObjC
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  构建图       │  GraphBuilder
+│  (AGE)       │  创建图节点和边
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  生成向量     │  Embedder
+│  (可选)       │  OpenAI/本地模型
+└──────────────┘
 ```
 
-## 设计决策
+### 增量索引
 
-### 1. 为什么选择 Tree-sitter？
+基于文件校验和的智能增量更新：
+
+```
+1. 计算文件 checksum (SHA256)
+2. 查询数据库中的 checksum
+3. 如果相同 → 跳过解析和写入
+4. 如果不同 → 重新解析并更新
+```
 
 **优势**：
-- ✅ 精确的语法解析
+- 大幅减少索引时间
+- 降低资源消耗
+- 支持大型代码库的频繁更新
+
+---
+
+## 数据流
+
+### 1. 代码索引流程
+
+```
+用户代码
+   ↓
+CLI 工具扫描
+   ↓
+Tree-sitter 解析
+   ↓
+提取符号和依赖
+   ↓
+生成 ParseOutput (JSON)
+   ↓
+POST /api/v1/index
+   ↓
+API 服务器接收
+   ↓
+验证数据
+   ↓
+写入 PostgreSQL
+   ↓
+构建图 (AGE)
+   ↓
+生成向量 (pgvector)
+   ↓
+返回索引结果
+```
+
+### 2. 代码搜索流程
+
+```
+用户查询 (自然语言)
+   ↓
+POST /api/v1/search
+   ↓
+API 服务器接收
+   ↓
+生成查询向量
+   ↓
+pgvector 相似度搜索
+   ↓
+返回匹配结果
+```
+
+### 3. 关系查询流程
+
+```
+用户请求关系
+   ↓
+GET /api/v1/symbols/:id/callers
+   ↓
+API 服务器接收
+   ↓
+查询 AGE 图数据库
+   ↓
+遍历关系边
+   ↓
+返回关系结果
+```
+
+---
+
+## 技术栈
+
+### 后端
+
+| 组件 | 技术选型 | 说明 |
+|------|---------|------|
+| **语言** | Go 1.25+ | 高性能、并发友好 |
+| **Web 框架** | Gin | 轻量、高性能 |
+| **数据库驱动** | pgx | 纯 Go 实现 |
+| **解析引擎** | Tree-sitter | 精确语法解析 |
+| **向量存储** | pgvector | 向量相似度搜索 |
+| **图数据库** | Apache AGE | 图查询和遍历 |
+| **CLI 框架** | urfave/cli/v2 | 命令行工具 |
+
+### 前端
+
+| 组件 | 技术选型 | 说明 |
+|------|---------|------|
+| **框架** | Svelte | 响应式 UI |
+| **构建工具** | Rsbuild | 快速编译 |
+| **样式** | 现代 CSS | 响应式设计 |
+
+### 数据库
+
+| 扩展 | 用途 | 状态 |
+|------|------|------|
+| **pgvector** | 向量存储和检索 | ✅ 已实现 |
+| **Apache AGE** | 图查询和遍历 | 🚧 部分实现 |
+
+---
+
+## 部署架构
+
+### 开发环境
+
+```
+┌─────────────────────────────────────┐
+│         Docker Compose              │
+├─────────────────────────────────────┤
+│  ┌────────────┐  ┌────────────┐   │
+│  │  API 服务   │  │  PostgreSQL│   │
+│  │  :8080     │  │  :5432     │   │
+│  └────────────┘  └────────────┘   │
+│         │                               │
+│         └───────────┬─────────────────┘
+│                     ▼
+│              ┌────────────┐
+│              │  Web UI    │
+│              │  :3000     │
+│              └────────────┘
+└─────────────────────────────────────┘
+```
+
+### 生产环境
+
+```
+┌─────────────────────────────────────────────────┐
+│                  负载均衡器                       │
+│                   (Nginx)                        │
+└───────────────┬─────────────────────────────────┘
+                │
+        ┌───────┴───────┐
+        ▼               ▼
+┌─────────────┐  ┌─────────────┐
+│ API 实例 1   │  │ API 实例 2   │
+│  :8080      │  │  :8080      │
+└──────┬──────┘  └──────┬──────┘
+       │                │
+       └────────┬───────┘
+                ▼
+         ┌─────────────┐
+         │ PostgreSQL  │
+         │  主从复制    │
+         └─────────────┘
+```
+
+---
+
+## 关键架构决策
+
+### 1. 为什么使用 Tree-sitter？
+
+**决策**：使用 Tree-sitter 作为解析引擎
+
+**理由**：
+- ✅ 精确的语法解析（优于正则表达式）
 - ✅ 增量解析支持
 - ✅ 错误恢复能力
-- ✅ 多语言支持
+- ✅ 多语言统一接口
 - ✅ 高性能
 
 **替代方案**：
-- ❌ 正则表达式：不够精确
-- ❌ 语言特定解析器：维护成本高
-- ❌ LSP：需要语言服务器
+- ❌ 正则表达式 - 不精确、难维护
+- ❌ 语言原生解析器 - 复杂、不一致
+- ❌ AST 解析器库 - 功能有限
 
-### 2. 为什么选择 PostgreSQL？
+### 2. 为什么使用 PostgreSQL？
 
-**优势**：
-- ✅ 成熟稳定
-- ✅ 丰富的扩展（pgvector, AGE）
-- ✅ 强大的查询能力
-- ✅ ACID 保证
-- ✅ 开源免费
+**决策**：使用 PostgreSQL 作为单一数据库
 
-**替代方案**：
-- ❌ Neo4j：图查询强但向量支持弱
-- ❌ Elasticsearch：搜索强但关系查询弱
-- ❌ 多数据库：复杂度高
-
-### 3. 为什么选择 Go？
-
-**优势**：
-- ✅ 高性能
-- ✅ 并发支持好
-- ✅ 静态类型
-- ✅ 部署简单（单二进制）
-- ✅ 丰富的生态
+**理由**：
+- ✅ 单数据库简化架构
+- ✅ pgvector 生产级向量检索
+- ✅ Apache AGE 图查询能力
+- ✅ ACID 事务保证
+- ✅ 成熟稳定、工具丰富
 
 **替代方案**：
-- ❌ Python：性能较低
-- ❌ Rust：学习曲线陡
-- ❌ Node.js：类型安全弱
+- ❌ Neo4j + Elasticsearch - 复杂的多数据库架构
+- ❌ MongoDB + Redis - 缺少向量检索
+- ❌ 纯 Elasticsearch - 图查询能力弱
 
-### 4. 为什么使用 pgvector？
+### 3. 为什么选择 Gin？
 
-**优势**：
-- ✅ 与 PostgreSQL 集成
-- ✅ 支持多种距离度量
-- ✅ 索引优化（IVFFlat, HNSW）
-- ✅ 开源免费
+**决策**：使用 Gin 作为 Web 框架
+
+**理由**：
+- ✅ 轻量高性能
+- ✅ 中间件生态丰富
+- � JSON 处理简单
+- ✅ 社区活跃
 
 **替代方案**：
-- ❌ Pinecone：商业服务，成本高
-- ❌ Milvus：独立部署，复杂度高
-- ❌ Weaviate：功能过于复杂
+- ❌ Echo - API 设计不够直观
+- ❌ Fiber - 文档较少
+- ❌ net/http - 功能过于基础
 
-## 性能优化
+### 4. 索引管道设计
 
-### 1. 解析性能
+**决策**：多阶段流水线 + 批量处理
 
-**策略**：
-- 并发解析（worker pool）
-- 增量解析（只解析变更文件）
-- 缓存机制（文件 checksum）
+**理由**：
+- ✅ 清晰的职责分离
+- ✅ 易于测试和调试
+- ✅ 支持事务回滚
+- ✅ 可配置的性能参数
 
-**基准测试**：
-```
-BenchmarkGoParser-8     1000    1.2 ms/op    500 KB/op
-BenchmarkJSParser-8     800     1.5 ms/op    600 KB/op
-```
+**关键优化**：
+- 批量插入（COPY 命令）
+- 工作池并发
+- 流式处理大型 AST
+- 自适应批处理
 
-### 2. 数据库性能
+---
 
-**索引策略**：
-```sql
--- B-tree 索引（精确查询）
-CREATE INDEX idx_symbols_name ON symbols(name);
+## 实现状态
 
--- 向量索引（相似度搜索）
-CREATE INDEX ON vectors USING ivfflat (embedding vector_cosine_ops)
-WITH (lists = 100);
+### 已实现功能 ✅
 
--- 部分索引（常用查询）
-CREATE INDEX idx_active_repos ON repositories(id) 
-WHERE deleted_at IS NULL;
-```
+| 功能 | 模块 | 说明 |
+|------|------|------|
+| 多语言解析 | `internal/parser/` | 支持 9 种语言 |
+| 代码索引 | `internal/indexer/` | 完整索引管道 |
+| 向量检索 | `pkg/models/` | pgvector 集成 |
+| 图构建 | `internal/indexer/graph_builder.go` | AGE 图节点和边 |
+| REST API | `internal/api/` | 完整 API 端点 |
+| CLI 工具 | `cmd/cli/` | parse, index, search 命令 |
+| 增量索引 | `internal/indexer/` | 基于 checksum |
+| 跨语言检测 | `internal/parser/*_parser.go` | 自动检测调用关系 |
 
-**查询优化**：
-```sql
--- 使用 CTE 优化复杂查询
-WITH symbol_calls AS (
-    SELECT source_id, target_id
-    FROM relationships
-    WHERE edge_type = 'call'
-)
-SELECT s.name, COUNT(*) as call_count
-FROM symbols s
-JOIN symbol_calls sc ON s.id = sc.source_id
-GROUP BY s.name
-ORDER BY call_count DESC
-LIMIT 10;
-```
+### 部分实现功能 🚧
 
-### 3. API 性能
+| 功能 | 模块 | 状态 |
+|------|------|------|
+| 图查询 | AGE | 图节点已创建，复杂查询待完善 |
+| Web UI | `web/` | 基础界面已实现 |
 
-**缓存策略**：
-- 内存缓存（热点数据）
-- Redis 缓存（分布式）
-- HTTP 缓存（ETag, Last-Modified）
+### 未实现功能 ❌
 
-**连接池**：
-```go
-db.SetMaxOpenConns(25)
-db.SetMaxIdleConns(5)
-db.SetConnMaxLifetime(time.Hour)
-```
+| 功能 | 模块 | 优先级 |
+|------|------|--------|
+| 检索服务 | `internal/retrieval/` | 高 |
+| 图服务 | `internal/graph/` | 高 |
+| QA 引擎 | `internal/qa/` | 中 |
 
-## 扩展性
+### 空模块说明
 
-### 水平扩展
+以下模块目录存在但未实现代码：
 
-```
-┌─────────┐  ┌─────────┐  ┌─────────┐
-│ API-1   │  │ API-2   │  │ API-3   │
-└────┬────┘  └────┬────┘  └────┬────┘
-     │            │            │
-     └────────────┼────────────┘
-                  │
-          ┌───────┴───────┐
-          │ Load Balancer │
-          └───────┬───────┘
-                  │
-          ┌───────┴───────┐
-          │  PostgreSQL   │
-          │  (Primary)    │
-          └───────┬───────┘
-                  │
-     ┌────────────┼────────────┐
-     │            │            │
-┌────┴────┐  ┌───┴────┐  ┌───┴────┐
-│Replica-1│  │Replica-2│  │Replica-3│
-└─────────┘  └─────────┘  └─────────┘
-```
+1. **`internal/retrieval/`** - 检索服务
+   - 计划：高级检索策略（混合检索、重排序）
+   - 当前：向量检索已集成在 API 层
 
-### 数据分片
+2. **`internal/graph/`** - 图服务
+   - 计划：复杂图查询、路径分析、社区发现
+   - 当前：基础图构建已实现
 
-```sql
--- 按仓库分片
-CREATE TABLE symbols_shard_1 (
-    CHECK (repo_id >= '00000000-0000-0000-0000-000000000000' 
-       AND repo_id < '55555555-5555-5555-5555-555555555555')
-) INHERITS (symbols);
+3. **`internal/qa/`** - QA 引擎
+   - 计划：RAG + Agentic Pipeline
+   - 当前：未开始实现
 
-CREATE TABLE symbols_shard_2 (
-    CHECK (repo_id >= '55555555-5555-5555-5555-555555555555')
-) INHERITS (symbols);
-```
+**建议**：
+- 短期：移除空目录或添加 TODO 说明
+- 长期：实现这些模块的功能
 
-## 安全性
-
-### 1. 认证和授权
-
-```go
-// JWT 认证
-func AuthMiddleware() gin.HandlerFunc {
-    return func(c *gin.Context) {
-        token := c.GetHeader("Authorization")
-        claims, err := ValidateJWT(token)
-        if err != nil {
-            c.AbortWithStatus(401)
-            return
-        }
-        c.Set("user_id", claims.UserID)
-        c.Next()
-    }
-}
-```
-
-### 2. SQL 注入防护
-
-```go
-// 使用参数化查询
-db.Query("SELECT * FROM symbols WHERE name = $1", name)
-
-// 避免字符串拼接
-// ❌ db.Query("SELECT * FROM symbols WHERE name = '" + name + "'")
-```
-
-### 3. 速率限制
-
-```go
-// 使用 rate limiter
-limiter := rate.NewLimiter(rate.Limit(60), 60) // 60 req/min
-
-func RateLimitMiddleware(limiter *rate.Limiter) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        if !limiter.Allow() {
-            c.AbortWithStatus(429)
-            return
-        }
-        c.Next()
-    }
-}
-```
-
-## 监控和可观测性
-
-### 指标收集
-
-```go
-// Prometheus 指标
-var (
-    parseRequests = prometheus.NewCounterVec(
-        prometheus.CounterOpts{
-            Name: "parse_requests_total",
-            Help: "Total number of parse requests",
-        },
-        []string{"language", "status"},
-    )
-    
-    parseDuration = prometheus.NewHistogramVec(
-        prometheus.HistogramOpts{
-            Name: "parse_duration_seconds",
-            Help: "Parse duration in seconds",
-        },
-        []string{"language"},
-    )
-)
-```
-
-### 日志记录
-
-```go
-// 结构化日志
-log.WithFields(log.Fields{
-    "repo_id": repoID,
-    "file_count": fileCount,
-    "duration": duration,
-}).Info("Repository indexed successfully")
-```
+---
 
 ## 未来规划
 
-### 短期（3-6 月）
-- [ ] 增量索引优化
-- [ ] 更多语言支持（Rust, Ruby）
-- [ ] 实时索引更新
-- [ ] Web UI 改进
+### 短期（1-3 个月）
 
-### 中期（6-12 月）
-- [ ] 分布式解析
-- [ ] 多租户支持
-- [ ] 高级图查询
-- [ ] AI 辅助代码理解
+1. **完善图查询**
+   - 实现复杂路径查询
+   - 添加图算法（PageRank、社区发现）
+   - 优化查询性能
 
-### 长期（12+ 月）
-- [ ] 代码生成
-- [ ] 自动重构建议
-- [ ] 漏洞检测
-- [ ] 性能分析
+2. **增强检索服务**
+   - 实现混合检索（向量 + 关键词）
+   - 添加结果重排序
+   - 支持查询扩展
 
-## 参考资源
+3. **改进 Web UI**
+   - 添加代码浏览功能
+   - 可视化调用图
+   - 改进搜索体验
 
-### 技术文档
-- [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)
-- [pgvector](https://github.com/pgvector/pgvector)
-- [PostgreSQL AGE](https://age.apache.org/)
-- [Gin Framework](https://gin-gonic.com/)
+### 中期（3-6 个月）
 
-### 相关项目
-- [Sourcegraph](https://sourcegraph.com/)
-- [GitHub Code Search](https://github.com/features/code-search)
-- [Kythe](https://kythe.io/)
+4. **实现 QA 引擎**
+   - RAG 实现
+   - Agentic Workflow
+   - 多轮对话支持
 
-## 下一步
+5. **性能优化**
+   - 添加缓存层
+   - 优化数据库查询
+   - 实现查询结果分页
 
-- 查看 [开发指南](development.md) 开始开发
-- 查看 [API 文档](api.md) 了解 API 使用
-- 查看 [部署指南](deployment.md) 部署到生产环境
+6. **扩展集成**
+   - GitHub 集成
+   - GitLab 集成
+   - IDE 插件
+
+### 长期（6-12 个月）
+
+7. **分布式架构**
+   - 支持分布式索引
+   - 水平扩展
+   - 负载均衡
+
+8. **高级功能**
+   - 代码推荐
+   - 重复代码检测
+   - 代码质量分析
+
+9. **企业功能**
+   - 多租户支持
+   - 权限管理
+   - 审计日志
+
+---
+
+## 相关文档
+
+- [快速开始](quick-start.md)
+- [CLI 文档](cli.md)
+- [API 文档](api.md)
+- [配置指南](configuration.md)
+- [解析器开发指南](development/parsers.md)
+- [测试指南](development/testing.md)
+- [数据模型层](../pkg/models/README.md)
+- [API 服务架构](../internal/api/README.md)
+
+---
+
+**最后更新**: 2026-02-10
+**维护者**: CodeAtlas 团队
