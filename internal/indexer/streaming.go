@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/yourtionguo/CodeAtlas/internal/schema"
 )
@@ -219,32 +220,38 @@ func (sp *StreamProcessor) StreamSymbols(
 	return nil
 }
 
-// waitForMemory blocks until memory usage is below threshold
+// waitForMemory 阻塞直到内存占用低于阈值，或 context 被取消。
+//
+// 修复说明：历史实现存在两个反模式——
+//  1. 用 runtime.Gosched() 让出 CPU 仅一个时间片，高内存时空转烧 CPU（忙轮询）；
+//     改为 time.Sleep 退避等待，让出调度资源。
+//  2. 主动调用 runtime.GC() 试图降内存；但 currentMemoryMB 是由
+//     acquire/release 维护的逻辑计数，并非堆内存，GC 无法释放它，
+//     反而引入 STW 暂停。已删除。
 func (sp *StreamProcessor) waitForMemory(ctx context.Context) error {
+	const maxBackoff = 200 * time.Millisecond
+	backoff := 10 * time.Millisecond
+
 	for {
-		currentMem := atomic.LoadInt64(&sp.currentMemoryMB)
-		if currentMem < sp.maxMemoryMB {
+		if atomic.LoadInt64(&sp.currentMemoryMB) < sp.maxMemoryMB {
 			return nil
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 
-		// Check context cancellation
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
+		case <-time.After(backoff):
 		}
 
-		// Force garbage collection if memory is high
-		if currentMem > sp.maxMemoryMB*9/10 {
-			runtime.GC()
-		}
-
-		// Small sleep to avoid busy waiting
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			runtime.Gosched()
+		// 指数退避（上限 maxBackoff），避免长时间高内存时过度频繁检查
+		if backoff < maxBackoff {
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 		}
 	}
 }

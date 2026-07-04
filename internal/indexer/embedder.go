@@ -419,7 +419,8 @@ func (e *OpenAIEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symb
 			continue
 		}
 
-		// Validate dimensions
+		// 收集维度校验通过的向量，稍后批量写入（替代原先逐条 Create 的 N 次 INSERT）
+		vectorsToStore := make([]*models.Vector, 0, len(embeddings))
 		for j, embedding := range embeddings {
 			if len(embedding) != e.config.Dimensions {
 				result.Errors = append(result.Errors, EmbedError{
@@ -428,9 +429,7 @@ func (e *OpenAIEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symb
 				})
 				continue
 			}
-
-			// Store embedding
-			vector := &models.Vector{
+			vectorsToStore = append(vectorsToStore, &models.Vector{
 				VectorID:   uuid.New().String(),
 				EntityID:   batch[j].EntityID,
 				EntityType: "symbol",
@@ -438,17 +437,27 @@ func (e *OpenAIEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symb
 				Content:    batch[j].Content,
 				Model:      e.config.Model,
 				ChunkIndex: batch[j].ChunkIndex,
-			}
+			})
+		}
 
-			err := e.vectorRepo.Create(ctx, vector)
-			if err != nil {
-				result.Errors = append(result.Errors, EmbedError{
-					EntityID: batch[j].EntityID,
-					Message:  fmt.Sprintf("failed to store embedding: %v", err),
-				})
-			} else {
-				result.VectorsCreated++
+		if len(vectorsToStore) == 0 {
+			continue
+		}
+
+		// 批量写入；失败时降级为逐条写入以定位具体出错条目
+		if err := e.vectorRepo.BatchCreate(ctx, vectorsToStore); err != nil {
+			for _, v := range vectorsToStore {
+				if err := e.vectorRepo.Create(ctx, v); err != nil {
+					result.Errors = append(result.Errors, EmbedError{
+						EntityID: v.EntityID,
+						Message:  fmt.Sprintf("failed to store embedding: %v", err),
+					})
+				} else {
+					result.VectorsCreated++
+				}
 			}
+		} else {
+			result.VectorsCreated += len(vectorsToStore)
 		}
 	}
 
