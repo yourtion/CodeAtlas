@@ -34,7 +34,6 @@ type Indexer struct {
 	db              *models.DB
 	logger          IndexerLogger
 	streamProcessor *StreamProcessor
-	workerPool      *WorkerPool
 	batchOptimizer  *BatchOptimizer
 
 	// executor 是管道副作用的执行入口，默认指向 Indexer 自身。
