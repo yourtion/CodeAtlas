@@ -52,6 +52,9 @@ type SearchRequest struct {
 	Language string   `json:"language,omitempty"`
 	Kind     []string `json:"kind,omitempty"`
 	Limit    int      `json:"limit,omitempty"`
+	// Mode 控制检索策略：vector（纯向量）、keyword（纯关键词）、hybrid（混合重排）。
+	// 默认 hybrid。hybrid 适合自然语言提问，keyword 适合精确符号名查找。
+	Mode string `json:"mode,omitempty"`
 }
 
 // SearchResponse represents the response for POST /api/v1/search
@@ -89,50 +92,99 @@ func (h *SearchHandler) Search(c *gin.Context) {
 
 	ctx := context.Background()
 
-	// Generate embedding from query text using embedding service
-	embedding, err := h.embedder.GenerateEmbedding(ctx, req.Query)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to generate embedding",
-			"details": err.Error(),
-		})
-		return
+	// mode 默认 hybrid：向量召回（语义）+ 关键词召回（精确符号名）+ 重排。
+	// keyword 模式跳过 embedding 生成，适合精确符号查找且省一次 API 调用。
+	mode := req.Mode
+	if mode == "" {
+		mode = "hybrid"
 	}
 
 	// 构建检索过滤：kind/language/repo 全部下沉到 SQL（JOIN symbols/files），
-	// 过滤在 LIMIT 前应用，保证返回数满 limit（修复原先"先取 limit 再内存
-	// 过滤、过滤掉的不补位、导致结果数失真"的缺陷）。
-	// JOIN 同时返回符号/文件详情，消除原先每条结果的 2 次 N+1 查询。
+	// 过滤在 LIMIT 前应用，保证返回数满 limit。
 	filters := models.VectorSearchFilters{
 		EntityType:  "symbol",
 		Limit:       req.Limit,
 		Kind:        req.Kind,
 		Language:    req.Language,
 		RepoID:      req.RepoID,
-		WithDetails: true, // 顺带取出 name/kind/signature/docstring/file_path/language/repo
+		WithDetails: true, // JOIN 顺带返回 name/kind/signature/docstring/file_path/language/repo
 	}
 
-	// Perform vector similarity search (过滤已在 SQL 层应用)
-	vectorResults, err := h.vectorRepo.SimilaritySearchWithFilters(ctx, embedding, filters)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to perform semantic search",
-			"details": err.Error(),
-		})
-		return
+	// 按 mode 分发到不同检索路径
+	var hybridResults []*models.HybridSearchResult
+	switch mode {
+	case "keyword":
+		// 纯关键词召回（无需 embedding）
+		kwResults, err := h.vectorRepo.KeywordSearch(ctx, req.Query, filters)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to perform keyword search",
+				"details": err.Error(),
+			})
+			return
+		}
+		hybridResults = make([]*models.HybridSearchResult, 0, len(kwResults))
+		for _, kw := range kwResults {
+			hybridResults = append(hybridResults, &models.HybridSearchResult{
+				VectorSearchResult: *kw, KeywordScore: kw.Similarity,
+			})
+		}
+	case "vector":
+		// 纯向量召回
+		embedding, err := h.embedder.GenerateEmbedding(ctx, req.Query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to generate embedding",
+				"details": err.Error(),
+			})
+			return
+		}
+		vecResults, err := h.vectorRepo.SimilaritySearchWithFilters(ctx, embedding, filters)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to perform semantic search",
+				"details": err.Error(),
+			})
+			return
+		}
+		hybridResults = make([]*models.HybridSearchResult, 0, len(vecResults))
+		for _, v := range vecResults {
+			hybridResults = append(hybridResults, &models.HybridSearchResult{
+				VectorSearchResult: *v, VectorScore: v.Similarity,
+			})
+		}
+	default:
+		// hybrid：向量 + 关键词 + 重排（默认）
+		embedding, err := h.embedder.GenerateEmbedding(ctx, req.Query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to generate embedding",
+				"details": err.Error(),
+			})
+			return
+		}
+		// 权重：向量为主 0.7，关键词为辅 0.3
+		hybridResults, err = h.vectorRepo.HybridSearch(ctx, req.Query, embedding, filters, 0.7, 0.3)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to perform hybrid search",
+				"details": err.Error(),
+			})
+			return
+		}
 	}
 
-	// 向量检索已 JOIN 返回全部所需详情，直接构造响应。
-	results := make([]SearchResult, 0, len(vectorResults))
-	for _, vr := range vectorResults {
+	// 构造响应（检索已 JOIN 返回全部所需详情）
+	results := make([]SearchResult, 0, len(hybridResults))
+	for _, h := range hybridResults {
 		results = append(results, SearchResult{
-			SymbolID:   vr.EntityID,
-			Name:       vr.Name,
-			Kind:       vr.Kind,
-			Signature:  vr.Signature,
-			FilePath:   vr.FilePath,
-			Docstring:  vr.Docstring,
-			Similarity: vr.Similarity,
+			SymbolID:   h.EntityID,
+			Name:       h.Name,
+			Kind:       h.Kind,
+			Signature:  h.Signature,
+			FilePath:   h.FilePath,
+			Docstring:  h.Docstring,
+			Similarity: h.Similarity,
 		})
 	}
 
