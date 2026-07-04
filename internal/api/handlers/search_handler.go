@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/yourtionguo/CodeAtlas/internal/indexer"
-	"github.com/yourtionguo/CodeAtlas/internal/search"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
@@ -100,13 +99,20 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		return
 	}
 
-	// Build search filters
+	// 构建检索过滤：kind/language/repo 全部下沉到 SQL（JOIN symbols/files），
+	// 过滤在 LIMIT 前应用，保证返回数满 limit（修复原先"先取 limit 再内存
+	// 过滤、过滤掉的不补位、导致结果数失真"的缺陷）。
+	// JOIN 同时返回符号/文件详情，消除原先每条结果的 2 次 N+1 查询。
 	filters := models.VectorSearchFilters{
-		EntityType: "symbol",
-		Limit:      req.Limit,
+		EntityType:  "symbol",
+		Limit:       req.Limit,
+		Kind:        req.Kind,
+		Language:    req.Language,
+		RepoID:      req.RepoID,
+		WithDetails: true, // 顺带取出 name/kind/signature/docstring/file_path/language/repo
 	}
 
-	// Perform vector similarity search
+	// Perform vector similarity search (过滤已在 SQL 层应用)
 	vectorResults, err := h.vectorRepo.SimilaritySearchWithFilters(ctx, embedding, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -116,53 +122,17 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		return
 	}
 
-	// 收集候选结果：向量检索结果 + 符号/文件详情。
-	// NOTE: 过滤逻辑已抽出到 internal/search.InMemoryFilter，调用点集中于此。
-	// 下一站检索质量优化时，把过滤下沉到 SQL（在 SimilaritySearchWithFilters
-	// 阶段就应用 kind/language/repo 条件），此处改用 search.SQLFilter 即可，
-	// 无需改动 handler。
-	candidates := make([]search.Candidate, 0, len(vectorResults))
+	// 向量检索已 JOIN 返回全部所需详情，直接构造响应。
+	results := make([]SearchResult, 0, len(vectorResults))
 	for _, vr := range vectorResults {
-		symbol, err := h.symbolRepo.GetByID(ctx, vr.EntityID)
-		if err != nil || symbol == nil {
-			continue
-		}
-		file, err := h.fileRepo.GetByID(ctx, symbol.FileID)
-		if err != nil || file == nil {
-			continue
-		}
-		candidates = append(candidates, search.Candidate{
-			SymbolID:   symbol.SymbolID,
-			Name:       symbol.Name,
-			Kind:       symbol.Kind,
-			Signature:  symbol.Signature,
-			FilePath:   file.Path,
-			Language:   file.Language,
-			RepoID:     file.RepoID,
-			Docstring:  symbol.Docstring,
-			Similarity: vr.Similarity,
-		})
-	}
-
-	// 应用过滤（当前为内存实现，行为与原内联逻辑一致）
-	filter := search.NewInMemoryFilter(search.FilterCriteria{
-		Kind:     req.Kind,
-		Language: req.Language,
-		RepoID:   req.RepoID,
-	})
-	filtered := filter.Filter(candidates)
-
-	// 转换为响应类型
-	results := make([]SearchResult, 0, len(filtered))
-	for _, c := range filtered {
 		results = append(results, SearchResult{
-			SymbolID:   c.SymbolID,
-			Name:       c.Name,
-			Kind:       c.Kind,
-			Signature:  c.Signature,
-			FilePath:   c.FilePath,
-			Docstring:  c.Docstring,
-			Similarity: c.Similarity,
+			SymbolID:   vr.EntityID,
+			Name:       vr.Name,
+			Kind:       vr.Kind,
+			Signature:  vr.Signature,
+			FilePath:   vr.FilePath,
+			Docstring:  vr.Docstring,
+			Similarity: vr.Similarity,
 		})
 	}
 

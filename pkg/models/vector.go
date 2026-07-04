@@ -335,54 +335,84 @@ func (r *VectorRepository) SimilaritySearch(ctx context.Context, queryEmbedding 
 
 // SimilaritySearchWithFilters performs vector similarity search with additional filters
 func (r *VectorRepository) SimilaritySearchWithFilters(ctx context.Context, queryEmbedding []float32, filters VectorSearchFilters) ([]*VectorSearchResult, error) {
-	baseQuery := `
-		SELECT 
+	// 判断是否需要 JOIN symbols/files：任一符号/文件维度过滤非空，或显式请求详情。
+	needJoin := len(filters.Kind) > 0 || filters.Language != "" || filters.RepoID != "" || filters.WithDetails
+
+	args := []interface{}{formatVectorForPgvector(queryEmbedding)}
+	argIndex := 2
+	addArg := func(v interface{}) string {
+		s := fmt.Sprintf("$%d", argIndex)
+		args = append(args, v)
+		argIndex++
+		return s
+	}
+
+	// SELECT 子句：JOIN 时附带符号/文件详情，消除调用方 N+1 查询。
+	selectClause := `
+		SELECT
 			v.vector_id,
 			v.entity_id,
 			v.entity_type,
 			v.content,
 			v.model,
 			v.chunk_index,
-			1 - (v.embedding <=> $1::vector) as similarity
-		FROM vectors v
-		WHERE 1=1
-	`
+			1 - (v.embedding <=> $1::vector) as similarity`
+	if needJoin {
+		selectClause += `,
+			s.name,
+			s.kind,
+			s.signature,
+			s.docstring,
+			f.path as file_path,
+			f.language,
+			f.repo_id`
+	}
 
-	args := []interface{}{formatVectorForPgvector(queryEmbedding)}
-	argIndex := 2
+	// FROM + JOIN
+	fromClause := "\n\t\t\tFROM vectors v"
+	if needJoin {
+		// LEFT JOIN：保留无符号关联的向量（如未来文件级 embedding），
+		// 过滤条件用 WHERE + IS NOT NULL 收紧。
+		fromClause += `
+			LEFT JOIN symbols s ON v.entity_id = s.symbol_id AND v.entity_type = 'symbol'
+			LEFT JOIN files f ON s.file_id = f.file_id`
+	}
 
+	// WHERE 子句
+	whereClause := "\n\t\t\tWHERE 1=1"
 	if filters.EntityType != "" {
-		baseQuery += fmt.Sprintf(" AND v.entity_type = $%d", argIndex)
-		args = append(args, filters.EntityType)
-		argIndex++
+		whereClause += fmt.Sprintf(" AND v.entity_type = %s", addArg(filters.EntityType))
 	}
-
 	if len(filters.EntityTypes) > 0 {
-		baseQuery += fmt.Sprintf(" AND v.entity_type = ANY($%d)", argIndex)
-		args = append(args, pq.Array(filters.EntityTypes))
-		argIndex++
+		whereClause += fmt.Sprintf(" AND v.entity_type = ANY(%s)", addArg(pq.Array(filters.EntityTypes)))
 	}
-
 	if filters.Model != "" {
-		baseQuery += fmt.Sprintf(" AND v.model = $%d", argIndex)
-		args = append(args, filters.Model)
-		argIndex++
+		whereClause += fmt.Sprintf(" AND v.model = %s", addArg(filters.Model))
 	}
-
 	if filters.MinSimilarity > 0 {
-		baseQuery += fmt.Sprintf(" AND (1 - (v.embedding <=> $1::vector)) >= $%d", argIndex)
-		args = append(args, filters.MinSimilarity)
-		argIndex++
+		whereClause += fmt.Sprintf(" AND (1 - (v.embedding <=> $1::vector)) >= %s", addArg(filters.MinSimilarity))
+	}
+	// kind/language/repo 过滤（JOIN 列）。过滤时要求 JOIN 命中（非 NULL）。
+	if len(filters.Kind) > 0 {
+		whereClause += fmt.Sprintf(" AND s.kind = ANY(%s)", addArg(pq.Array(filters.Kind)))
+	}
+	if filters.Language != "" {
+		whereClause += fmt.Sprintf(" AND f.language = %s", addArg(filters.Language))
+	}
+	if filters.RepoID != "" {
+		whereClause += fmt.Sprintf(" AND f.repo_id = %s", addArg(filters.RepoID))
 	}
 
-	baseQuery += " ORDER BY v.embedding <=> $1::vector"
-
+	// ORDER BY + LIMIT（过滤在 LIMIT 前应用，保证返回数满 limit）
+	orderBy := "\n\t\t\tORDER BY v.embedding <=> $1::vector"
+	limitClause := ""
 	if filters.Limit > 0 {
-		baseQuery += fmt.Sprintf(" LIMIT $%d", argIndex)
-		args = append(args, filters.Limit)
+		limitClause = fmt.Sprintf("\n\t\t\tLIMIT %s", addArg(filters.Limit))
 	}
 
-	rows, err := r.db.QueryContext(ctx, baseQuery, args...)
+	query := selectClause + fromClause + whereClause + orderBy + limitClause
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -391,9 +421,18 @@ func (r *VectorRepository) SimilaritySearchWithFilters(ctx context.Context, quer
 	var results []*VectorSearchResult
 	for rows.Next() {
 		var result VectorSearchResult
-		err := rows.Scan(
-			&result.VectorID, &result.EntityID, &result.EntityType,
-			&result.Content, &result.Model, &result.ChunkIndex, &result.Similarity)
+		var err error
+		if needJoin {
+			err = rows.Scan(
+				&result.VectorID, &result.EntityID, &result.EntityType,
+				&result.Content, &result.Model, &result.ChunkIndex, &result.Similarity,
+				&result.Name, &result.Kind, &result.Signature, &result.Docstring,
+				&result.FilePath, &result.Language, &result.RepoID)
+		} else {
+			err = rows.Scan(
+				&result.VectorID, &result.EntityID, &result.EntityType,
+				&result.Content, &result.Model, &result.ChunkIndex, &result.Similarity)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -490,6 +529,16 @@ type VectorSearchResult struct {
 	Model      string  `json:"model"`
 	ChunkIndex int     `json:"chunk_index"`
 	Similarity float64 `json:"similarity"`
+
+	// 符号与文件详情（JOIN 查询时填充，避免调用方再做 N+1 查询）。
+	// 当查询未 JOIN symbols/files 时为零值。
+	Name       string `json:"name,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	Signature  string `json:"signature,omitempty"`
+	Docstring  string `json:"docstring,omitempty"`
+	FilePath   string `json:"file_path,omitempty"`
+	Language   string `json:"language,omitempty"`
+	RepoID     string `json:"repo_id,omitempty"`
 }
 
 // VectorSearchFilters represents filters for vector similarity search
@@ -499,4 +548,16 @@ type VectorSearchFilters struct {
 	Model         string   `json:"model,omitempty"`
 	MinSimilarity float64  `json:"min_similarity,omitempty"`
 	Limit         int      `json:"limit,omitempty"`
+
+	// 符号/文件维度过滤（通过 JOIN symbols/files 在 SQL 层应用，
+	// 替代原本"先取 limit 再内存过滤导致结果数失真"的做法）。
+	// 任一非空即触发 JOIN。
+	Kind     []string `json:"kind,omitempty"`     // OR 语义
+	Language string   `json:"language,omitempty"` // 精确匹配
+	RepoID   string   `json:"repo_id,omitempty"`  // 精确匹配
+
+	// WithDetails 控制是否 JOIN 并返回符号/文件详情（Name/Kind/FilePath 等）。
+	// 传入 kind/language/repo 任一即隐含 WithDetails=true。
+	// 显式设为 true 可在不过滤时也消除调用方的 N+1 查询。
+	WithDetails bool `json:"with_details,omitempty"`
 }
