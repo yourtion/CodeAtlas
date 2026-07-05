@@ -12,4 +12,4 @@ bin/
 cli
 
 # DevContainer
-.devcontainer/.envcli
+.devcontainer/.env
