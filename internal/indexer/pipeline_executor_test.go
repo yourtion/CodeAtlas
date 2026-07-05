@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -163,3 +164,62 @@ func TestSetExecutor_NilRestoresDefault(t *testing.T) {
 		t.Error("executor should be the Indexer itself after SetExecutor(nil)")
 	}
 }
+
+// TestIndexWithProgress_ReturnsFailureResultOnWriteDataError 钉住 S3：
+// IndexWithProgress 在错误路径下必须返回非空、Status="failed" 的结果，
+// 而不是 nil（与 Index 契约一致），避免调用方 nil 解引用。
+func TestIndexWithProgress_ReturnsFailureResultOnWriteDataError(t *testing.T) {
+	idx, fake := newIndexerWithFake(t)
+	fake.writeDataErr = fmt.Errorf("simulated write failure")
+
+	input := &schema.ParseOutput{
+		Metadata: schema.ParseMetadata{Version: "test-1.0"},
+		Files: []schema.File{
+			{FileID: uuid.New().String(), Path: "main.go", Checksum: "abc", Language: "go"},
+		},
+	}
+
+	result, err := idx.IndexWithProgress(context.Background(), input, nil)
+	if err == nil {
+		t.Fatal("expected error from writeData failure")
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result on error path (S3 contract), got nil")
+	}
+	if result.Status != "failed" {
+		t.Errorf("expected Status='failed', got %q", result.Status)
+	}
+}
+
+// TestIndex_WriteDataFailureDoesNotReportPartialCounts 钉住 S4：
+// writeData 失败时，部分填充的 WriteResult 计数（如中途返回的 FilesProcessed）
+// 不应被上报到最终 IndexResult，避免计数虚高。
+func TestIndex_WriteDataFailureDoesNotReportPartialCounts(t *testing.T) {
+	idx, fake := newIndexerWithFake(t)
+	// 模拟 writeData 返回部分填充结果 + 错误
+	fake.writeDataResult = &WriteResult{
+		FilesProcessed: 999,
+		SymbolsCreated: 999,
+		NodesCreated:   999,
+		EdgesCreated:   999,
+	}
+	fake.writeDataErr = fmt.Errorf("simulated write failure")
+
+	input := &schema.ParseOutput{
+		Metadata: schema.ParseMetadata{Version: "test-1.0"},
+		Files: []schema.File{
+			{FileID: uuid.New().String(), Path: "main.go", Checksum: "abc", Language: "go"},
+		},
+	}
+
+	result, _ := idx.Index(context.Background(), input)
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if result.FilesProcessed != 0 || result.SymbolsCreated != 0 ||
+		result.NodesCreated != 0 || result.EdgesCreated != 0 {
+		t.Errorf("writeData failure must zero partial counts; got files=%d symbols=%d nodes=%d edges=%d",
+			result.FilesProcessed, result.SymbolsCreated, result.NodesCreated, result.EdgesCreated)
+	}
+}
+

@@ -200,6 +200,19 @@ type IndexResult struct {
 	Summary        map[string]interface{} `json:"summary,omitempty"`
 }
 
+// failResult 构造一个失败的 IndexResult，记录起止时间与失败阶段。
+// 用于 Index / IndexWithProgress 在错误路径下与成功路径一致地返回非空结果，
+// 调用方据此读取 Status / Errors 而无需 nil 检查。
+func (idx *Indexer) failResult(startTime time.Time, stage string, cause error) *IndexResult {
+	return &IndexResult{
+		RepoID:   idx.config.RepoID,
+		Status:   "failed",
+		Duration: time.Since(startTime),
+		Summary:  map[string]interface{}{"failed_stage": stage},
+		Errors:   []*IndexerError{NewDatabaseError(stage, "", "", cause, true)},
+	}
+}
+
 // Index coordinates the validation → write → graph → embeddings pipeline
 func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*IndexResult, error) {
 	idx.ensureExecutor()
@@ -292,7 +305,8 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		LogField{Key: "relationships", Value: len(input.Relationships)},
 	)
 	writeResult, err := idx.executor.writeData(ctx, filesToProcess, input.Relationships)
-	if err != nil {
+	writeDataFailed := err != nil
+	if writeDataFailed {
 		idx.logger.ErrorWithFields("failed to write data", err,
 			LogField{Key: "repo_id", Value: idx.config.RepoID},
 		)
@@ -303,6 +317,9 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 			err,
 			true,
 		))
+		// writeData 失败时返回的部分填充计数（如子步骤中途 return）不可靠，
+		// 不上报，避免 result.FilesProcessed 等虚高。
+		writeResult = &WriteResult{}
 	}
 	result.FilesProcessed = writeResult.FilesProcessed
 	result.SymbolsCreated = writeResult.SymbolsCreated
@@ -467,7 +484,9 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 				Error:    true,
 			}
 		}
-		return nil, fmt.Errorf("validation failed")
+		// 与 Index 的契约一致：返回带 Status 的失败结果而非 nil，
+		// 避免调用方 nil 解引用。
+		return idx.failResult(startTime, "validation failed", fmt.Errorf("validation failed")), fmt.Errorf("validation failed")
 	}
 
 	if progressChan != nil {
@@ -488,7 +507,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 	}
 
 	if err := idx.executor.writeRepository(ctx); err != nil {
-		return nil, err
+		return idx.failResult(startTime, "write_repository", err), err
 	}
 
 	if progressChan != nil {
@@ -525,7 +544,9 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 
 	writeResult, err := idx.executor.writeData(ctx, filesToProcess, input.Relationships)
 	if err != nil {
-		return nil, err
+		// 与 Index 的契约一致：返回带 Status 的失败结果而非 nil。
+		// writeData 失败时 writeResult 的部分计数不可靠，不上报。
+		return idx.failResult(startTime, "write_data", err), err
 	}
 
 	if progressChan != nil {
