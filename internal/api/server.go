@@ -101,6 +101,9 @@ func (s *Server) RegisterRoutes(r *gin.Engine) {
 		v1.GET("/symbols/:id/callers", s.relationshipHandler.GetCallers)
 		v1.GET("/symbols/:id/callees", s.relationshipHandler.GetCallees)
 		v1.GET("/symbols/:id/dependencies", s.relationshipHandler.GetDependencies)
+		// Transitive (multi-hop) relationship endpoints
+		v1.GET("/symbols/:id/transitive-callers", s.relationshipHandler.GetTransitiveCallers)
+		v1.GET("/symbols/:id/transitive-callees", s.relationshipHandler.GetTransitiveCallees)
 		v1.GET("/files/:id/symbols", s.relationshipHandler.GetFileSymbols)
 
 		// File endpoints

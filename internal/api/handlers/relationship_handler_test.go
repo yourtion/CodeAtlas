@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
 func TestRelationshipHandler_GetCallers_InvalidRequest(t *testing.T) {
@@ -266,5 +267,63 @@ func TestSymbolsResponse_Structure(t *testing.T) {
 	}
 	if symbol.EndLine <= symbol.StartLine {
 		t.Error("Expected end_line to be greater than start_line")
+	}
+}
+
+// TestRelationshipHandler_GetTransitiveCallees_InvalidRequest 验证空 symbol ID 返回 400。
+func TestRelationshipHandler_GetTransitiveCallees_InvalidRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewRelationshipHandler(nil)
+	router := gin.New()
+	router.GET("/api/v1/symbols/:id/transitive-callees", handler.GetTransitiveCallees)
+
+	req, _ := http.NewRequest("GET", "/api/v1/symbols//transitive-callees", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d for empty symbol ID, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+// TestRelationshipHandler_GetTransitiveCallers_InvalidRequest 验证空 symbol ID 返回 400。
+func TestRelationshipHandler_GetTransitiveCallers_InvalidRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewRelationshipHandler(nil)
+	router := gin.New()
+	router.GET("/api/v1/symbols/:id/transitive-callers", handler.GetTransitiveCallers)
+
+	req, _ := http.NewRequest("GET", "/api/v1/symbols//transitive-callers", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d for empty symbol ID, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+// TestParseDepthParam 验证 depth 查询参数解析的边界。
+func TestParseDepthParam(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cases := []struct {
+		query   string
+		want    int
+		name    string
+	}{
+		{"", models.DefaultTransitiveDepth, "missing uses default"},
+		{"?depth=10", 10, "valid depth"},
+		{"?depth=0", models.DefaultTransitiveDepth, "zero falls back to default"},
+		{"?depth=-3", models.DefaultTransitiveDepth, "negative falls back to default"},
+		{"?depth=abc", models.DefaultTransitiveDepth, "invalid falls back to default"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest("GET", "/api/v1/symbols/x/transitive-callees"+tc.query, nil)
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = req
+			if got := parseDepthParam(c); got != tc.want {
+				t.Errorf("parseDepthParam(%q) = %d, want %d", tc.query, got, tc.want)
+			}
+		})
 	}
 }

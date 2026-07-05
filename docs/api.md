@@ -204,6 +204,55 @@ GET /api/v1/dependencies?repo_id=xxx
 }
 ```
 
+#### 传递调用链（多跳）
+
+返回从指定符号出发沿调用边递归可达的全部符号，用递归 CTE 在 `edges` 表上
+多跳遍历实现。结果按最短跳数升序、去重（含环也不会重复）。
+
+```http
+GET /api/v1/symbols/:id/transitive-callees?depth=5
+```
+
+| 参数 | 说明 | 默认 |
+|------|------|------|
+| `id` | 起始符号 ID（路径参数，必填） | — |
+| `depth` | 最大跳数（1=直接调用，2=隔一跳，依此类推） | 5 |
+
+**语义**："起始符号的执行会触及哪些代码"——例如查 `main` 的传递调用链
+可得到整棵调用子树。
+
+响应：
+```json
+{
+  "symbols": [
+    {
+      "symbol_id": "...",
+      "name": "processData",
+      "kind": "function",
+      "file_path": "main.go",
+      "signature": "func processData()",
+      "depth": 1
+    }
+  ],
+  "total": 1,
+  "depth": 5
+}
+```
+
+#### 反向影响范围（多跳）
+
+返回沿调用边反向递归可达的全部符号。
+
+```http
+GET /api/v1/symbols/:id/transitive-callers?depth=5
+```
+
+**语义**："修改起始符号会影响哪些代码"——例如查某底层函数的传递调用方
+可得到所有直接/间接依赖它的入口点。响应结构同上。
+
+> 注：递归深度通过 `depth` 控制（默认 5），防止大型调用图上的递归爆炸。
+> 服务端用 `WITH RECURSIVE` + `UNION` 去重，天然防环。
+
 ### 文件和符号
 
 #### 获取文件详情

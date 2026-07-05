@@ -598,3 +598,108 @@ func (r *EdgeRepository) queryEdgesWithDetails(ctx context.Context, query, arg s
 	}
 	return results, rows.Err()
 }
+
+// ReachableSymbol 是多跳可达性查询的单条结果，记录从起始符号出发沿调用边
+// 递归可达的符号及其最近出现深度。
+type ReachableSymbol struct {
+	SymbolID  string
+	Name      string
+	Kind      string
+	Signature string
+	FilePath  string
+	// Depth 是该符号相对起始符号的最短跳数（起始符号自身为 0，直接相邻为 1）。
+	Depth int
+}
+
+// DefaultTransitiveDepth 是多跳查询的默认最大深度，防止环与大图上的递归爆炸。
+// 通过查询参数可覆盖（调用方按需调大）。5 跳覆盖多数"调用链追踪"需求。
+const DefaultTransitiveDepth = 5
+
+// transitiveQuery 构建递归 CTE 查询并执行。
+//
+// direction 决定递归方向：
+//   - "forward"（传递调用链 callees）：沿 source→target 扩展，返回起始符号"会触及的代码"
+//   - "backward"（反向影响 callers）：沿 target→source 扩展，返回"调用起始符号的代码"
+//
+// 用 UNION（而非 UNION ALL）对 symbol_id 去重，天然防环；保留每符号的最小 depth。
+func (r *EdgeRepository) transitiveQuery(ctx context.Context, startSymbolID, direction string, maxDepth int) ([]*ReachableSymbol, error) {
+	if maxDepth <= 0 {
+		maxDepth = DefaultTransitiveDepth
+	}
+
+	// 递归步的"下一跳"列：正向取 target_id，反向取 source_id
+	var nextCol string
+	if direction == "backward" {
+		nextCol = "source_id"
+	} else {
+		nextCol = "target_id"
+	}
+
+	// 起始符号的"对端"列：正向 base 从 source 出发记录 target；反向 base 从 target 出发记录 source
+	var baseStartCol, baseNextCol string
+	if direction == "backward" {
+		// 反向：起始符号在 target_id，沿 source_id 扩展
+		baseStartCol, baseNextCol = "target_id", "source_id"
+	} else {
+		// 正向：起始符号在 source_id，沿 target_id 扩展
+		baseStartCol, baseNextCol = "source_id", "target_id"
+	}
+
+	query := fmt.Sprintf(`
+	WITH RECURSIVE reach AS (
+		-- Base case: 从起始符号的直接相邻符号开始（depth=1）。
+		-- 不把起始符号自身放入结果（调用方已知），只返回可达的"其他"符号。
+		SELECT e.%s AS symbol_id, 1 AS depth
+		FROM edges e
+		WHERE e.%s = $1 AND e.edge_type = 'call' AND e.%s IS NOT NULL
+
+		UNION
+		-- Recursive case: 沿 call 边再走一跳
+		SELECT e.%s, r.depth + 1
+		FROM reach r
+		JOIN edges e ON e.%s = r.symbol_id
+		WHERE e.edge_type = 'call' AND e.%s IS NOT NULL AND r.depth < $2
+	)
+	SELECT r.symbol_id, s.name, s.kind, s.signature, f.path, MIN(r.depth) AS depth
+	FROM reach r
+	JOIN symbols s ON s.symbol_id = r.symbol_id
+	LEFT JOIN files f ON s.file_id = f.file_id
+	GROUP BY r.symbol_id, s.name, s.kind, s.signature, f.path
+	ORDER BY MIN(r.depth), s.name
+	`, baseNextCol, baseStartCol, baseNextCol,
+		nextCol, baseStartCol, nextCol)
+
+	rows, err := r.db.QueryContext(ctx, query, startSymbolID, maxDepth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*ReachableSymbol
+	for rows.Next() {
+		var rs ReachableSymbol
+		if err := rows.Scan(&rs.SymbolID, &rs.Name, &rs.Kind, &rs.Signature, &rs.FilePath, &rs.Depth); err != nil {
+			return nil, err
+		}
+		results = append(results, &rs)
+	}
+	return results, rows.Err()
+}
+
+// GetTransitiveCallees 返回从 startSymbolID 出发，沿调用边（source→target）
+// 递归可达的全部符号（传递调用链）。maxDepth 限制最大跳数（<=0 用默认值）。
+//
+// 语义："起始符号的执行会触及哪些代码"。例如查 main 的 transitive callees
+// 可得到整条调用树（去重，每符号取最短跳数）。
+func (r *EdgeRepository) GetTransitiveCallees(ctx context.Context, startSymbolID string, maxDepth int) ([]*ReachableSymbol, error) {
+	return r.transitiveQuery(ctx, startSymbolID, "forward", maxDepth)
+}
+
+// GetTransitiveCallers 返回沿调用边反向（target→source）递归可达的全部符号
+// （反向影响范围）。maxDepth 限制最大跳数（<=0 用默认值）。
+//
+// 语义："修改起始符号会影响哪些代码"。例如查某底层函数的 transitive callers
+// 可得到所有直接/间接依赖它的入口点。
+func (r *EdgeRepository) GetTransitiveCallers(ctx context.Context, startSymbolID string, maxDepth int) ([]*ReachableSymbol, error) {
+	return r.transitiveQuery(ctx, startSymbolID, "backward", maxDepth)
+}

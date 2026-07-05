@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
@@ -344,4 +345,115 @@ func (h *RelationshipHandler) GetFileSymbols(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// ReachableSymbolResponse 是多跳可达性查询的单条结果。
+type ReachableSymbolResponse struct {
+	SymbolID  string `json:"symbol_id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	FilePath  string `json:"file_path"`
+	Signature string `json:"signature"`
+	// Depth 是该符号相对起始符号的最短跳数（1=直接调用关系，2=隔一跳，依此类推）。
+	Depth int `json:"depth"`
+}
+
+// TransitiveResponse 是多跳查询响应。
+type TransitiveResponse struct {
+	Symbols []ReachableSymbolResponse `json:"symbols"`
+	Total   int                       `json:"total"`
+	Depth   int                       `json:"depth"` // 实际使用的最大深度
+}
+
+// parseDepthParam 解析可选的 depth 查询参数，<=0 或非法时返回默认值。
+func parseDepthParam(c *gin.Context) int {
+	raw := c.Query("depth")
+	if raw == "" {
+		return models.DefaultTransitiveDepth
+	}
+	d, err := strconv.Atoi(raw)
+	if err != nil || d <= 0 {
+		return models.DefaultTransitiveDepth
+	}
+	return d
+}
+
+// verifySymbol 校验符号存在，返回 true 并写入 404/500 响应时返回 false。
+func (h *RelationshipHandler) verifySymbol(c *gin.Context) (string, bool) {
+	symbolID := c.Param("id")
+	if symbolID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Symbol ID is required"})
+		return "", false
+	}
+	ctx := context.Background()
+	symbol, err := h.symbolRepo.GetByID(ctx, symbolID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve symbol", "details": err.Error()})
+		return "", false
+	}
+	if symbol == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Symbol not found"})
+		return "", false
+	}
+	return symbolID, true
+}
+
+// toReachableResponse 将 []*ReachableSymbol 转为响应并写入 c。
+func toReachableResponse(c *gin.Context, reachable []*models.ReachableSymbol, depth int) {
+	results := make([]ReachableSymbolResponse, 0, len(reachable))
+	for _, r := range reachable {
+		results = append(results, ReachableSymbolResponse{
+			SymbolID:  r.SymbolID,
+			Name:      r.Name,
+			Kind:      r.Kind,
+			FilePath:  r.FilePath,
+			Signature: r.Signature,
+			Depth:     r.Depth,
+		})
+	}
+	c.JSON(http.StatusOK, TransitiveResponse{
+		Symbols: results,
+		Total:   len(results),
+		Depth:   depth,
+	})
+}
+
+// GetTransitiveCallees handles GET /api/v1/symbols/:id/transitive-callees
+// 返回从指定符号出发沿调用边递归可达的全部符号（传递调用链）。
+// 可选查询参数 depth 控制最大跳数（默认 5）。
+//
+// 语义："起始符号的执行会触及哪些代码"——例如查 main 的传递调用链可得到
+// 整棵调用子树（去重，每符号取最短跳数）。
+func (h *RelationshipHandler) GetTransitiveCallees(c *gin.Context) {
+	symbolID, ok := h.verifySymbol(c)
+	if !ok {
+		return
+	}
+	depth := parseDepthParam(c)
+	reachable, err := h.edgeRepo.GetTransitiveCallees(c.Request.Context(), symbolID, depth)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve transitive callees", "details": err.Error()})
+		return
+	}
+	toReachableResponse(c, reachable, depth)
+}
+
+// GetTransitiveCallers handles GET /api/v1/symbols/:id/transitive-callers
+// 返回沿调用边反向递归可达的全部符号（反向影响范围）。
+// 可选查询参数 depth 控制最大跳数（默认 5）。
+//
+// 语义："修改起始符号会影响哪些代码"——例如查某底层函数的传递调用方
+// 可得到所有直接/间接依赖它的入口点。
+func (h *RelationshipHandler) GetTransitiveCallers(c *gin.Context) {
+	symbolID, ok := h.verifySymbol(c)
+	if !ok {
+		return
+	}
+	depth := parseDepthParam(c)
+	reachable, err := h.edgeRepo.GetTransitiveCallers(c.Request.Context(), symbolID, depth)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve transitive callers", "details": err.Error()})
+		return
+	}
+	toReachableResponse(c, reachable, depth)
 }
