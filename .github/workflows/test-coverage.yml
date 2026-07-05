@@ -40,9 +40,6 @@ jobs:
     - name: Initialize database extensions
       run: |
         docker exec postgres psql -U codeatlas -d codeatlas -c "CREATE EXTENSION IF NOT EXISTS vector;"
-        docker exec postgres psql -U codeatlas -d codeatlas -c "CREATE EXTENSION IF NOT EXISTS age;"
-        docker exec postgres psql -U codeatlas -d codeatlas -c "LOAD 'age';"
-        docker exec postgres psql -U codeatlas -d codeatlas -c "SET search_path = ag_catalog, \"\$user\", public;"
     
     - name: Set up Go
       uses: actions/setup-go@v5
