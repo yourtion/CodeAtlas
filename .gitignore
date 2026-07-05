@@ -9,6 +9,7 @@ coverage.html
 
 # Build artifacts
 bin/
+cli
 
 # DevContainer
-.devcontainer/.env
+.devcontainer/.envcli
