@@ -1013,6 +1013,11 @@ func (idx *Indexer) writeSymbolsOptimized(ctx context.Context, symbols []schema.
 	// Process symbols in adaptive batches
 	symbolRepo := models.NewSymbolRepository(idx.db)
 	for i := 0; i < len(modelSymbols); i += batchSize {
+		// 顶部检查 ctx：BatchCreate 内部虽透传 ctx，但顶部显式检查可让取消/超时
+		// 在一个 batch 边界即响应，避免等下一个 BatchCreate 才发现。
+		if err := ctx.Err(); err != nil {
+			return result, fmt.Errorf("write symbols cancelled before batch %d: %w", i/batchSize, err)
+		}
 		end := i + batchSize
 		if end > len(modelSymbols) {
 			end = len(modelSymbols)

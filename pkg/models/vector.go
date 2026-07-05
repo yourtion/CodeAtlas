@@ -446,6 +446,11 @@ func (r *VectorRepository) SimilaritySearchWithFilters(ctx context.Context, quer
 // 查询文本先用 split_identifier 拆分驼峰/下划线，再 plainto_tsquery。
 // 返回按 ts_rank 排序的结果，score 落入 Similarity 字段以便与向量结果统一处理。
 // filters 的 kind/language/repo 同样在 SQL 层应用。
+//
+// 能力差异（与 SimilaritySearchWithFilters）：本方法仅支持 EntityType（单值），
+// 不支持 EntityTypes（多值）/Model/MinSimilarity。原因是这些过滤项当前无关键词
+// 检索调用方使用，且 ts_rank 与 cosine 距离的 MinSimilarity 阈值语义不同。
+// 如未来需要，应在此扩展并同步更新 search_handler 的 keyword 分支。
 func (r *VectorRepository) KeywordSearch(ctx context.Context, query string, filters VectorSearchFilters) ([]*VectorSearchResult, error) {
 	needJoin := len(filters.Kind) > 0 || filters.Language != "" || filters.RepoID != "" || filters.WithDetails
 

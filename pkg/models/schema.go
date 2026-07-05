@@ -152,17 +152,6 @@ func (sm *SchemaManager) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
-// CreateVectorIndex 已废弃：向量相似度索引现在由迁移
-// 20260101000002_vector_hnsw.sql 以 HNSW 方式创建（召回率更高、增量友好）。
-// 保留此方法仅为向后兼容 scripts/init_db.go 的 -create-vector-index 标志；
-// 调用时为空操作并记录提示，不再创建 IVFFlat 索引。
-func (sm *SchemaManager) CreateVectorIndex(ctx context.Context, lists int) error {
-	if dbLogger != nil {
-		dbLogger.Debug("CreateVectorIndex is deprecated; HNSW index is created by migration 20260101000002_vector_hnsw.sql (no-op)")
-	}
-	return nil
-}
-
 // GetDatabaseStats returns statistics about the database
 func (sm *SchemaManager) GetDatabaseStats(ctx context.Context) (*DatabaseStats, error) {
 	stats := &DatabaseStats{}

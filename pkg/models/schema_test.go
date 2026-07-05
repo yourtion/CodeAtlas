@@ -198,37 +198,3 @@ func TestWaitForDatabase(t *testing.T) {
 		t.Fatalf("Database ping failed: %v", err)
 	}
 }
-
-func TestSchemaManager_CreateVectorIndex(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test")
-	}
-
-	testDB := SetupTestDB(t)
-	defer testDB.TeardownTestDB(t)
-
-	sm := NewSchemaManager(testDB.DB)
-	ctx := context.Background()
-
-	// Initialize schema first
-	if err := sm.InitializeSchema(ctx); err != nil {
-		t.Fatalf("Failed to initialize schema: %v", err)
-	}
-
-	// Create vector index
-	err := sm.CreateVectorIndex(ctx, 10)
-	if err != nil {
-		t.Fatalf("Failed to create vector index: %v", err)
-	}
-
-	// Verify index exists
-	var indexExists bool
-	query := `SELECT EXISTS(SELECT 1 FROM pg_indexes WHERE indexname = 'idx_vectors_embedding')`
-	err = testDB.DB.QueryRowContext(ctx, query).Scan(&indexExists)
-	if err != nil {
-		t.Fatalf("Failed to check index existence: %v", err)
-	}
-	if !indexExists {
-		t.Error("Vector index not found")
-	}
-}

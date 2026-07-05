@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
@@ -88,7 +87,7 @@ func (h *RelationshipHandler) GetCallers(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// Verify symbol exists
 	symbol, err := h.symbolRepo.GetByID(ctx, symbolID)
@@ -113,7 +112,7 @@ func (h *RelationshipHandler) GetCallers(c *gin.Context) {
 // getCallersSQL 通过 JOIN 查询返回调用给定符号的所有符号（含详情），
 // 一次 SQL 消除原先逐条 GetByID 的 N+1 查询。
 func (h *RelationshipHandler) getCallersSQL(c *gin.Context, symbolID string) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	edges, err := h.edgeRepo.GetCallersWithDetails(ctx, symbolID)
 	if err != nil {
@@ -149,7 +148,7 @@ func (h *RelationshipHandler) GetCallees(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// Verify symbol exists
 	symbol, err := h.symbolRepo.GetByID(ctx, symbolID)
@@ -174,7 +173,7 @@ func (h *RelationshipHandler) GetCallees(c *gin.Context) {
 // getCalleesSQL 通过 JOIN 查询返回给定符号调用的所有符号（含详情），
 // 一次 SQL 消除原先逐条 GetByID 的 N+1 查询。
 func (h *RelationshipHandler) getCalleesSQL(c *gin.Context, symbolID string) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	edges, err := h.edgeRepo.GetCalleesWithDetails(ctx, symbolID)
 	if err != nil {
@@ -210,7 +209,7 @@ func (h *RelationshipHandler) GetDependencies(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// Verify symbol exists
 	symbol, err := h.symbolRepo.GetByID(ctx, symbolID)
@@ -236,7 +235,7 @@ func (h *RelationshipHandler) GetDependencies(c *gin.Context) {
 // 一次 SQL 消除原先逐条 GetByID 的 N+1 查询。
 // 分两类：内部符号依赖（JOIN symbols/files）+ 外部模块依赖（仅 target_module）。
 func (h *RelationshipHandler) getDependenciesSQL(c *gin.Context, symbolID string) {
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// 1. 内部符号依赖（有 target_id，JOIN 取详情）
 	internalDeps, err := h.edgeRepo.GetDependenciesWithDetails(ctx, symbolID)
@@ -296,7 +295,7 @@ func (h *RelationshipHandler) GetFileSymbols(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
 	// Verify file exists
 	file, err := h.fileRepo.GetByID(ctx, fileID)
@@ -390,7 +389,7 @@ func (h *RelationshipHandler) verifySymbol(c *gin.Context) (string, bool) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Symbol ID is required"})
 		return "", false
 	}
-	ctx := context.Background()
+	ctx := c.Request.Context()
 	symbol, err := h.symbolRepo.GetByID(ctx, symbolID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve symbol", "details": err.Error()})

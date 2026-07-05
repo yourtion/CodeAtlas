@@ -386,61 +386,40 @@ func (r *VectorRepository) SemanticSearch(
 
 ## 事务管理
 
-### 事务接口
+### 事务
+
+代码库使用 `database/sql` 原生事务（`*sql.Tx`），各 repository 提供
+`BatchCreateTx(ctx, tx, items)` 形态的方法，在调用方管理的事务边界内写入，
+保证索引管道多表写入的原子性。
 
 ```go
-// transaction.go
-type Tx interface {
-    Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
-    Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
-    Rollback(ctx context.Context) error
-    Commit(ctx context.Context) error
+// 写入方示例（见 internal/indexer/indexer.go 的 writeDataWithTransaction）
+tx, err := db.BeginTx(ctx, nil)
+if err != nil {
+    return err
 }
-```
-
-### 使用事务
-
-```go
-func (r *Repository) ComplexOperation(ctx context.Context) error {
-    tx, err := r.db.Begin(ctx)
+// 失败时回滚（命名返回值 + defer 是惯用模式）
+defer func() {
     if err != nil {
-        return fmt.Errorf("failed to begin transaction: %w", err)
+        _ = tx.Rollback()
     }
-    defer tx.Rollback(ctx)
+}()
 
-    // 执行多个操作
-    if err := r.doSomething(ctx, tx); err != nil {
-        return err
-    }
-
-    if err := r.doAnotherThing(ctx, tx); err != nil {
-        return err
-    }
-
-    // 提交事务
-    if err := tx.Commit(ctx); err != nil {
-        return fmt.Errorf("failed to commit transaction: %w", err)
-    }
-
-    return nil
+if err := fileRepo.BatchCreateTx(ctx, tx, files); err != nil {
+    return err
 }
+if err := symbolRepo.BatchCreateTx(ctx, tx, symbols); err != nil {
+    return err
+}
+if err := edgeRepo.BatchCreateTx(ctx, tx, edges); err != nil {
+    return err
+}
+return tx.Commit()
 ```
 
-### 事务选项
-
-```go
-// transaction.go
-type TxOptions struct {
-    IsoLevel   pgx.TxIsoLevel
-    AccessMode pgx.TxAccessMode
-}
-
-// Read Committed
-tx, err := db.BeginTx(ctx, pgx.TxOptions{
-    IsoLevel:   pgx.ReadCommitted,
-    AccessMode: pgx.ReadWrite,
-})
-```
+> 注：早期版本曾有独立的 `TransactionManager`/`WithTransaction` 抽象（基于
+> pgx 风格的 `Tx`/`TxOptions` 接口），已在死代码清理中移除——实际写入路径
+> 一律走 `*sql.Tx`，不再保留这层未接入的抽象。
 
 ---
 

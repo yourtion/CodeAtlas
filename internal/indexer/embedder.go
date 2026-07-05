@@ -80,6 +80,13 @@ func (SymbolChunker) Chunk(symbols []schema.Symbol) []EmbeddingInput {
 // 差 ≤ GapThreshold 行则合并为一块。每块拼接其所有符号的 signature/docstring/
 // summary。entity_id 取块内"主要符号"（function > class > interface > 其他），
 // 保证检索时 JOIN symbols 能落到该块最具代表性的符号上。
+//
+// 设计权衡（已知限制）：
+//   - 块内次要符号不再生成独立向量：检索只能命中块的主要符号。这是"块语义覆盖"
+//     与"每符号独立可召回"之间的取舍；当前选择前者。如需后者，可改用 SymbolChunker，
+//     或增强为"块向量 + 符号向量双写"。
+//   - ChunkIndex 恒为 0：当前一个 entity 只产出一个块向量，无多 chunk 细分。
+//     如未来需对超大符号做二次切分，再用 ChunkIndex 区分。
 type CodeBlockChunker struct {
 	// GapThreshold 是合并相邻符号的最大行距，超过则开新块。默认 30。
 	GapThreshold int
@@ -251,7 +258,6 @@ type OpenAIEmbedder struct {
 	vectorRepo  *models.VectorRepository
 	rateLimiter *rateLimiter
 	chunker     Chunker
-	mu          sync.Mutex
 }
 
 // NewOpenAIEmbedder creates a new OpenAI-compatible embedder
@@ -395,6 +401,15 @@ func (e *OpenAIEmbedder) EmbedSymbols(ctx context.Context, symbols []schema.Symb
 
 	// Process in batches
 	for i := 0; i < len(inputs); i += e.config.BatchSize {
+		// 顶部检查 ctx：长批次链下，BatchEmbed/BatchCreate 内部虽检查 ctx，
+		// 但顶部显式检查可让取消/超时在一个 batch 边界即响应，无需等下游。
+		if err := ctx.Err(); err != nil {
+			result.Errors = append(result.Errors, EmbedError{
+				EntityID: "",
+				Message:  fmt.Sprintf("embedding cancelled before batch %d: %v", i/e.config.BatchSize, err),
+			})
+			break
+		}
 		end := i + e.config.BatchSize
 		if end > len(inputs) {
 			end = len(inputs)
