@@ -132,6 +132,67 @@ codeatlas index -i result.json -r myproject \
   --server https://codeatlas.example.com
 ```
 
+## Impact 命令
+
+可视化某个符号的"影响范围"——基于多跳可达性查询，把传递调用链或反向影响范围
+以分层缩进树形式输出。依赖已索引的代码库与运行中的 API 服务。
+
+### 基本用法
+
+```bash
+codeatlas impact --symbol <symbol-id> [options]
+```
+
+### 选项
+
+| 选项 | 说明 | 默认 |
+|------|------|------|
+| `--symbol, -s` | 起始符号 ID（必填） | — |
+| `--direction, -d` | 遍历方向：`callees`（正向，默认）或 `callers`（反向） | `callees` |
+| `--depth` | 最大跳数（0 表示用服务端默认，通常为 5） | 0 |
+| `--api-url` | API 服务地址（或 `CODEATLAS_API_URL` 环境变量） | — |
+| `--api-token` | API 认证 token（或 `CODEATLAS_API_TOKEN` 环境变量） | — |
+
+### 两种语义
+
+- **callees（默认）**：起始符号"会调用到哪些代码"。例如查 `main` 得到整棵调用子树，
+  直观看到程序入口会触及哪些函数。
+- **callers**：起始符号"被哪些代码调用"。例如查某个底层工具函数得到所有直接/间接
+  依赖它的入口点，用于评估改动它的影响范围。
+
+### 示例
+
+```bash
+# 查某符号的传递调用链（默认 depth=5）
+codeatlas impact --symbol abc-123
+
+# 反向：查谁（直接/间接）调用了它
+codeatlas impact --symbol abc-123 --direction callers
+
+# 限制只看 3 跳以内
+codeatlas impact --symbol abc-123 --depth 3
+```
+
+### 输出格式
+
+按 depth（跳数）分层，同层符号按名字排序：
+
+```
+Transitive callees (max depth=5, 8 symbols, 47ms)
+
+call (depth=1, 2):
+  ├── processData [function]  main.go
+  ├── validateInput [function]  main.go
+
+call (depth=2, 3):
+  ├── saveToDB [function]  db.go
+  ├── logEvent [function]  log.go
+  └── parseConfig [function]  config.go
+```
+
+> 注：输出按最短跳数分层（BFS），同层符号的精确父节点未追溯。若需完整路径树，
+> 需增强 API 返回 parent 信息（当前为集合视图）。
+
 ## 环境变量
 
 ### LLM 配置（用于 --semantic）
