@@ -620,7 +620,15 @@ func (r *VectorRepository) HybridSearch(ctx context.Context, query string, query
 		}
 	}
 
-	// 加权融合 + 重排
+	return fuseHybridResults(merge, weightVector, weightKeyword, filters.Limit), nil
+}
+
+// fuseHybridResults 是 HybridSearch 的纯函数核心：对每路已归一化的分数
+// 做加权融合、按总分降序排序、截断到 limit。提取出来便于无 DB 单测。
+//
+// 输入约定：merge 中每项的 VectorScore / KeywordScore 已经各自完成
+// 除以本路 max 的归一化（[0,1]）。
+func fuseHybridResults(merge map[string]*HybridSearchResult, weightVector, weightKeyword float64, limit int) []*HybridSearchResult {
 	results := make([]*HybridSearchResult, 0, len(merge))
 	for _, h := range merge {
 		h.Similarity = h.VectorScore*weightVector + h.KeywordScore*weightKeyword
@@ -629,12 +637,10 @@ func (r *VectorRepository) HybridSearch(ctx context.Context, query string, query
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Similarity > results[j].Similarity
 	})
-
-	// 截断到请求的 limit
-	if filters.Limit > 0 && len(results) > filters.Limit {
-		results = results[:filters.Limit]
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
 	}
-	return results, nil
+	return results
 }
 
 // GetEmbeddingDimensions returns the dimensions of embeddings for a model
