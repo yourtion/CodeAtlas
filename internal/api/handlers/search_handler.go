@@ -123,10 +123,23 @@ func (h *SearchHandler) Search(c *gin.Context) {
 			})
 			return
 		}
+		// ts_rank 原始量纲不可控（可能远大于 1），除以本批 max 归一化到 [0,1]，
+		// 与 vector / hybrid 模式保持相似度同量纲（响应字段语义一致）。
+		kwMax := 0.0
+		for _, kw := range kwResults {
+			if kw.Similarity > kwMax {
+				kwMax = kw.Similarity
+			}
+		}
 		hybridResults = make([]*models.HybridSearchResult, 0, len(kwResults))
 		for _, kw := range kwResults {
+			score := kw.Similarity
+			if kwMax > 0 {
+				score /= kwMax
+			}
+			kw.Similarity = score // 写回，使响应直接读到归一化后的值
 			hybridResults = append(hybridResults, &models.HybridSearchResult{
-				VectorSearchResult: *kw, KeywordScore: kw.Similarity,
+				VectorSearchResult: *kw, KeywordScore: score,
 			})
 		}
 	case "vector":
