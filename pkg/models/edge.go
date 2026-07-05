@@ -615,6 +615,11 @@ type ReachableSymbol struct {
 // 通过查询参数可覆盖（调用方按需调大）。5 跳覆盖多数"调用链追踪"需求。
 const DefaultTransitiveDepth = 5
 
+// MaxTransitiveDepth 是多跳查询的硬上限，防止恶意 ?depth=1e9 触发递归 CTE
+// 在密集调用图上产生爆炸性中间结果（DoS 防护）。任何传入的 maxDepth 都会被
+// 收敛到该值以内。20 跳足够覆盖大型代码库中最深的调用链，同时保证 CTE 终止开销可控。
+const MaxTransitiveDepth = 20
+
 // transitiveQuery 构建递归 CTE 查询并执行。
 //
 // direction 决定递归方向：
@@ -625,6 +630,10 @@ const DefaultTransitiveDepth = 5
 func (r *EdgeRepository) transitiveQuery(ctx context.Context, startSymbolID, direction string, maxDepth int) ([]*ReachableSymbol, error) {
 	if maxDepth <= 0 {
 		maxDepth = DefaultTransitiveDepth
+	}
+	// 硬上限：无论调用方传多大，都收敛到 MaxTransitiveDepth 以内，防止递归 CTE 爆炸。
+	if maxDepth > MaxTransitiveDepth {
+		maxDepth = MaxTransitiveDepth
 	}
 
 	// 递归步的"下一跳"列：正向取 target_id，反向取 source_id

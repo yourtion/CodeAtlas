@@ -365,7 +365,9 @@ type TransitiveResponse struct {
 	Depth   int                       `json:"depth"` // 实际使用的最大深度
 }
 
-// parseDepthParam 解析可选的 depth 查询参数，<=0 或非法时返回默认值。
+// parseDepthParam 解析可选的 depth 查询参数。
+//   - 缺省 / 非法 / <=0：返回默认值
+//   - 超过 MaxTransitiveDepth：收敛到 MaxTransitiveDepth（防 DoS，见 edge.go）
 func parseDepthParam(c *gin.Context) int {
 	raw := c.Query("depth")
 	if raw == "" {
@@ -374,6 +376,9 @@ func parseDepthParam(c *gin.Context) int {
 	d, err := strconv.Atoi(raw)
 	if err != nil || d <= 0 {
 		return models.DefaultTransitiveDepth
+	}
+	if d > models.MaxTransitiveDepth {
+		return models.MaxTransitiveDepth
 	}
 	return d
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -315,6 +316,9 @@ func TestParseDepthParam(t *testing.T) {
 		{"?depth=0", models.DefaultTransitiveDepth, "zero falls back to default"},
 		{"?depth=-3", models.DefaultTransitiveDepth, "negative falls back to default"},
 		{"?depth=abc", models.DefaultTransitiveDepth, "invalid falls back to default"},
+		{fmt.Sprintf("?depth=%d", models.MaxTransitiveDepth), models.MaxTransitiveDepth, "at cap is allowed"},
+		{fmt.Sprintf("?depth=%d", models.MaxTransitiveDepth+5), models.MaxTransitiveDepth, "over cap is clamped (DoS guard)"},
+		{"?depth=1000000", models.MaxTransitiveDepth, "huge value is clamped"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
