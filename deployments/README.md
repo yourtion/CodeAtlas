@@ -56,7 +56,6 @@ CodeAtlas can be deployed in two ways:
 
 - PostgreSQL 17+ with extensions:
   - pgvector (for semantic search)
-  - Apache AGE (for graph queries)
 - Go 1.21+ (for building from source)
 - Network access to embedding API (OpenAI or local server)
 
@@ -316,7 +315,6 @@ API_REQUEST_TIMEOUT=5m         # Request timeout
 ```bash
 INDEXER_BATCH_SIZE=100         # Batch size for processing
 INDEXER_WORKER_COUNT=4         # Number of worker threads
-INDEXER_GRAPH_NAME=code_graph  # AGE graph name
 ```
 
 #### Embedding Configuration
@@ -481,10 +479,6 @@ docker-compose -f deployments/docker-compose.prod.yml exec db \
 # Install pgvector
 docker-compose -f deployments/docker-compose.prod.yml exec db \
   psql -U codeatlas -d codeatlas -c "CREATE EXTENSION IF NOT EXISTS vector;"
-
-# Install AGE
-docker-compose -f deployments/docker-compose.prod.yml exec db \
-  psql -U codeatlas -d codeatlas -c "CREATE EXTENSION IF NOT EXISTS age;"
 ```
 
 #### Performance Issues

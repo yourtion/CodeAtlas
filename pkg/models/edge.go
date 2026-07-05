@@ -490,3 +490,111 @@ func (r *EdgeRepository) CountByTargetID(ctx context.Context, targetID string) (
 	err := r.db.QueryRowContext(ctx, query, targetID).Scan(&count)
 	return count, err
 }
+
+// EdgeWithDetails 是带符号与文件详情的边结果，用于消除关系查询的 N+1。
+// 一次 JOIN 即可取回边两端符号的 name/kind/signature 与文件路径，
+// 替代原先逐条 GetByID 的 N+1 查询。
+type EdgeWithDetails struct {
+	EdgeID      string
+	EdgeType    string
+	SymbolID    string // 关联符号 ID（caller 查询里是 source，callee/dependency 是 target）
+	Name        string
+	Kind        string
+	Signature   string
+	FilePath    string
+	SourceFile  string
+	TargetFile  *string
+	TargetModule *string
+}
+
+// edgeDetailsQuery 是 JOIN symbols/files 的公共 SQL 片段。
+// symbolAlias 指定取详情的符号端（source 或 target），fileAlias 对应其文件。
+const edgeDetailsColumns = `
+	SELECT
+		e.edge_id, e.edge_type,
+		s.symbol_id, s.name, s.kind, s.signature,
+		f.path,
+		e.source_file, e.target_file, e.target_module
+	FROM edges e
+	JOIN symbols s ON s.symbol_id = %s
+	LEFT JOIN files f ON s.file_id = f.file_id
+	WHERE %s
+	ORDER BY s.name
+`
+
+// GetCallersWithDetails 返回调用给定符号的所有符号（含详情），一次 JOIN 消除 N+1。
+// caller 是边的 source，给定符号是 target。
+func (r *EdgeRepository) GetCallersWithDetails(ctx context.Context, targetSymbolID string) ([]*EdgeWithDetails, error) {
+	query := fmt.Sprintf(edgeDetailsColumns, "e.source_id", "e.target_id = $1 AND e.edge_type = 'call'")
+	return r.queryEdgesWithDetails(ctx, query, targetSymbolID)
+}
+
+// GetCalleesWithDetails 返回给定符号调用的所有符号（含详情）。
+// callee 是边的 target，给定符号是 source。
+func (r *EdgeRepository) GetCalleesWithDetails(ctx context.Context, sourceSymbolID string) ([]*EdgeWithDetails, error) {
+	query := fmt.Sprintf(edgeDetailsColumns, "e.target_id", "e.source_id = $1 AND e.edge_type = 'call'")
+	return r.queryEdgesWithDetails(ctx, query, sourceSymbolID)
+}
+
+// GetDependenciesWithDetails 返回给定符号的依赖（import/extends/implements/reference，含详情）。
+// 依赖的符号是边的 target；若边无 target_id（外部 import，仅有 target_module）则跳过。
+func (r *EdgeRepository) GetDependenciesWithDetails(ctx context.Context, sourceSymbolID string) ([]*EdgeWithDetails, error) {
+	query := fmt.Sprintf(`
+	SELECT
+		e.edge_id, e.edge_type,
+		s.symbol_id, s.name, s.kind, s.signature,
+		f.path,
+		e.source_file, e.target_file, e.target_module
+	FROM edges e
+	JOIN symbols s ON s.symbol_id = e.target_id
+	LEFT JOIN files f ON s.file_id = f.file_id
+	WHERE e.source_id = $1
+	  AND e.edge_type IN ('import', 'extends', 'implements', 'reference')
+	  AND e.target_id IS NOT NULL
+	ORDER BY e.edge_type, s.name
+	`)
+	return r.queryEdgesWithDetails(ctx, query, sourceSymbolID)
+}
+
+// GetExternalDependencies 返回给定符号的外部依赖（无 target_id，仅有 target_module，
+// 如未解析的 import）。这些边无法 JOIN symbols，单独查询。
+func (r *EdgeRepository) GetExternalDependencies(ctx context.Context, sourceSymbolID string) ([]*EdgeWithDetails, error) {
+	query := `
+	SELECT
+		e.edge_id, e.edge_type,
+		'' AS symbol_id, '' AS name, '' AS kind, '' AS signature,
+		'' AS path,
+		e.source_file, e.target_file, e.target_module
+	FROM edges e
+	WHERE e.source_id = $1
+	  AND e.edge_type IN ('import', 'extends', 'implements', 'reference')
+	  AND e.target_id IS NULL
+	  AND e.target_module IS NOT NULL
+	ORDER BY e.edge_type, e.target_module
+	`
+	return r.queryEdgesWithDetails(ctx, query, sourceSymbolID)
+}
+
+// queryEdgesWithDetails 执行 JOIN 查询并扫描为 EdgeWithDetails 切片。
+func (r *EdgeRepository) queryEdgesWithDetails(ctx context.Context, query, arg string) ([]*EdgeWithDetails, error) {
+	rows, err := r.db.QueryContext(ctx, query, arg)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*EdgeWithDetails
+	for rows.Next() {
+		var d EdgeWithDetails
+		if err := rows.Scan(
+			&d.EdgeID, &d.EdgeType,
+			&d.SymbolID, &d.Name, &d.Kind, &d.Signature,
+			&d.FilePath,
+			&d.SourceFile, &d.TargetFile, &d.TargetModule,
+		); err != nil {
+			return nil, err
+		}
+		results = append(results, &d)
+	}
+	return results, rows.Err()
+}

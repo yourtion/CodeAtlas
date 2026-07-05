@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | **后端服务** | Go 1.25+ (Gin) | 高性能 API 服务 |
 | **解析引擎** | Go + Tree-sitter | 精确语法解析，支持 9+ 语言 |
 | **向量存储** | PostgreSQL + pgvector | 语义检索 |
-| **图谱存储** | PostgreSQL AGE | 依赖关系、路径查询 |
+| **图谱存储** | PostgreSQL 关系表 | 依赖关系、路径查询 |
 | **前端界面** | Svelte + Rsbuild | 轻量现代前端框架 |
 | **容器化** | Docker + Docker Compose | 本地和生产环境一致 |
 | **CLI 工具** | Go (urfave/cli/v2) | 跨平台代码分析和上传工具 |
@@ -193,7 +193,7 @@ EMBEDDING_DIMENSIONS=1024
 
 - **单数据库简化架构** - 关系数据 + 向量检索 + 图查询
 - **pgvector** - 生产级向量检索
-- **Apache AGE** - Cypher 图查询语言
+- **关系表图查询** - 基于 edges/symbols/files 关系表的 SQL 查询实现代码图谱
 - **ACID 保证** - 事务完整性
 - **成熟稳定** - 丰富的工具和生态
 
@@ -404,5 +404,4 @@ EMBEDDING_DIMENSIONS=1024
 ### 技术文档
 - [Tree-sitter](https://tree-sitter.github.io/tree-sitter/)
 - [pgvector](https://github.com/pgvector/pgvector)
-- [PostgreSQL AGE](https://age.apache.org/)
 - [Gin Framework](https://gin-gonic.com/)

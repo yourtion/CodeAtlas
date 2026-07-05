@@ -10,7 +10,6 @@
 - [事务管理](#事务管理)
 - [数据库连接池](#数据库连接池)
 - [pgvector 集成](#pgvector-集成)
-- [Apache AGE 集成](#apache-age-集成)
 - [数据迁移](#数据迁移)
 - [性能优化](#性能优化)
 
@@ -24,7 +23,6 @@
 
 - **数据库**: PostgreSQL 15+
 - **向量扩展**: pgvector
-- **图扩展**: Apache AGE
 - **驱动**: pgx (PostgreSQL 驱动)
 
 ### 设计原则
@@ -589,72 +587,21 @@ pgvector 提供多种距离函数：
 
 ---
 
-## Apache AGE 集成
+## 代码图谱查询
 
-### 安装 Apache AGE
+> 注：已移除 Apache AGE 图数据库支持，改用关系表（edges/symbols/files）的 SQL 查询实现代码知识图谱。
 
-```sql
--- 安装扩展
-CREATE EXTENSION IF NOT EXISTS age;
-
--- 加载 AGE
-LOAD 'age';
-
--- 设置搜索路径
-SET search_path = ag_catalog, "$user", public;
-```
-
-### 创建图
-
-```sql
--- 创建图
-SELECT create_graph('code_graph');
-
--- 创建图节点
-SELECT * FROM cypher('code_graph', $$
-    CREATE (s:Symbol {
-        id: 'uuid',
-        name: 'parseJSON',
-        kind: 'function'
-    })
-$$) as (a agtype);
-
--- 创建关系
-SELECT * FROM cypher('code_graph', $$
-    MATCH (s1:Symbol {id: 'uuid1'}), (s2:Symbol {id: 'uuid2'})
-    CREATE (s1)-[r:CALLS]->(s2)
-    RETURN r
-$$) as (a agtype);
-```
-
-### 图查询
+代码关系（调用、依赖、继承等）存储在 `edges` 表中，通过标准 SQL JOIN 查询即可实现调用图、依赖链和路径查询：
 
 ```go
-// 使用 Cypher 查询调用关系
-func (r *GraphRepository) GetCallers(ctx context.Context, symbolID string) ([]*Symbol, error) {
+// 查询调用关系
+func (r *EdgeRepository) GetCallers(ctx context.Context, symbolID string) ([]*Symbol, error) {
     rows, err := r.db.Query(ctx, `
-        SELECT * FROM cypher('code_graph', $$
-            MATCH (s:Symbol {id: $1})<-[r:CALLS]-(caller:Symbol)
-            RETURN caller.id, caller.name, caller.kind
-        $$) as (a agtype)
+        SELECT s.id, s.name, s.kind
+        FROM edges e
+        JOIN symbols s ON s.id = e.source_id
+        WHERE e.target_id = $1 AND e.edge_type = 'call'
     `, symbolID)
-    // ...
-}
-
-// 查找路径
-func (r *GraphRepository) FindPath(
-    ctx context.Context,
-    fromID string,
-    toID string,
-) ([]*Path, error) {
-    rows, err := r.db.Query(ctx, `
-        SELECT * FROM cypher('code_graph', $$
-            MATCH path = shortestPath(
-                (s1:Symbol {id: $1})-[*..5]-(s2:Symbol {id: $2})
-            )
-            RETURN path
-        $$) as (a agtype)
-    `, fromID, toID)
     // ...
 }
 ```
@@ -831,7 +778,6 @@ config := &Config{
 - [API 服务架构](../api/README.md)
 - [配置指南](../../docs/configuration.md)
 - [pgvector 文档](https://github.com/pgvector/pgvector)
-- [Apache AGE 文档](https://age.apache.org/)
 
 ---
 

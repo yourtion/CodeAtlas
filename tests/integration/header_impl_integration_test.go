@@ -36,7 +36,6 @@ func TestHeaderImplAssociation(t *testing.T) {
 		SkipVectors:     true, // Skip vectors for faster test
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_header_impl_graph",
 	}
 
 	// Create indexer
@@ -289,7 +288,6 @@ func TestMultipleHeaderImplPairs(t *testing.T) {
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_multiple_header_impl_graph",
 	}
 
 	// Create indexer

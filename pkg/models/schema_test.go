@@ -49,49 +49,6 @@ func TestSchemaManager_EnsureExtensions(t *testing.T) {
 	if !vectorExists {
 		t.Error("pgvector extension not found")
 	}
-
-	// Verify AGE extension
-	var ageExists bool
-	err = testDB.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'age')").Scan(&ageExists)
-	if err != nil {
-		t.Fatalf("Failed to check age extension: %v", err)
-	}
-	if !ageExists {
-		t.Error("AGE extension not found")
-	}
-}
-
-func TestSchemaManager_EnsureAGEGraph(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test")
-	}
-
-	testDB := SetupTestDB(t)
-	defer testDB.TeardownTestDB(t)
-
-	sm := NewSchemaManager(testDB.DB)
-	ctx := context.Background()
-
-	// Ensure extensions first
-	if err := sm.ensureExtensions(ctx); err != nil {
-		t.Fatalf("Failed to ensure extensions: %v", err)
-	}
-
-	// Ensure graph
-	err := sm.ensureAGEGraph(ctx)
-	if err != nil {
-		t.Fatalf("Failed to ensure AGE graph: %v", err)
-	}
-
-	// Verify graph exists
-	var graphExists bool
-	err = testDB.DB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM ag_catalog.ag_graph WHERE name = 'code_graph')").Scan(&graphExists)
-	if err != nil {
-		t.Fatalf("Failed to check graph existence: %v", err)
-	}
-	if !graphExists {
-		t.Error("code_graph not found")
-	}
 }
 
 func TestSchemaManager_VerifyCoreTables(t *testing.T) {

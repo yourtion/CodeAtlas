@@ -40,15 +40,11 @@ echo "Database is ready!"
 
 # Verify extensions
 echo "Verifying extensions..."
-docker-compose exec -T db psql -U codeatlas -d codeatlas -c "SELECT extname FROM pg_extension WHERE extname IN ('vector', 'age');"
+docker-compose exec -T db psql -U codeatlas -d codeatlas -c "SELECT extname FROM pg_extension WHERE extname IN ('vector');"
 
 # Verify tables
 echo "Verifying tables..."
 docker-compose exec -T db psql -U codeatlas -d codeatlas -c "\dt"
-
-# Verify AGE graph
-echo "Verifying AGE graph..."
-docker-compose exec -T db psql -U codeatlas -d codeatlas -c "SELECT * FROM ag_catalog.ag_graph WHERE name = 'code_graph';"
 
 # Get table counts
 echo "Getting table counts..."

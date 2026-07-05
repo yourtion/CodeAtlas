@@ -46,9 +46,6 @@ func TestLoadConfig(t *testing.T) {
 		if config.Indexer.WorkerCount != 4 {
 			t.Errorf("expected indexer worker count 4, got %d", config.Indexer.WorkerCount)
 		}
-		if config.Indexer.GraphName != "code_graph" {
-			t.Errorf("expected graph name 'code_graph', got '%s'", config.Indexer.GraphName)
-		}
 
 		// Check embedder defaults
 		if config.Embedder.Backend != "openai" {
@@ -175,7 +172,6 @@ func TestDatabaseConfigValidation(t *testing.T) {
 				Indexer: IndexerConfig{
 					BatchSize:   100,
 					WorkerCount: 4,
-					GraphName:   "test_graph",
 				},
 				Embedder: EmbedderConfig{
 					Backend:              "openai",
@@ -250,7 +246,6 @@ func TestAPIConfigValidation(t *testing.T) {
 				Indexer: IndexerConfig{
 					BatchSize:   100,
 					WorkerCount: 4,
-					GraphName:   "test_graph",
 				},
 				Embedder: EmbedderConfig{
 					Backend:              "openai",
@@ -281,7 +276,6 @@ func TestIndexerConfigValidation(t *testing.T) {
 			config: IndexerConfig{
 				BatchSize:   100,
 				WorkerCount: 4,
-				GraphName:   "test_graph",
 			},
 			wantErr: false,
 		},
@@ -290,7 +284,6 @@ func TestIndexerConfigValidation(t *testing.T) {
 			config: IndexerConfig{
 				BatchSize:   0,
 				WorkerCount: 4,
-				GraphName:   "test_graph",
 			},
 			wantErr: true,
 		},
@@ -299,16 +292,6 @@ func TestIndexerConfigValidation(t *testing.T) {
 			config: IndexerConfig{
 				BatchSize:   100,
 				WorkerCount: 0,
-				GraphName:   "test_graph",
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty_graph_name",
-			config: IndexerConfig{
-				BatchSize:   100,
-				WorkerCount: 4,
-				GraphName:   "",
 			},
 			wantErr: true,
 		},
@@ -418,7 +401,6 @@ func TestEmbedderConfigValidation(t *testing.T) {
 				Indexer: IndexerConfig{
 					BatchSize:   100,
 					WorkerCount: 4,
-					GraphName:   "test_graph",
 					SkipVectors: tt.skipVectors,
 				},
 				Embedder: tt.config,

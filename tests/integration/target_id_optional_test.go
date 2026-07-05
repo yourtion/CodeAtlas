@@ -78,7 +78,6 @@ func TestTargetIDOptional(t *testing.T) {
 		BatchSize:       100,
 		WorkerCount:     1,
 		UseTransactions: true,
-		GraphName:       "code_graph",
 	}
 	idx := indexer.NewIndexer(db, config)
 
@@ -196,7 +195,6 @@ func TestTargetIDRequired(t *testing.T) {
 		BatchSize:       100,
 		WorkerCount:     1,
 		UseTransactions: true,
-		GraphName:       "code_graph",
 	}
 	idx := indexer.NewIndexer(db, config)
 
@@ -302,7 +300,6 @@ func TestMixedEdges(t *testing.T) {
 		BatchSize:       100,
 		WorkerCount:     1,
 		UseTransactions: true,
-		GraphName:       "code_graph",
 	}
 	idx := indexer.NewIndexer(db, config)
 

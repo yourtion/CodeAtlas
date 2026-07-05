@@ -78,7 +78,6 @@ type SymbolInfo struct {
 
 // GetCallers handles GET /api/v1/symbols/:id/callers
 // Finds all functions that call the specified symbol via parameterized SQL.
-// (AGE Cypher 路径已停用，见方法内注释；图查询重写属于图谱主线工作。)
 func (h *RelationshipHandler) GetCallers(c *gin.Context) {
 	symbolID := c.Param("id")
 	if symbolID == "" {
@@ -106,21 +105,16 @@ func (h *RelationshipHandler) GetCallers(c *gin.Context) {
 		return
 	}
 
-	// NOTE: AGE Cypher 路径已停用。
-	// 历史实现通过 h.db.QueryContext 执行 Cypher，但查询里的 $symbol_id
-	// 是 dollar-quoted string 中的字面量，PostgreSQL 不会做参数绑定，
-	// 因此查询必然报错并触发 fallback；同时 Cypher 字符串拼接存在注入风险。
-	// 真正安全的图查询需要 AGE 1.5+ 的三参数形式 cypher(graph, $$...$$, params)，
-	// 这属于图谱主线的工作（见迭代计划），当前统一走参数化 SQL 路径。
+	// 查询关系表（edges JOIN symbols/files），一次 SQL 取回调用方详情。
 	h.getCallersSQL(c, symbolID)
 }
 
-// getCallersSQL is a fallback method using SQL when AGE is not available
+// getCallersSQL 通过 JOIN 查询返回调用给定符号的所有符号（含详情），
+// 一次 SQL 消除原先逐条 GetByID 的 N+1 查询。
 func (h *RelationshipHandler) getCallersSQL(c *gin.Context, symbolID string) {
 	ctx := context.Background()
 
-	// Get edges where this symbol is the target
-	edges, err := h.edgeRepo.GetByTargetAndType(ctx, symbolID, "call")
+	edges, err := h.edgeRepo.GetCallersWithDetails(ctx, symbolID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to retrieve callers",
@@ -129,36 +123,18 @@ func (h *RelationshipHandler) getCallersSQL(c *gin.Context, symbolID string) {
 		return
 	}
 
-	results := make([]RelatedSymbol, 0)
-	for _, edge := range edges {
-		// Get source symbol details
-		sourceSymbol, err := h.symbolRepo.GetByID(ctx, edge.SourceID)
-		if err != nil || sourceSymbol == nil {
-			continue
-		}
-
-		// Get file path
-		file, err := h.fileRepo.GetByID(ctx, sourceSymbol.FileID)
-		if err != nil || file == nil {
-			continue
-		}
-
-		result := RelatedSymbol{
-			SymbolID:  sourceSymbol.SymbolID,
-			Name:      sourceSymbol.Name,
-			Kind:      sourceSymbol.Kind,
-			FilePath:  file.Path,
-			Signature: sourceSymbol.Signature,
-		}
-		results = append(results, result)
+	results := make([]RelatedSymbol, 0, len(edges))
+	for _, e := range edges {
+		results = append(results, RelatedSymbol{
+			SymbolID:  e.SymbolID,
+			Name:      e.Name,
+			Kind:      e.Kind,
+			FilePath:  e.FilePath,
+			Signature: e.Signature,
+		})
 	}
 
-	response := RelationshipResponse{
-		Symbols: results,
-		Total:   len(results),
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, RelationshipResponse{Symbols: results, Total: len(results)})
 }
 
 // GetCallees handles GET /api/v1/symbols/:id/callees
@@ -190,17 +166,16 @@ func (h *RelationshipHandler) GetCallees(c *gin.Context) {
 		return
 	}
 
-	// NOTE: AGE Cypher 路径已停用（同 GetCallers，详见其注释）。
-	// 当前统一走参数化 SQL 路径；Cypher 重写属于图谱主线工作。
+	// 查询关系表，一次 SQL 取回被调用方详情。
 	h.getCalleesSQL(c, symbolID)
 }
 
-// getCalleesSQL is a fallback method using SQL when AGE is not available
+// getCalleesSQL 通过 JOIN 查询返回给定符号调用的所有符号（含详情），
+// 一次 SQL 消除原先逐条 GetByID 的 N+1 查询。
 func (h *RelationshipHandler) getCalleesSQL(c *gin.Context, symbolID string) {
 	ctx := context.Background()
 
-	// Get edges where this symbol is the source
-	edges, err := h.edgeRepo.GetBySourceAndType(ctx, symbolID, "call")
+	edges, err := h.edgeRepo.GetCalleesWithDetails(ctx, symbolID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to retrieve callees",
@@ -209,40 +184,18 @@ func (h *RelationshipHandler) getCalleesSQL(c *gin.Context, symbolID string) {
 		return
 	}
 
-	results := make([]RelatedSymbol, 0)
-	for _, edge := range edges {
-		if edge.TargetID == nil {
-			continue
-		}
-
-		// Get target symbol details
-		targetSymbol, err := h.symbolRepo.GetByID(ctx, *edge.TargetID)
-		if err != nil || targetSymbol == nil {
-			continue
-		}
-
-		// Get file path
-		file, err := h.fileRepo.GetByID(ctx, targetSymbol.FileID)
-		if err != nil || file == nil {
-			continue
-		}
-
-		result := RelatedSymbol{
-			SymbolID:  targetSymbol.SymbolID,
-			Name:      targetSymbol.Name,
-			Kind:      targetSymbol.Kind,
-			FilePath:  file.Path,
-			Signature: targetSymbol.Signature,
-		}
-		results = append(results, result)
+	results := make([]RelatedSymbol, 0, len(edges))
+	for _, e := range edges {
+		results = append(results, RelatedSymbol{
+			SymbolID:  e.SymbolID,
+			Name:      e.Name,
+			Kind:      e.Kind,
+			FilePath:  e.FilePath,
+			Signature: e.Signature,
+		})
 	}
 
-	response := RelationshipResponse{
-		Symbols: results,
-		Total:   len(results),
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, RelationshipResponse{Symbols: results, Total: len(results)})
 }
 
 // GetDependencies handles GET /api/v1/symbols/:id/dependencies
@@ -274,17 +227,18 @@ func (h *RelationshipHandler) GetDependencies(c *gin.Context) {
 		return
 	}
 
-	// NOTE: AGE Cypher 路径已停用（同 GetCallers，详见其注释）。
-	// 当前统一走参数化 SQL 路径；Cypher 重写属于图谱主线工作。
+	// 查询关系表，一次 SQL 取回依赖详情（含外部模块依赖）。
 	h.getDependenciesSQL(c, symbolID)
 }
 
-// getDependenciesSQL is a fallback method using SQL when AGE is not available
+// getDependenciesSQL 通过 JOIN 查询返回给定符号的依赖（含详情），
+// 一次 SQL 消除原先逐条 GetByID 的 N+1 查询。
+// 分两类：内部符号依赖（JOIN symbols/files）+ 外部模块依赖（仅 target_module）。
 func (h *RelationshipHandler) getDependenciesSQL(c *gin.Context, symbolID string) {
 	ctx := context.Background()
 
-	// Get all outgoing edges for dependency types
-	edges, err := h.edgeRepo.GetBySourceID(ctx, symbolID)
+	// 1. 内部符号依赖（有 target_id，JOIN 取详情）
+	internalDeps, err := h.edgeRepo.GetDependenciesWithDetails(ctx, symbolID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to retrieve dependencies",
@@ -293,51 +247,41 @@ func (h *RelationshipHandler) getDependenciesSQL(c *gin.Context, symbolID string
 		return
 	}
 
-	results := make([]Dependency, 0)
-	for _, edge := range edges {
-		// Filter for dependency edge types
-		if edge.EdgeType != "import" && edge.EdgeType != "extends" && 
-		   edge.EdgeType != "implements" && edge.EdgeType != "reference" {
-			continue
-		}
-
-		dep := Dependency{
-			EdgeType: edge.EdgeType,
-		}
-
-		// Handle edges with target symbols
-		if edge.TargetID != nil {
-			targetSymbol, err := h.symbolRepo.GetByID(ctx, *edge.TargetID)
-			if err == nil && targetSymbol != nil {
-				dep.SymbolID = targetSymbol.SymbolID
-				dep.Name = targetSymbol.Name
-				dep.Kind = targetSymbol.Kind
-				dep.Signature = targetSymbol.Signature
-
-				// Get file path
-				file, err := h.fileRepo.GetByID(ctx, targetSymbol.FileID)
-				if err == nil && file != nil {
-					dep.FilePath = file.Path
-				}
-			}
-		}
-
-		// Handle edges with target modules (imports without resolved symbols)
-		if edge.TargetModule != nil && dep.SymbolID == "" {
-			dep.Module = *edge.TargetModule
-			dep.Name = *edge.TargetModule
-			dep.Kind = "module"
-		}
-
-		results = append(results, dep)
+	// 2. 外部模块依赖（无 target_id，仅有 target_module，如未解析的 import）
+	externalDeps, err := h.edgeRepo.GetExternalDependencies(ctx, symbolID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve external dependencies",
+			"details": err.Error(),
+		})
+		return
 	}
 
-	response := DependencyResponse{
-		Dependencies: results,
-		Total:        len(results),
+	results := make([]Dependency, 0, len(internalDeps)+len(externalDeps))
+	for _, e := range internalDeps {
+		results = append(results, Dependency{
+			SymbolID:  e.SymbolID,
+			Name:      e.Name,
+			Kind:      e.Kind,
+			FilePath:  e.FilePath,
+			Signature: e.Signature,
+			EdgeType:  e.EdgeType,
+		})
+	}
+	for _, e := range externalDeps {
+		module := ""
+		if e.TargetModule != nil {
+			module = *e.TargetModule
+		}
+		results = append(results, Dependency{
+			Module:   module,
+			Name:     module,
+			Kind:     "module",
+			EdgeType: e.EdgeType,
+		})
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, DependencyResponse{Dependencies: results, Total: len(results)})
 }
 
 // GetFileSymbols handles GET /api/v1/files/:id/symbols
@@ -400,17 +344,4 @@ func (h *RelationshipHandler) GetFileSymbols(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
-}
-
-// parseAgtypeString parses an agtype JSON string value
-// AGE returns values as JSON, so "value" becomes value
-func parseAgtypeString(agtype string) string {
-	if len(agtype) < 2 {
-		return agtype
-	}
-	// Remove surrounding quotes if present
-	if agtype[0] == '"' && agtype[len(agtype)-1] == '"' {
-		return agtype[1 : len(agtype)-1]
-	}
-	return agtype
 }

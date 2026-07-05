@@ -14,17 +14,15 @@ import (
 type fakeExecutor struct {
 	mu sync.Mutex
 
-	writeRepositoryCalls   int
-	writeDataCalls         int
-	buildGraphCalls        int
+	writeRepositoryCalls    int
+	writeDataCalls          int
 	generateEmbeddingsCalls int
 
 	// 返回值（默认零值结果，调用方可按需覆盖）
-	writeRepoErr     error
-	writeDataResult  *WriteResult
-	writeDataErr     error
-	graphResult      *GraphBuildResult
-	embedResult      *EmbedResult
+	writeRepoErr    error
+	writeDataResult *WriteResult
+	writeDataErr    error
+	embedResult     *EmbedResult
 }
 
 func (f *fakeExecutor) writeRepository(ctx context.Context) error {
@@ -42,16 +40,6 @@ func (f *fakeExecutor) writeData(ctx context.Context, files []schema.File, edges
 		return &WriteResult{}, f.writeDataErr
 	}
 	return f.writeDataResult, f.writeDataErr
-}
-
-func (f *fakeExecutor) buildGraph(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) *GraphBuildResult {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.buildGraphCalls++
-	if f.graphResult == nil {
-		return &GraphBuildResult{}
-	}
-	return f.graphResult
 }
 
 func (f *fakeExecutor) generateEmbeddings(ctx context.Context, files []schema.File) *EmbedResult {
@@ -116,9 +104,6 @@ func TestIndexWithProgress_DoesNotRunPipelineTwice(t *testing.T) {
 	if fake.writeDataCalls != 1 {
 		t.Errorf("writeData should be called once, got %d (double-run bug?)", fake.writeDataCalls)
 	}
-	if fake.buildGraphCalls != 1 {
-		t.Errorf("buildGraph should be called once, got %d (double-run bug?)", fake.buildGraphCalls)
-	}
 	// generateEmbeddings 在 SkipVectors=true 时不进入该分支，预期 0 次
 	if fake.generateEmbeddingsCalls != 0 {
 		t.Errorf("generateEmbeddings should not be called when SkipVectors=true, got %d", fake.generateEmbeddingsCalls)
@@ -159,9 +144,6 @@ func TestIndex_RunsPipelineOnce(t *testing.T) {
 	}
 	if fake.writeDataCalls != 1 {
 		t.Errorf("writeData should be called once, got %d", fake.writeDataCalls)
-	}
-	if fake.buildGraphCalls != 1 {
-		t.Errorf("buildGraph should be called once, got %d", fake.buildGraphCalls)
 	}
 }
 

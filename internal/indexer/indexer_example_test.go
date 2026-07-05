@@ -31,7 +31,6 @@ func ExampleIndexer_Index() {
 		WorkerCount: 4,
 		SkipVectors: false,
 		Incremental: false,
-		GraphName:   "code_graph",
 	}
 
 	// Create indexer

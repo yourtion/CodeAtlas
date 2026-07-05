@@ -1,7 +1,8 @@
 # 使用 PostgreSQL 17 官方 Debian 基础镜像
 FROM postgres:17-bookworm
 
-# 安装 Pigsty APT 仓库并安装 pgvector + age
+# 安装 Pigsty APT 仓库并安装 pgvector
+# 注：CodeAtlas 已移除 Apache AGE 依赖，代码知识图谱查询改为关系表 SQL 实现。
 RUN apt-get update && apt-get install -y curl gnupg lsb-release \
     && curl -fsSL https://repo.pigsty.cc/key | gpg --dearmor -o /etc/apt/keyrings/pigsty.gpg \
     && echo "deb [signed-by=/etc/apt/keyrings/pigsty.gpg] https://repo.pigsty.cc/apt/infra generic main" \
@@ -9,7 +10,7 @@ RUN apt-get update && apt-get install -y curl gnupg lsb-release \
     && echo "deb [signed-by=/etc/apt/keyrings/pigsty.gpg] https://repo.pigsty.cc/apt/pgsql/$(lsb_release -cs) $(lsb_release -cs) main" \
             >> /etc/apt/sources.list.d/pigsty.list \
     && apt-get update \
-    && apt-get install -y postgresql-17-pgvector postgresql-17-age \
+    && apt-get install -y postgresql-17-pgvector \
     && rm -rf /var/lib/apt/lists/*
 
 # 默认挂载 PG 数据目录

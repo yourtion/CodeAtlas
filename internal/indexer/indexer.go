@@ -11,7 +11,7 @@ import (
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
-// pipelineExecutor 抽象索引管道中产生数据库副作用的四个阶段，
+// pipelineExecutor 抽象索引管道中产生数据库副作用的三个阶段，
 // 使其可被测试 fake 接管以做行为断言（例如钉住 IndexWithProgress
 // 不应重复执行整个管道）。
 //
@@ -20,7 +20,6 @@ import (
 type pipelineExecutor interface {
 	writeRepository(ctx context.Context) error
 	writeData(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) (*WriteResult, error)
-	buildGraph(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) *GraphBuildResult
 	generateEmbeddings(ctx context.Context, files []schema.File) *EmbedResult
 }
 
@@ -28,7 +27,6 @@ type pipelineExecutor interface {
 type Indexer struct {
 	validator       Validator
 	writer          *Writer
-	graphBuilder    *GraphBuilder
 	embedder        Embedder
 	config          *IndexerConfig
 	db              *models.DB
@@ -74,9 +72,6 @@ type IndexerConfig struct {
 	Incremental     bool `json:"incremental"`
 	UseTransactions bool `json:"use_transactions"`
 
-	// Graph options
-	GraphName string `json:"graph_name"`
-
 	// Embedding options
 	EmbeddingModel string `json:"embedding_model,omitempty"`
 }
@@ -89,7 +84,6 @@ func DefaultIndexerConfig() *IndexerConfig {
 		SkipVectors:     false,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "code_graph",
 	}
 }
 
@@ -130,13 +124,6 @@ func newIndexerInternal(db *models.DB, config *IndexerConfig, logger IndexerLogg
 	}
 	writer := NewWriter(db, writerConfig)
 
-	// Create graph builder with config
-	graphConfig := &GraphBuilderConfig{
-		GraphName: config.GraphName,
-		BatchSize: config.BatchSize,
-	}
-	graphBuilder := NewGraphBuilder(db, graphConfig)
-
 	// Create embedder with config (if not skipping vectors and not provided)
 	if embedder == nil && !config.SkipVectors {
 		embedderConfig := DefaultEmbedderConfig()
@@ -160,7 +147,6 @@ func newIndexerInternal(db *models.DB, config *IndexerConfig, logger IndexerLogg
 	return &Indexer{
 		validator:       validator,
 		writer:          writer,
-		graphBuilder:    graphBuilder,
 		embedder:        embedder,
 		config:          config,
 		db:              db,
@@ -381,36 +367,7 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		}
 	}
 
-	// Step 5: Build graph (async, non-blocking)
-	if idx.graphBuilder != nil {
-		idx.logger.Info("building knowledge graph")
-		graphResult := idx.executor.buildGraph(ctx, filesToProcess, input.Relationships)
-		result.Summary["graph_nodes_created"] = graphResult.NodesCreated
-		result.Summary["graph_edges_created"] = graphResult.EdgesCreated
-
-		idx.logger.InfoWithFields("knowledge graph built",
-			LogField{Key: "nodes_created", Value: graphResult.NodesCreated},
-			LogField{Key: "edges_created", Value: graphResult.EdgesCreated},
-			LogField{Key: "graph_errors", Value: len(graphResult.Errors)},
-		)
-
-		// Collect graph errors (non-fatal)
-		for _, graphErr := range graphResult.Errors {
-			idx.logger.WarnWithFields("graph error occurred",
-				LogField{Key: "entity_type", Value: graphErr.EntityType},
-				LogField{Key: "entity_id", Value: graphErr.EntityID},
-				LogField{Key: "message", Value: graphErr.Message},
-			)
-			errorCollector.Add(NewGraphError(
-				graphErr.Message,
-				graphErr.EntityID,
-				"",
-				nil,
-			))
-		}
-	}
-
-	// Step 6: Generate embeddings (async, optional)
+	// Step 5: Generate embeddings (async, optional)
 	if idx.embedder != nil && !idx.config.SkipVectors {
 		idx.logger.Info("generating vector embeddings")
 		embedResult := idx.executor.generateEmbeddings(ctx, filesToProcess)
@@ -580,30 +537,6 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		}
 	}
 
-	// Build graph
-	var graphNodesCreated, graphEdgesCreated int
-	if idx.graphBuilder != nil {
-		if progressChan != nil {
-			progressChan <- IndexProgress{
-				Stage:    "graph",
-				Progress: 0,
-				Message:  "Building knowledge graph...",
-			}
-		}
-
-		graphResult := idx.executor.buildGraph(ctx, filesToProcess, input.Relationships)
-		graphNodesCreated = graphResult.NodesCreated
-		graphEdgesCreated = graphResult.EdgesCreated
-
-		if progressChan != nil {
-			progressChan <- IndexProgress{
-				Stage:    "graph",
-				Progress: 100,
-				Message:  fmt.Sprintf("Created %d nodes, %d edges", graphResult.NodesCreated, graphResult.EdgesCreated),
-			}
-		}
-	}
-
 	// Generate embeddings
 	var vectorsCreated int
 	if idx.embedder != nil && !idx.config.SkipVectors {
@@ -650,10 +583,7 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		EdgesCreated:   writeResult.EdgesCreated,
 		VectorsCreated: vectorsCreated,
 		Duration:       time.Since(startTime),
-		Summary: map[string]interface{}{
-			"graph_nodes_created": graphNodesCreated,
-			"graph_edges_created": graphEdgesCreated,
-		},
+		Summary:        make(map[string]interface{}),
 	}
 
 	return result, nil
@@ -926,47 +856,6 @@ func (idx *Indexer) writeDataWithTransaction(ctx context.Context, files []schema
 	}
 
 	return result, nil
-}
-
-// buildGraph builds the knowledge graph from symbols and edges
-func (idx *Indexer) buildGraph(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) *GraphBuildResult {
-	result := &GraphBuildResult{}
-
-	// Collect all symbols
-	var allSymbols []schema.Symbol
-	for _, file := range files {
-		allSymbols = append(allSymbols, file.Symbols...)
-	}
-
-	// Create nodes in parallel
-	if len(allSymbols) > 0 {
-		nodesResult, err := idx.graphBuilder.CreateNodes(ctx, allSymbols)
-		if err != nil {
-			result.Errors = append(result.Errors, GraphError{
-				EntityType: "nodes",
-				Message:    err.Error(),
-			})
-		} else {
-			result.NodesCreated = nodesResult.NodesCreated
-			result.Errors = append(result.Errors, nodesResult.Errors...)
-		}
-	}
-
-	// Create edges in parallel
-	if len(edges) > 0 {
-		edgesResult, err := idx.graphBuilder.CreateEdges(ctx, edges)
-		if err != nil {
-			result.Errors = append(result.Errors, GraphError{
-				EntityType: "edges",
-				Message:    err.Error(),
-			})
-		} else {
-			result.EdgesCreated = edgesResult.EdgesCreated
-			result.Errors = append(result.Errors, edgesResult.Errors...)
-		}
-	}
-
-	return result
 }
 
 // generateEmbeddings generates vector embeddings for symbols

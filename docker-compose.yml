@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # PostgreSQL database with pgvector and AGE extensions
+  # PostgreSQL database with pgvector extension
   db:
     build: ./docker
     environment:

@@ -3,5 +3,4 @@
 -- （pkg/models/migrations/*.sql，由 SchemaManager.CreateSchema 触发）。
 -- 不要在此添加 CREATE TABLE，避免与迁移真源产生不一致。
 
-CREATE EXTENSION IF NOT EXISTS age;
 CREATE EXTENSION IF NOT EXISTS vector;

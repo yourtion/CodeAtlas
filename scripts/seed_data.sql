@@ -1,10 +1,6 @@
 -- Seed data for CodeAtlas development environment
 -- This script creates sample repositories, files, and relationships for testing
 
--- Set search path to match schema initialization
-LOAD 'age';
-SET search_path = ag_catalog, "$user", public;
-
 -- Insert sample repositories
 INSERT INTO repositories (repo_id, name, url, branch, metadata, created_at, updated_at) VALUES
 ('550e8400-e29b-41d4-a716-446655440001', 'sample-go-api', 'https://github.com/example/sample-go-api', 'main',

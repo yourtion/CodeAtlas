@@ -27,11 +27,6 @@ func (sm *SchemaManager) InitializeSchema(ctx context.Context) error {
 		return fmt.Errorf("failed to ensure extensions: %w", err)
 	}
 
-	// Verify AGE graph exists
-	if err := sm.ensureAGEGraph(ctx); err != nil {
-		return fmt.Errorf("failed to ensure AGE graph: %w", err)
-	}
-
 	// Try to verify tables exist, if not create them
 	if err := sm.verifyCoreTables(ctx); err != nil {
 		if dbLogger != nil {
@@ -62,7 +57,7 @@ func (sm *SchemaManager) CreateSchema(ctx context.Context) error {
 
 // ensureExtensions checks and creates required PostgreSQL extensions
 func (sm *SchemaManager) ensureExtensions(ctx context.Context) error {
-	extensions := []string{"vector", "age"}
+	extensions := []string{"vector"}
 
 	for _, ext := range extensions {
 		// Check if extension exists
@@ -88,48 +83,6 @@ func (sm *SchemaManager) ensureExtensions(ctx context.Context) error {
 			if dbLogger != nil {
 				dbLogger.Debugf("Extension %s already exists", ext)
 			}
-		}
-	}
-
-	// Load AGE into search path
-	if _, err := sm.db.ExecContext(ctx, "LOAD 'age'"); err != nil {
-		if dbLogger != nil {
-			dbLogger.Debugf("Failed to load AGE (may already be loaded): %v", err)
-		}
-	}
-
-	if _, err := sm.db.ExecContext(ctx, "SET search_path = ag_catalog, \"$user\", public"); err != nil {
-		if dbLogger != nil {
-			dbLogger.Debugf("Failed to set search path: %v", err)
-		}
-	}
-
-	return nil
-}
-
-// ensureAGEGraph ensures the code_graph exists in AGE
-func (sm *SchemaManager) ensureAGEGraph(ctx context.Context) error {
-	// Check if graph exists
-	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM ag_catalog.ag_graph WHERE name = 'code_graph')`
-	err := sm.db.QueryRowContext(ctx, query).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("failed to check graph existence: %w", err)
-	}
-
-	if !exists {
-		if dbLogger != nil {
-			dbLogger.Debug("Creating AGE graph: code_graph")
-		}
-		if _, err := sm.db.ExecContext(ctx, "SELECT ag_catalog.create_graph('code_graph')"); err != nil {
-			return fmt.Errorf("failed to create graph: %w", err)
-		}
-		if dbLogger != nil {
-			dbLogger.Debug("AGE graph created successfully")
-		}
-	} else {
-		if dbLogger != nil {
-			dbLogger.Debug("AGE graph already exists")
 		}
 	}
 
@@ -186,7 +139,7 @@ func (sm *SchemaManager) HealthCheck(ctx context.Context) error {
 	}
 
 	// Check extensions
-	extensions := []string{"vector", "age"}
+	extensions := []string{"vector"}
 	for _, ext := range extensions {
 		var exists bool
 		query := `SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = $1)`
@@ -194,14 +147,6 @@ func (sm *SchemaManager) HealthCheck(ctx context.Context) error {
 		if err != nil || !exists {
 			return fmt.Errorf("extension %s not available", ext)
 		}
-	}
-
-	// Check AGE graph
-	var graphExists bool
-	query := `SELECT EXISTS(SELECT 1 FROM ag_catalog.ag_graph WHERE name = 'code_graph')`
-	err := sm.db.QueryRowContext(ctx, query).Scan(&graphExists)
-	if err != nil || !graphExists {
-		return fmt.Errorf("AGE graph 'code_graph' not available")
 	}
 
 	return nil

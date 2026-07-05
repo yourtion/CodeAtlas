@@ -76,10 +76,6 @@ func TestNewIndexer(t *testing.T) {
 		t.Error("expected writer to be initialized")
 	}
 
-	if indexer.graphBuilder == nil {
-		t.Error("expected graph builder to be initialized")
-	}
-
 	if indexer.embedder == nil {
 		t.Error("expected embedder to be initialized when SkipVectors is false")
 	}
@@ -450,36 +446,6 @@ func TestIndexWithoutTransactions(t *testing.T) {
 
 	if result.Status != "success" && result.Status != "success_with_warnings" {
 		t.Errorf("expected success status, got: %s", result.Status)
-	}
-}
-
-// TestIndexWithGraphBuilder tests indexing with graph building
-func TestIndexWithGraphBuilder(t *testing.T) {
-	db, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	config := DefaultIndexerConfig()
-	config.RepoID = uuid.New().String()
-	config.RepoName = "test-repo"
-	config.SkipVectors = true
-
-	indexer := NewIndexer(db, config)
-	ctx := context.Background()
-
-	// Create test input with relationships
-	input := createTestParseOutputWithRelationships()
-
-	result, err := indexer.Index(ctx, input)
-	if err != nil {
-		t.Fatalf("index with graph failed: %v", err)
-	}
-
-	if result.Summary["graph_nodes_created"] == nil {
-		t.Error("expected graph nodes to be created")
-	}
-
-	if result.Summary["graph_edges_created"] == nil {
-		t.Error("expected graph edges to be created")
 	}
 }
 

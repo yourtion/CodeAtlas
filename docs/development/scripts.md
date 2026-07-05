@@ -120,7 +120,7 @@ bash scripts/test_devcontainer.sh
 
 #### test_schema.sh - 数据库模式测试
 
-验证数据库扩展、表结构、AGE 图谱、显示统计。
+验证数据库扩展、表结构、关系表图谱、显示统计。
 
 ```bash
 bash scripts/test_schema.sh

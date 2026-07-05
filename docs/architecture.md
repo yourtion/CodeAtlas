@@ -23,7 +23,7 @@ CodeAtlas 是一个智能代码知识图谱平台，结合了：
 - **代码解析**：Tree-sitter 静态分析
 - **语义理解**：LLM 增强的语义提取
 - **向量检索**：pgvector 语义搜索
-- **图查询**：PostgreSQL AGE 关系遍历
+- **图查询**：PostgreSQL 关系表关系遍历
 
 ### 核心能力
 
@@ -76,9 +76,9 @@ CodeAtlas 是一个智能代码知识图谱平台，结合了：
 │                         数据层                              │
 ├─────────────────────────────┴─────────────────────────────┤
 │  ┌──────────────┐  ┌──────────────┐  ┌─────────────────┐ │
-│  │ PostgreSQL   │  │  pgvector    │  │  PostgreSQL AGE │ │
-│  │ (关系数据)    │  │  (向量检索)   │  │  (图查询)        │ │
-│  │ ✅ 已实现     │  │  ✅ 已实现    │  │  🚧 部分实现     │ │
+│  │ PostgreSQL   │  │  pgvector    │  │  关系表图查询     │ │
+│  │ (关系数据)    │  │  (向量检索)   │  │  (edges/symbols) │ │
+│  │ ✅ 已实现     │  │  ✅ 已实现    │  │  ✅ 已实现       │ │
 │  └──────────────┘  └──────────────┘  └─────────────────┘ │
 └───────────────────────────────────────────────────────────┘
 
@@ -261,7 +261,6 @@ type IndexerConfig struct {
     SkipVectors     bool
     Incremental     bool
     UseTransactions bool
-    GraphName       string
 }
 ```
 
@@ -296,7 +295,6 @@ type IndexerConfig struct {
 **技术栈**：
 - PostgreSQL 15+
 - pgvector (向量检索)
-- Apache AGE (图查询)
 - pgx (驱动)
 
 **详细文档**：[数据模型层](../pkg/models/README.md)
@@ -358,7 +356,7 @@ type IndexerConfig struct {
        ▼
 ┌──────────────┐
 │  构建图       │  GraphBuilder
-│  (AGE)       │  创建图节点和边
+│  (关系表)     │  创建图节点和边
 └──────┬───────┘
        │
        ▼
@@ -409,7 +407,7 @@ API 服务器接收
    ↓
 写入 PostgreSQL
    ↓
-构建图 (AGE)
+构建图 (关系表)
    ↓
 生成向量 (pgvector)
    ↓
@@ -441,7 +439,7 @@ GET /api/v1/symbols/:id/callers
    ↓
 API 服务器接收
    ↓
-查询 AGE 图数据库
+查询关系表
    ↓
 遍历关系边
    ↓
@@ -461,7 +459,7 @@ API 服务器接收
 | **数据库驱动** | pgx | 纯 Go 实现 |
 | **解析引擎** | Tree-sitter | 精确语法解析 |
 | **向量存储** | pgvector | 向量相似度搜索 |
-| **图数据库** | Apache AGE | 图查询和遍历 |
+| **图查询** | 关系表 (edges/symbols/files) | 基于 SQL 的依赖关系遍历 |
 | **CLI 框架** | urfave/cli/v2 | 命令行工具 |
 
 ### 前端
@@ -477,7 +475,6 @@ API 服务器接收
 | 扩展 | 用途 | 状态 |
 |------|------|------|
 | **pgvector** | 向量存储和检索 | ✅ 已实现 |
-| **Apache AGE** | 图查询和遍历 | 🚧 部分实现 |
 
 ---
 
@@ -553,7 +550,7 @@ API 服务器接收
 **理由**：
 - ✅ 单数据库简化架构
 - ✅ pgvector 生产级向量检索
-- ✅ Apache AGE 图查询能力
+- ✅ 关系表实现代码图谱查询
 - ✅ ACID 事务保证
 - ✅ 成熟稳定、工具丰富
 
@@ -604,7 +601,7 @@ API 服务器接收
 | 多语言解析 | `internal/parser/` | 支持 9 种语言 |
 | 代码索引 | `internal/indexer/` | 完整索引管道 |
 | 向量检索 | `pkg/models/` | pgvector 集成 |
-| 图构建 | `internal/indexer/graph_builder.go` | AGE 图节点和边 |
+| 图构建 | `internal/indexer/graph_builder.go` | 关系表图节点和边 |
 | REST API | `internal/api/` | 完整 API 端点 |
 | CLI 工具 | `cmd/cli/` | parse, index, search 命令 |
 | 增量索引 | `internal/indexer/` | 基于 checksum |
@@ -614,7 +611,6 @@ API 服务器接收
 
 | 功能 | 模块 | 状态 |
 |------|------|------|
-| 图查询 | AGE | 图节点已创建，复杂查询待完善 |
 | Web UI | `web/` | 基础界面已实现 |
 
 ### 未实现功能 ❌

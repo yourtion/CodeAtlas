@@ -9,16 +9,12 @@
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS age;
-
-LOAD 'age';
-SET search_path = ag_catalog, "$user", public;
 
 -- ============================================================================
 -- 核心表
 -- ============================================================================
 
-SET search_path = public, ag_catalog, "$user";
+SET search_path = public;
 
 -- repositories: 仓库元数据
 CREATE TABLE IF NOT EXISTS repositories (
@@ -171,12 +167,6 @@ CREATE INDEX IF NOT EXISTS idx_edges_with_target ON edges(target_id) WHERE targe
 CREATE INDEX IF NOT EXISTS idx_files_path_prefix ON files(path text_pattern_ops);
 
 -- ============================================================================
--- AGE 图
--- ============================================================================
-
-SELECT * FROM ag_catalog.create_graph('code_graph');
-
--- ============================================================================
 -- updated_at 触发器（DB 为真源，应用层不再赋值）
 -- ============================================================================
 
@@ -244,9 +234,6 @@ LEFT JOIN symbols s2 ON e.target_id = s2.symbol_id;
 
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO codeatlas;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO codeatlas;
-GRANT USAGE ON SCHEMA ag_catalog TO codeatlas;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ag_catalog TO codeatlas;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ag_catalog TO codeatlas;
 
 -- 更新表统计信息，便于查询规划器
 ANALYZE repositories;

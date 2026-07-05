@@ -36,7 +36,7 @@ flowchart TD
     CLI[CLI 工具: 本地仓库上传] --> API[服务端 API]
     API --> Parser[解析引擎: 语法解析 + LLM增强]
     Parser --> VectorDB[向量数据库: pgvector]
-    Parser --> GraphDB[图数据库: AGE/Neo4j]
+    Parser --> GraphDB[知识图谱: 关系表查询]
     API --> QAEngine[QA 引擎: RAG + Agentic Pipeline]
     QAEngine --> VectorDB
     QAEngine --> GraphDB
@@ -53,7 +53,7 @@ flowchart TD
 | **后端服务** | Go (Gin/Fiber)          | 高性能 API 服务        |
 | **解析引擎** | Go + Tree-sitter + LLM  | 代码语法解析 + AI 增强 |
 | **向量存储** | PostgreSQL + pgvector   | 语义检索               |
-| **图谱存储** | PostgreSQL AGE          | 依赖关系、路径查询     |
+| **图谱存储** | PostgreSQL 关系表       | 依赖关系、路径查询     |
 | **前端界面** | Svelte + Rsbuild        | 轻量现代前端框架       |
 | **容器化**   | Docker + Docker Compose | 本地和生产环境一致     |
 | **CLI 工具** | Go                      | 轻量跨平台同步工具     |

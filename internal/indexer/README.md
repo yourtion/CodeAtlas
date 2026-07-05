@@ -14,7 +14,7 @@
 1. **验证** - 验证输入的 schema 约束
 2. **仓库元数据** - 创建或更新仓库记录
 3. **数据库写入** - 持久化文件、符号、AST 节点和边
-4. **图构建** - 构建 AGE 图节点和关系
+4. **图构建** - 构建关系表图节点和关系
 5. **嵌入生成** - 创建语义搜索的向量嵌入
 
 ### 配置
@@ -30,7 +30,6 @@ type IndexerConfig struct {
     SkipVectors     bool
     Incremental     bool
     UseTransactions bool
-    GraphName       string // 默认: "code_graph"
     EmbeddingModel  string
 }
 ```
@@ -185,8 +184,8 @@ go test -cover ./internal/indexer
         ┌─────────────────┴─────────────────┐
         ↓                 ↓                  ↓
    ┌──────────┐    ┌──────────┐      ┌──────────┐
-   │PostgreSQL│    │   AGE    │      │ pgvector │
-   │(关系型)  │    │  (图)    │      │(向量)    │
+   │PostgreSQL│    │ 关系表   │      │ pgvector │
+   │(关系型)  │    │ (图查询) │      │(向量)    │
    └──────────┘    └──────────┘      └──────────┘
 ```
 
