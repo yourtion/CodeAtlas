@@ -52,11 +52,11 @@ jobs:
 
       - name: Test Go build
         run: |
-          docker compose -f .devcontainer/docker-compose.yml exec -T dev make build
+          docker compose -f .devcontainer/docker-compose.yml exec --user root -T dev make build
 
       - name: Run tests with enhanced output
         run: |
-          docker compose -f .devcontainer/docker-compose.yml exec -T dev make test-ci
+          docker compose -f .devcontainer/docker-compose.yml exec --user root -T dev make test-ci
 
       - name: Extract test results
         if: always()
