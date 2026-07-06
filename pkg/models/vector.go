@@ -110,6 +110,43 @@ func (r *VectorRepository) GetByID(ctx context.Context, vectorID string) (*Vecto
 	return &vector, nil
 }
 
+// GetByVectorIDs 按 vector_id 批量查询向量记录（用于按需取源码片段）。
+// 返回顺序不保证，调用方按 VectorID 自行对齐。
+func (r *VectorRepository) GetByVectorIDs(ctx context.Context, ids []string) ([]*Vector, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	query := `
+		SELECT vector_id, entity_id, entity_type, embedding::text, content, model, chunk_index, created_at
+		FROM vectors WHERE vector_id = ANY($1)
+	`
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var vectors []*Vector
+	for rows.Next() {
+		var vector Vector
+		var embeddingStr string
+		if err := rows.Scan(
+			&vector.VectorID, &vector.EntityID, &vector.EntityType, &embeddingStr,
+			&vector.Content, &vector.Model, &vector.ChunkIndex, &vector.CreatedAt); err != nil {
+			return nil, err
+		}
+
+		embedding, err := parseVectorFromPgvector(embeddingStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse embedding for vector %s: %w", vector.VectorID, err)
+		}
+		vector.Embedding = embedding
+		vectors = append(vectors, &vector)
+	}
+	return vectors, rows.Err()
+}
+
 // GetByEntityID retrieves all vectors for an entity
 func (r *VectorRepository) GetByEntityID(ctx context.Context, entityID, entityType string) ([]*Vector, error) {
 	query := `
