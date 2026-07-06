@@ -111,7 +111,7 @@ type IndexError struct {
 
 // SearchFilters contains filters for search queries
 type SearchFilters struct {
-	RepoID   string   `json:"repo_id,omitempty"`
+	RepoIDs  []string `json:"repo_ids,omitempty"`
 	Language string   `json:"language,omitempty"`
 	Kind     []string `json:"kind,omitempty"`
 	Limit    int      `json:"limit,omitempty"`
@@ -218,8 +218,8 @@ func (c *APIClient) Search(ctx context.Context, query string, embedding []float3
 		"embedding": embedding,
 	}
 
-	if filters.RepoID != "" {
-		searchReq["repo_id"] = filters.RepoID
+	if len(filters.RepoIDs) > 0 {
+		searchReq["repo_ids"] = filters.RepoIDs
 	}
 	if filters.Language != "" {
 		searchReq["language"] = filters.Language
