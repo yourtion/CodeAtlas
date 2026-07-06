@@ -73,7 +73,7 @@ jobs:
         EMBEDDING_BACKEND: openai
         EMBEDDING_API_ENDPOINT: https://models.inference.ai.azure.com/embeddings
         EMBEDDING_API_KEY: ${{ secrets.GITHUB_TOKEN }}
-        EMBEDDING_DIMENSIONS: 768
+        EMBEDDING_DIMENSIONS: 1024
         INDEXER_SKIP_VECTORS: false
       run: |
         bash scripts/test_ci.sh go test $(go list ./... | grep -v /scripts | grep -v /test-repo) -coverprofile=coverage.out -covermode=atomic -v

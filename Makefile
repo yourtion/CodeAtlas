@@ -15,9 +15,11 @@ TEST_PACKAGES=$(shell go list ./... | grep -v /scripts | grep -v /test-repo)
 build: build-api build-cli
 
 build-api:
+	@mkdir -p bin
 	@go build -o ${API_BINARY} cmd/api/main.go
 
 build-cli:
+	@mkdir -p bin
 	@go build -o ${CLI_BINARY} cmd/cli/*.go
 
 run-api: build-api
