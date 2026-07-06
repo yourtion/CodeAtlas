@@ -52,6 +52,9 @@ type SearchRequest struct {
 	Language string   `json:"language,omitempty"`
 	Kind     []string `json:"kind,omitempty"`
 	Limit    int      `json:"limit,omitempty"`
+	// Mode 控制检索策略：vector（纯向量）、keyword（纯关键词）、hybrid（混合重排）。
+	// 默认 hybrid。hybrid 适合自然语言提问，keyword 适合精确符号名查找。
+	Mode string `json:"mode,omitempty"`
 }
 
 // SearchResponse represents the response for POST /api/v1/search
@@ -89,88 +92,113 @@ func (h *SearchHandler) Search(c *gin.Context) {
 
 	ctx := context.Background()
 
-	// Generate embedding from query text using embedding service
-	embedding, err := h.embedder.GenerateEmbedding(ctx, req.Query)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to generate embedding",
-			"details": err.Error(),
-		})
-		return
+	// mode 默认 hybrid：向量召回（语义）+ 关键词召回（精确符号名）+ 重排。
+	// keyword 模式跳过 embedding 生成，适合精确符号查找且省一次 API 调用。
+	mode := req.Mode
+	if mode == "" {
+		mode = "hybrid"
 	}
 
-	// Build search filters
+	// 构建检索过滤：kind/language/repo 全部下沉到 SQL（JOIN symbols/files），
+	// 过滤在 LIMIT 前应用，保证返回数满 limit。
 	filters := models.VectorSearchFilters{
-		EntityType: "symbol",
-		Limit:      req.Limit,
+		EntityType:  "symbol",
+		Limit:       req.Limit,
+		Kind:        req.Kind,
+		Language:    req.Language,
+		RepoID:      req.RepoID,
+		WithDetails: true, // JOIN 顺带返回 name/kind/signature/docstring/file_path/language/repo
 	}
 
-	// Perform vector similarity search
-	vectorResults, err := h.vectorRepo.SimilaritySearchWithFilters(ctx, embedding, filters)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to perform semantic search",
-			"details": err.Error(),
+	// 按 mode 分发到不同检索路径
+	var hybridResults []*models.HybridSearchResult
+	switch mode {
+	case "keyword":
+		// 纯关键词召回（无需 embedding）
+		kwResults, err := h.vectorRepo.KeywordSearch(ctx, req.Query, filters)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to perform keyword search",
+				"details": err.Error(),
+			})
+			return
+		}
+		// ts_rank 原始量纲不可控（可能远大于 1），除以本批 max 归一化到 [0,1]，
+		// 与 vector / hybrid 模式保持相似度同量纲（响应字段语义一致）。
+		kwMax := 0.0
+		for _, kw := range kwResults {
+			if kw.Similarity > kwMax {
+				kwMax = kw.Similarity
+			}
+		}
+		hybridResults = make([]*models.HybridSearchResult, 0, len(kwResults))
+		for _, kw := range kwResults {
+			score := kw.Similarity
+			if kwMax > 0 {
+				score /= kwMax
+			}
+			kw.Similarity = score // 写回，使响应直接读到归一化后的值
+			hybridResults = append(hybridResults, &models.HybridSearchResult{
+				VectorSearchResult: *kw, KeywordScore: score,
+			})
+		}
+	case "vector":
+		// 纯向量召回
+		embedding, err := h.embedder.GenerateEmbedding(ctx, req.Query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to generate embedding",
+				"details": err.Error(),
+			})
+			return
+		}
+		vecResults, err := h.vectorRepo.SimilaritySearchWithFilters(ctx, embedding, filters)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to perform semantic search",
+				"details": err.Error(),
+			})
+			return
+		}
+		hybridResults = make([]*models.HybridSearchResult, 0, len(vecResults))
+		for _, v := range vecResults {
+			hybridResults = append(hybridResults, &models.HybridSearchResult{
+				VectorSearchResult: *v, VectorScore: v.Similarity,
+			})
+		}
+	default:
+		// hybrid：向量 + 关键词 + 重排（默认）
+		embedding, err := h.embedder.GenerateEmbedding(ctx, req.Query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to generate embedding",
+				"details": err.Error(),
+			})
+			return
+		}
+		// 权重：向量为主 0.7，关键词为辅 0.3
+		hybridResults, err = h.vectorRepo.HybridSearch(ctx, req.Query, embedding, filters, 0.7, 0.3)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to perform hybrid search",
+				"details": err.Error(),
+			})
+			return
+		}
+	}
+
+	// 构造响应（检索已 JOIN 返回全部所需详情）
+	results := make([]SearchResult, 0, len(hybridResults))
+	for _, h := range hybridResults {
+		results = append(results, SearchResult{
+			SymbolID:   h.EntityID,
+			Name:       h.Name,
+			Kind:       h.Kind,
+			Signature:  h.Signature,
+			FilePath:   h.FilePath,
+			Docstring:  h.Docstring,
+			Similarity: h.Similarity,
 		})
-		return
-	}
-
-	// Fetch symbol details and apply additional filters
-	results := make([]SearchResult, 0)
-	for _, vr := range vectorResults {
-		// Get symbol details
-		symbol, err := h.symbolRepo.GetByID(ctx, vr.EntityID)
-		if err != nil {
-			continue // Skip on error
-		}
-		if symbol == nil {
-			continue
-		}
-
-		// Apply kind filter
-		if len(req.Kind) > 0 {
-			kindMatch := false
-			for _, k := range req.Kind {
-				if symbol.Kind == k {
-					kindMatch = true
-					break
-				}
-			}
-			if !kindMatch {
-				continue
-			}
-		}
-
-		// Get file details for path and language filter
-		file, err := h.fileRepo.GetByID(ctx, symbol.FileID)
-		if err != nil {
-			continue
-		}
-		if file == nil {
-			continue
-		}
-
-		// Apply repo filter
-		if req.RepoID != "" && file.RepoID != req.RepoID {
-			continue
-		}
-
-		// Apply language filter
-		if req.Language != "" && file.Language != req.Language {
-			continue
-		}
-
-		// Build result
-		result := SearchResult{
-			SymbolID:   symbol.SymbolID,
-			Name:       symbol.Name,
-			Kind:       symbol.Kind,
-			Signature:  symbol.Signature,
-			FilePath:   file.Path,
-			Docstring:  symbol.Docstring,
-			Similarity: vr.Similarity,
-		}
-		results = append(results, result)
 	}
 
 	response := SearchResponse{

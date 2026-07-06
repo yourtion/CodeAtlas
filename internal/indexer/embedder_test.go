@@ -581,9 +581,6 @@ func TestOpenAIEmbedder_DimensionValidation(t *testing.T) {
 }
 
 func TestBuildSymbolContent(t *testing.T) {
-	config := DefaultEmbedderConfig()
-	embedder := NewOpenAIEmbedder(config, nil)
-
 	tests := []struct {
 		name     string
 		symbol   schema.Symbol
@@ -622,7 +619,7 @@ func TestBuildSymbolContent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			content := embedder.buildSymbolContent(tt.symbol)
+			content := buildSymbolContent(tt.symbol)
 			if content != tt.expected {
 				t.Errorf("Expected content:\n%s\nGot:\n%s", tt.expected, content)
 			}

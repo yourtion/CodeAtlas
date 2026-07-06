@@ -126,7 +126,6 @@ func TestMobileLanguagesEndToEnd(t *testing.T) {
 				SkipVectors:     true,
 				Incremental:     false,
 				UseTransactions: true,
-				GraphName:       "test_" + lang.name + "_graph",
 			}
 
 			idx := indexer.NewIndexer(testDB.DB, config)
@@ -342,7 +341,6 @@ public:
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_mixed_languages_graph",
 	}
 
 	idx := indexer.NewIndexer(testDB.DB, config)
@@ -499,7 +497,6 @@ func TestSwiftObjCInterop(t *testing.T) {
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_swift_objc_interop_graph",
 	}
 
 	idx := indexer.NewIndexer(testDB.DB, config)
@@ -623,7 +620,6 @@ func TestCppCInterop(t *testing.T) {
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_cpp_c_interop_graph",
 	}
 
 	idx := indexer.NewIndexer(testDB.DB, config)

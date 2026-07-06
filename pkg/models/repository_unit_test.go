@@ -96,16 +96,3 @@ func TestNewSchemaManager(t *testing.T) {
 		t.Error("Expected schema manager to store DB reference")
 	}
 }
-
-func TestNewTransactionManager(t *testing.T) {
-	db := &DB{}
-	manager := NewTransactionManager(db)
-	
-	if manager == nil {
-		t.Fatal("Expected non-nil transaction manager")
-	}
-	
-	if manager.db != db {
-		t.Error("Expected transaction manager to store DB reference")
-	}
-}

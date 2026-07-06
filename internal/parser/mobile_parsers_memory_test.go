@@ -37,7 +37,10 @@ func TestMemoryUsageKotlinParser(t *testing.T) {
 	t.Logf("Kotlin Parser - Total allocated: %.2f MB for 100 parses", allocatedMB)
 	t.Logf("Kotlin Parser - Average per parse: %.2f KB", allocatedMB*1024/100)
 
-	heapGrowthMB := float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	heapGrowthMB := 0.0
+	if m2.HeapAlloc > m1.HeapAlloc {
+		heapGrowthMB = float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	}
 	if heapGrowthMB > 100 {
 		t.Errorf("Excessive heap growth: %.2f MB (possible memory leak)", heapGrowthMB)
 	}
@@ -75,7 +78,10 @@ func TestMemoryUsageJavaParser(t *testing.T) {
 	t.Logf("Java Parser - Total allocated: %.2f MB for 100 parses", allocatedMB)
 	t.Logf("Java Parser - Average per parse: %.2f KB", allocatedMB*1024/100)
 
-	heapGrowthMB := float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	heapGrowthMB := 0.0
+	if m2.HeapAlloc > m1.HeapAlloc {
+		heapGrowthMB = float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	}
 	if heapGrowthMB > 100 {
 		t.Errorf("Excessive heap growth: %.2f MB (possible memory leak)", heapGrowthMB)
 	}
@@ -113,7 +119,10 @@ func TestMemoryUsageSwiftParser(t *testing.T) {
 	t.Logf("Swift Parser - Total allocated: %.2f MB for 100 parses", allocatedMB)
 	t.Logf("Swift Parser - Average per parse: %.2f KB", allocatedMB*1024/100)
 
-	heapGrowthMB := float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	heapGrowthMB := 0.0
+	if m2.HeapAlloc > m1.HeapAlloc {
+		heapGrowthMB = float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	}
 	if heapGrowthMB > 100 {
 		t.Errorf("Excessive heap growth: %.2f MB (possible memory leak)", heapGrowthMB)
 	}
@@ -151,7 +160,10 @@ func TestMemoryUsageCppParser(t *testing.T) {
 	t.Logf("C++ Parser - Total allocated: %.2f MB for 100 parses", allocatedMB)
 	t.Logf("C++ Parser - Average per parse: %.2f KB", allocatedMB*1024/100)
 
-	heapGrowthMB := float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	heapGrowthMB := 0.0
+	if m2.HeapAlloc > m1.HeapAlloc {
+		heapGrowthMB = float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	}
 	if heapGrowthMB > 100 {
 		t.Errorf("Excessive heap growth: %.2f MB (possible memory leak)", heapGrowthMB)
 	}
@@ -188,7 +200,10 @@ func TestMemoryUsageParserPool(t *testing.T) {
 	t.Logf("Parser Pool - Total allocated: %.2f MB for 10 runs (50 files each)", allocatedMB)
 	t.Logf("Parser Pool - Average per run: %.2f MB", allocatedMB/10)
 
-	heapGrowthMB := float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	heapGrowthMB := 0.0
+	if m2.HeapAlloc > m1.HeapAlloc {
+		heapGrowthMB = float64(m2.HeapAlloc-m1.HeapAlloc) / 1024 / 1024
+	}
 	if heapGrowthMB > 200 {
 		t.Errorf("Excessive heap growth in parser pool: %.2f MB (possible memory leak)", heapGrowthMB)
 	}

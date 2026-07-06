@@ -15,9 +15,11 @@ TEST_PACKAGES=$(shell go list ./... | grep -v /scripts | grep -v /test-repo)
 build: build-api build-cli
 
 build-api:
+	@mkdir -p bin
 	@go build -o ${API_BINARY} cmd/api/main.go
 
 build-cli:
+	@mkdir -p bin
 	@go build -o ${CLI_BINARY} cmd/cli/*.go
 
 run-api: build-api
@@ -57,6 +59,23 @@ verify:
 # Clean test databases
 clean-test-dbs:
 	@bash scripts/cleanup_test_databases.sh
+
+# Call analysis tests (cross-language interop)
+test-call-analysis:
+	@bash scripts/run_call_analysis_tests.sh
+
+# Call analysis tests (fixture-based, recommended)
+test-call-analysis-fixtures:
+	@go test -v ./tests/integration -run TestCallAnalysis_AllFixtures -timeout 60s
+
+# Single language call analysis tests
+test-call-analysis-single:
+	@go test -v ./tests/integration -run TestCallAnalysis_AllSingleLanguage -timeout 60s
+
+# All call analysis tests (single + cross-language)
+test-call-analysis-all:
+	@echo "Running all call analysis tests..."
+	@go test -v ./tests/integration -run "TestCallAnalysis_AllSingleLanguage|TestCallAnalysis_AllFixtures" -timeout 90s
 
 #==============================================================================
 # Database

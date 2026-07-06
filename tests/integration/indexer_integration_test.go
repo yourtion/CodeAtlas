@@ -36,7 +36,6 @@ func TestEndToEndIndexing(t *testing.T) {
 		SkipVectors:     true, // Skip vectors for faster test
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_graph",
 	}
 
 	// Create indexer

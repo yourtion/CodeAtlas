@@ -2,13 +2,13 @@ version: '3.8'
 
 # Production Docker Compose configuration for CodeAtlas Knowledge Graph Indexer
 # This configuration includes:
-# - PostgreSQL with pgvector and AGE extensions
+# - PostgreSQL with pgvector extension
 # - CodeAtlas API server with health checks
 # - Persistent volumes for data
 # - Production-ready networking and security settings
 
 services:
-  # PostgreSQL database with pgvector and AGE extensions
+  # PostgreSQL database with pgvector extension
   db:
     image: codeatlas/postgres:latest
     build:
@@ -63,7 +63,6 @@ services:
       # Indexer configuration
       - INDEXER_BATCH_SIZE=${INDEXER_BATCH_SIZE:-100}
       - INDEXER_WORKER_COUNT=${INDEXER_WORKER_COUNT:-4}
-      - INDEXER_GRAPH_NAME=${INDEXER_GRAPH_NAME:-code_graph}
       
       # Embedding configuration
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-openai/text-embedding-3-small}

@@ -47,7 +47,6 @@ type IndexerConfig struct {
 	SkipVectors     bool
 	Incremental     bool
 	UseTransactions bool
-	GraphName       string
 	EmbeddingModel  string
 }
 
@@ -137,7 +136,6 @@ func loadIndexerConfig() IndexerConfig {
 		SkipVectors:     getEnvBool("INDEXER_SKIP_VECTORS", false),
 		Incremental:     getEnvBool("INDEXER_INCREMENTAL", false),
 		UseTransactions: getEnvBool("INDEXER_USE_TRANSACTIONS", true),
-		GraphName:       getEnv("INDEXER_GRAPH_NAME", "code_graph"),
 		EmbeddingModel:  getEnv("INDEXER_EMBEDDING_MODEL", ""),
 	}
 }
@@ -198,9 +196,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Indexer.WorkerCount < 1 {
 		return fmt.Errorf("indexer worker count must be at least 1")
-	}
-	if c.Indexer.GraphName == "" {
-		return fmt.Errorf("indexer graph name cannot be empty")
 	}
 
 	// Validate embedder config

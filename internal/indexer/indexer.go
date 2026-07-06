@@ -11,18 +11,32 @@ import (
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
+// pipelineExecutor 抽象索引管道中产生数据库副作用的三个阶段，
+// 使其可被测试 fake 接管以做行为断言（例如钉住 IndexWithProgress
+// 不应重复执行整个管道）。
+//
+// Indexer 自身实现该接口（方法已存在）；测试可注入 fakeExecutor
+// 来记录各阶段调用次数而无需真实数据库。
+type pipelineExecutor interface {
+	writeRepository(ctx context.Context) error
+	writeData(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) (*WriteResult, error)
+	generateEmbeddings(ctx context.Context, files []schema.File) *EmbedResult
+}
+
 // Indexer orchestrates the indexing pipeline
 type Indexer struct {
 	validator       Validator
 	writer          *Writer
-	graphBuilder    *GraphBuilder
 	embedder        Embedder
 	config          *IndexerConfig
 	db              *models.DB
 	logger          IndexerLogger
 	streamProcessor *StreamProcessor
-	workerPool      *WorkerPool
 	batchOptimizer  *BatchOptimizer
+
+	// executor 是管道副作用的执行入口，默认指向 Indexer 自身。
+	// 测试中可替换为 fakeExecutor 以断言调用行为，无需真实数据库。
+	executor pipelineExecutor
 }
 
 // IndexerLogger defines the logging interface for the indexer
@@ -58,9 +72,6 @@ type IndexerConfig struct {
 	Incremental     bool `json:"incremental"`
 	UseTransactions bool `json:"use_transactions"`
 
-	// Graph options
-	GraphName string `json:"graph_name"`
-
 	// Embedding options
 	EmbeddingModel string `json:"embedding_model,omitempty"`
 }
@@ -73,7 +84,6 @@ func DefaultIndexerConfig() *IndexerConfig {
 		SkipVectors:     false,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "code_graph",
 	}
 }
 
@@ -114,13 +124,6 @@ func newIndexerInternal(db *models.DB, config *IndexerConfig, logger IndexerLogg
 	}
 	writer := NewWriter(db, writerConfig)
 
-	// Create graph builder with config
-	graphConfig := &GraphBuilderConfig{
-		GraphName: config.GraphName,
-		BatchSize: config.BatchSize,
-	}
-	graphBuilder := NewGraphBuilder(db, graphConfig)
-
 	// Create embedder with config (if not skipping vectors and not provided)
 	if embedder == nil && !config.SkipVectors {
 		embedderConfig := DefaultEmbedderConfig()
@@ -144,13 +147,30 @@ func newIndexerInternal(db *models.DB, config *IndexerConfig, logger IndexerLogg
 	return &Indexer{
 		validator:       validator,
 		writer:          writer,
-		graphBuilder:    graphBuilder,
 		embedder:        embedder,
 		config:          config,
 		db:              db,
 		logger:          logger,
 		streamProcessor: streamProcessor,
 		batchOptimizer:  batchOptimizer,
+	}
+}
+
+// SetExecutor 替换管道执行入口，仅供测试注入 fake。
+// 传入 nil 等价于恢复默认（Indexer 自身执行）。
+func (idx *Indexer) SetExecutor(e pipelineExecutor) {
+	if e == nil {
+		idx.executor = idx
+	} else {
+		idx.executor = e
+	}
+}
+
+// ensureExecutor 确保 executor 已初始化（默认指向自身）。
+// 在每个使用 executor 的方法入口调用。
+func (idx *Indexer) ensureExecutor() {
+	if idx.executor == nil {
+		idx.executor = idx
 	}
 }
 
@@ -180,8 +200,22 @@ type IndexResult struct {
 	Summary        map[string]interface{} `json:"summary,omitempty"`
 }
 
+// failResult 构造一个失败的 IndexResult，记录起止时间与失败阶段。
+// 用于 Index / IndexWithProgress 在错误路径下与成功路径一致地返回非空结果，
+// 调用方据此读取 Status / Errors 而无需 nil 检查。
+func (idx *Indexer) failResult(startTime time.Time, stage string, cause error) *IndexResult {
+	return &IndexResult{
+		RepoID:   idx.config.RepoID,
+		Status:   "failed",
+		Duration: time.Since(startTime),
+		Summary:  map[string]interface{}{"failed_stage": stage},
+		Errors:   []*IndexerError{NewDatabaseError(stage, "", "", cause, true)},
+	}
+}
+
 // Index coordinates the validation → write → graph → embeddings pipeline
 func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*IndexResult, error) {
+	idx.ensureExecutor()
 	startTime := time.Now()
 	result := &IndexResult{
 		RepoID:  idx.config.RepoID,
@@ -226,7 +260,7 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 
 	// Step 2: Write repository metadata
 	idx.logger.Debug("writing repository metadata")
-	if err := idx.writeRepository(ctx); err != nil {
+	if err := idx.executor.writeRepository(ctx); err != nil {
 		idx.logger.ErrorWithFields("failed to write repository metadata", err,
 			LogField{Key: "repo_id", Value: idx.config.RepoID},
 		)
@@ -270,8 +304,9 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		LogField{Key: "files_to_process", Value: len(filesToProcess)},
 		LogField{Key: "relationships", Value: len(input.Relationships)},
 	)
-	writeResult, err := idx.writeData(ctx, filesToProcess, input.Relationships)
-	if err != nil {
+	writeResult, err := idx.executor.writeData(ctx, filesToProcess, input.Relationships)
+	writeDataFailed := err != nil
+	if writeDataFailed {
 		idx.logger.ErrorWithFields("failed to write data", err,
 			LogField{Key: "repo_id", Value: idx.config.RepoID},
 		)
@@ -282,6 +317,9 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 			err,
 			true,
 		))
+		// writeData 失败时返回的部分填充计数（如子步骤中途 return）不可靠，
+		// 不上报，避免 result.FilesProcessed 等虚高。
+		writeResult = &WriteResult{}
 	}
 	result.FilesProcessed = writeResult.FilesProcessed
 	result.SymbolsCreated = writeResult.SymbolsCreated
@@ -315,8 +353,15 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 
 	// Step 4.5: Associate header and implementation files (for C/C++/Objective-C)
 	idx.logger.Info("associating header and implementation files")
-	headerImplAssociator := NewHeaderImplAssociator(idx.db, idx.logger)
-	assocResult, err := headerImplAssociator.AssociateHeadersAndImplementations(ctx, filesToProcess)
+	var assocResult *AssociationResult
+	if idx.db == nil {
+		// 测试环境（db 未注入，走 fake executor）下跳过；
+		// 该步骤为非致命的增强关联，真实路径中会执行。
+		assocResult = &AssociationResult{}
+	} else {
+		headerImplAssociator := NewHeaderImplAssociator(idx.db, idx.logger)
+		assocResult, err = headerImplAssociator.AssociateHeadersAndImplementations(ctx, filesToProcess)
+	}
 	if err != nil {
 		idx.logger.WarnWithFields("header-implementation association failed", LogField{Key: "error", Value: err})
 		// Non-fatal, continue
@@ -339,39 +384,10 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 		}
 	}
 
-	// Step 5: Build graph (async, non-blocking)
-	if idx.graphBuilder != nil {
-		idx.logger.Info("building knowledge graph")
-		graphResult := idx.buildGraph(ctx, filesToProcess, input.Relationships)
-		result.Summary["graph_nodes_created"] = graphResult.NodesCreated
-		result.Summary["graph_edges_created"] = graphResult.EdgesCreated
-
-		idx.logger.InfoWithFields("knowledge graph built",
-			LogField{Key: "nodes_created", Value: graphResult.NodesCreated},
-			LogField{Key: "edges_created", Value: graphResult.EdgesCreated},
-			LogField{Key: "graph_errors", Value: len(graphResult.Errors)},
-		)
-
-		// Collect graph errors (non-fatal)
-		for _, graphErr := range graphResult.Errors {
-			idx.logger.WarnWithFields("graph error occurred",
-				LogField{Key: "entity_type", Value: graphErr.EntityType},
-				LogField{Key: "entity_id", Value: graphErr.EntityID},
-				LogField{Key: "message", Value: graphErr.Message},
-			)
-			errorCollector.Add(NewGraphError(
-				graphErr.Message,
-				graphErr.EntityID,
-				"",
-				nil,
-			))
-		}
-	}
-
-	// Step 6: Generate embeddings (async, optional)
+	// Step 5: Generate embeddings (async, optional)
 	if idx.embedder != nil && !idx.config.SkipVectors {
 		idx.logger.Info("generating vector embeddings")
-		embedResult := idx.generateEmbeddings(ctx, filesToProcess)
+		embedResult := idx.executor.generateEmbeddings(ctx, filesToProcess)
 		result.VectorsCreated = embedResult.VectorsCreated
 
 		idx.logger.InfoWithFields("vector embeddings generated",
@@ -444,6 +460,7 @@ func (idx *Indexer) Index(ctx context.Context, input *schema.ParseOutput) (*Inde
 
 // IndexWithProgress indexes with progress tracking
 func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOutput, progressChan chan<- IndexProgress) (*IndexResult, error) {
+	idx.ensureExecutor()
 	startTime := time.Now()
 
 	// Send initial progress
@@ -467,7 +484,9 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 				Error:    true,
 			}
 		}
-		return nil, fmt.Errorf("validation failed")
+		// 与 Index 的契约一致：返回带 Status 的失败结果而非 nil，
+		// 避免调用方 nil 解引用。
+		return idx.failResult(startTime, "validation failed", fmt.Errorf("validation failed")), fmt.Errorf("validation failed")
 	}
 
 	if progressChan != nil {
@@ -487,8 +506,8 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		}
 	}
 
-	if err := idx.writeRepository(ctx); err != nil {
-		return nil, err
+	if err := idx.executor.writeRepository(ctx); err != nil {
+		return idx.failResult(startTime, "write_repository", err), err
 	}
 
 	if progressChan != nil {
@@ -523,9 +542,11 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		}
 	}
 
-	writeResult, err := idx.writeData(ctx, filesToProcess, input.Relationships)
+	writeResult, err := idx.executor.writeData(ctx, filesToProcess, input.Relationships)
 	if err != nil {
-		return nil, err
+		// 与 Index 的契约一致：返回带 Status 的失败结果而非 nil。
+		// writeData 失败时 writeResult 的部分计数不可靠，不上报。
+		return idx.failResult(startTime, "write_data", err), err
 	}
 
 	if progressChan != nil {
@@ -537,28 +558,8 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		}
 	}
 
-	// Build graph
-	if idx.graphBuilder != nil {
-		if progressChan != nil {
-			progressChan <- IndexProgress{
-				Stage:    "graph",
-				Progress: 0,
-				Message:  "Building knowledge graph...",
-			}
-		}
-
-		graphResult := idx.buildGraph(ctx, filesToProcess, input.Relationships)
-
-		if progressChan != nil {
-			progressChan <- IndexProgress{
-				Stage:    "graph",
-				Progress: 100,
-				Message:  fmt.Sprintf("Created %d nodes, %d edges", graphResult.NodesCreated, graphResult.EdgesCreated),
-			}
-		}
-	}
-
 	// Generate embeddings
+	var vectorsCreated int
 	if idx.embedder != nil && !idx.config.SkipVectors {
 		if progressChan != nil {
 			progressChan <- IndexProgress{
@@ -568,7 +569,8 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 			}
 		}
 
-		embedResult := idx.generateEmbeddings(ctx, filesToProcess)
+		embedResult := idx.executor.generateEmbeddings(ctx, filesToProcess)
+		vectorsCreated = embedResult.VectorsCreated
 
 		if progressChan != nil {
 			progressChan <- IndexProgress{
@@ -589,7 +591,23 @@ func (idx *Indexer) IndexWithProgress(ctx context.Context, input *schema.ParseOu
 		close(progressChan)
 	}
 
-	return idx.Index(ctx, input)
+	// 构造与 Index 等价的返回结果。
+	// 历史实现这里错误地调用了 idx.Index(ctx, input)，会把整个索引管道
+	// （写库、建图、生成 embedding）再执行一遍，导致数据重复写入。
+	// 本方法已在上文按序执行了全部阶段，这里只需汇总结果。
+	result := &IndexResult{
+		RepoID:         idx.config.RepoID,
+		Status:         "success",
+		FilesProcessed: writeResult.FilesProcessed,
+		SymbolsCreated: writeResult.SymbolsCreated,
+		NodesCreated:   writeResult.NodesCreated,
+		EdgesCreated:   writeResult.EdgesCreated,
+		VectorsCreated: vectorsCreated,
+		Duration:       time.Since(startTime),
+		Summary:        make(map[string]interface{}),
+	}
+
+	return result, nil
 }
 
 // writeRepository writes repository metadata
@@ -861,47 +879,6 @@ func (idx *Indexer) writeDataWithTransaction(ctx context.Context, files []schema
 	return result, nil
 }
 
-// buildGraph builds the knowledge graph from symbols and edges
-func (idx *Indexer) buildGraph(ctx context.Context, files []schema.File, edges []schema.DependencyEdge) *GraphBuildResult {
-	result := &GraphBuildResult{}
-
-	// Collect all symbols
-	var allSymbols []schema.Symbol
-	for _, file := range files {
-		allSymbols = append(allSymbols, file.Symbols...)
-	}
-
-	// Create nodes in parallel
-	if len(allSymbols) > 0 {
-		nodesResult, err := idx.graphBuilder.CreateNodes(ctx, allSymbols)
-		if err != nil {
-			result.Errors = append(result.Errors, GraphError{
-				EntityType: "nodes",
-				Message:    err.Error(),
-			})
-		} else {
-			result.NodesCreated = nodesResult.NodesCreated
-			result.Errors = append(result.Errors, nodesResult.Errors...)
-		}
-	}
-
-	// Create edges in parallel
-	if len(edges) > 0 {
-		edgesResult, err := idx.graphBuilder.CreateEdges(ctx, edges)
-		if err != nil {
-			result.Errors = append(result.Errors, GraphError{
-				EntityType: "edges",
-				Message:    err.Error(),
-			})
-		} else {
-			result.EdgesCreated = edgesResult.EdgesCreated
-			result.Errors = append(result.Errors, edgesResult.Errors...)
-		}
-	}
-
-	return result
-}
-
 // generateEmbeddings generates vector embeddings for symbols
 func (idx *Indexer) generateEmbeddings(ctx context.Context, files []schema.File) *EmbedResult {
 	result := &EmbedResult{}
@@ -1036,6 +1013,11 @@ func (idx *Indexer) writeSymbolsOptimized(ctx context.Context, symbols []schema.
 	// Process symbols in adaptive batches
 	symbolRepo := models.NewSymbolRepository(idx.db)
 	for i := 0; i < len(modelSymbols); i += batchSize {
+		// 顶部检查 ctx：BatchCreate 内部虽透传 ctx，但顶部显式检查可让取消/超时
+		// 在一个 batch 边界即响应，避免等下一个 BatchCreate 才发现。
+		if err := ctx.Err(); err != nil {
+			return result, fmt.Errorf("write symbols cancelled before batch %d: %w", i/batchSize, err)
+		}
 		end := i + batchSize
 		if end > len(modelSymbols) {
 			end = len(modelSymbols)
@@ -1161,6 +1143,11 @@ func (idx *Indexer) GetPerformanceStats() map[string]interface{} {
 
 // ensureExternalFile creates the special external file if it doesn't exist
 func (idx *Indexer) ensureExternalFile(ctx context.Context) error {
+	if idx.db == nil {
+		// 测试环境（db 未注入，走 fake executor）下跳过；
+		// 外部文件会在真实写入路径中按需创建。
+		return nil
+	}
 	fileRepo := models.NewFileRepository(idx.db)
 
 	// Check if external file exists

@@ -1,9 +1,45 @@
 -- Seed data for CodeAtlas development environment
--- This script creates sample repositories, files, and relationships for testing
+-- This script creates sample repositories, files, and relationships for testing.
+--
+-- 自包含建表兜底：devcontainer/db 容器启动时执行此脚本，此时应用层 goose
+-- 迁移可能尚未运行（表不存在）。CREATE TABLE IF NOT EXISTS 保证脚本幂等——
+-- 表不存在则建最小结构，已存在（应用迁移已跑）则跳过，仅 INSERT seed 数据。
+CREATE TABLE IF NOT EXISTS repositories (
+    repo_id UUID PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    url TEXT,
+    branch VARCHAR(255) DEFAULT 'main',
+    commit_hash VARCHAR(64),
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
 
--- Set search path to match schema initialization
-LOAD 'age';
-SET search_path = ag_catalog, "$user", public;
+CREATE TABLE IF NOT EXISTS files (
+    file_id UUID PRIMARY KEY,
+    repo_id UUID NOT NULL REFERENCES repositories(repo_id) ON DELETE CASCADE,
+    path TEXT NOT NULL,
+    language VARCHAR(50) NOT NULL,
+    size BIGINT NOT NULL DEFAULT 0,
+    checksum VARCHAR(64) NOT NULL DEFAULT '',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS symbols (
+    symbol_id UUID PRIMARY KEY,
+    file_id UUID NOT NULL REFERENCES files(file_id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    kind VARCHAR(50) NOT NULL,
+    signature TEXT,
+    start_line INT NOT NULL DEFAULT 0,
+    end_line INT NOT NULL DEFAULT 0,
+    start_byte INT NOT NULL DEFAULT 0,
+    end_byte INT NOT NULL DEFAULT 0,
+    docstring TEXT,
+    semantic_summary TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
 -- Insert sample repositories
 INSERT INTO repositories (repo_id, name, url, branch, metadata, created_at, updated_at) VALUES

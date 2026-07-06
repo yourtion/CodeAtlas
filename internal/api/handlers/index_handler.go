@@ -106,7 +106,6 @@ func (h *IndexHandler) Index(c *gin.Context) {
 		SkipVectors:     req.Options.SkipVectors,
 		Incremental:     req.Options.Incremental,
 		UseTransactions: true,
-		GraphName:       "code_graph",
 		EmbeddingModel:  req.Options.EmbeddingModel,
 	}
 

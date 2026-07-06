@@ -36,7 +36,7 @@ flowchart TD
     CLI[CLI 工具: 本地仓库上传] --> API[服务端 API]
     API --> Parser[解析引擎: 语法解析 + LLM增强]
     Parser --> VectorDB[向量数据库: pgvector]
-    Parser --> GraphDB[图数据库: AGE/Neo4j]
+    Parser --> GraphDB[知识图谱: 关系表查询]
     API --> QAEngine[QA 引擎: RAG + Agentic Pipeline]
     QAEngine --> VectorDB
     QAEngine --> GraphDB
@@ -53,7 +53,7 @@ flowchart TD
 | **后端服务** | Go (Gin/Fiber)          | 高性能 API 服务        |
 | **解析引擎** | Go + Tree-sitter + LLM  | 代码语法解析 + AI 增强 |
 | **向量存储** | PostgreSQL + pgvector   | 语义检索               |
-| **图谱存储** | PostgreSQL AGE          | 依赖关系、路径查询     |
+| **图谱存储** | PostgreSQL 关系表       | 依赖关系、路径查询     |
 | **前端界面** | Svelte + Rsbuild        | 轻量现代前端框架       |
 | **容器化**   | Docker + Docker Compose | 本地和生产环境一致     |
 | **CLI 工具** | Go                      | 轻量跨平台同步工具     |
@@ -151,6 +151,36 @@ curl http://localhost:8080/api/v1/repositories
 - **[配置指南](docs/configuration/README.md)** - 所有配置选项说明
 - **[部署指南](docs/deployment/README.md)** - 生产环境部署
 - **[开发指南](docs/development/testing.md)** - 测试和开发最佳实践
+- **[调用分析测试](tests/integration/CALL_ANALYSIS_SUMMARY.md)** - 跨语言调用分析测试结果
+
+---
+
+## 🧪 测试
+
+### 快速测试
+```bash
+# 单元测试（快速，无需数据库）
+make test
+
+# 集成测试（需要数据库）
+make test-integration
+
+# 调用分析测试（跨语言互操作）
+go test -v ./tests/integration -run TestCallAnalysis_AllFixtures
+```
+
+### 测试覆盖率
+- **目标**: 90% 代码覆盖率
+- **当前**: 查看 [测试文档](docs/development/testing.md)
+
+### 跨语言调用分析测试 ✅
+CodeAtlas 支持检测跨语言调用关系，包括：
+- C++ → C (100% 检测率)
+- Kotlin → Java (100% 检测率)
+- Swift → Objective-C (100% 检测率)
+- TypeScript → JavaScript (62.5% 检测率)
+
+详见 [调用分析测试总结](tests/integration/CALL_ANALYSIS_SUMMARY.md)
 
 ---
 

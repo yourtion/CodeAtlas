@@ -1,5 +1,6 @@
 docker/pgdata
 node_modules
+.kiro
 
 # Test coverage
 *.out
@@ -8,6 +9,7 @@ coverage.html
 
 # Build artifacts
 bin/
+cli
 
 # DevContainer
 .devcontainer/.env

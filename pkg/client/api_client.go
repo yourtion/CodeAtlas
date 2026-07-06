@@ -166,6 +166,23 @@ type Dependency struct {
 	Signature string `json:"signature,omitempty"`
 }
 
+// TransitiveResponse 是多跳可达性查询的响应。
+type TransitiveResponse struct {
+	Symbols []ReachableSymbol `json:"symbols"`
+	Total   int               `json:"total"`
+	Depth   int               `json:"depth"`
+}
+
+// ReachableSymbol 是多跳查询的单条结果，Depth 为相对起始符号的跳数。
+type ReachableSymbol struct {
+	SymbolID  string `json:"symbol_id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	FilePath  string `json:"file_path"`
+	Signature string `json:"signature"`
+	Depth     int    `json:"depth"`
+}
+
 // SymbolsResponse represents the response for file symbols query
 type SymbolsResponse struct {
 	Symbols []SymbolInfo `json:"symbols"`
@@ -240,6 +257,38 @@ func (c *APIClient) GetCallees(ctx context.Context, symbolID string) (*Relations
 	err := c.doRequestWithRetry(ctx, "GET", path, nil, &response)
 	if err != nil {
 		return nil, fmt.Errorf("get callees request failed: %w", err)
+	}
+	return &response, nil
+}
+
+// GetTransitiveCallees 返回从指定符号出发沿调用边递归可达的全部符号（传递调用链）。
+// depth 控制最大跳数，<=0 时由服务端使用默认值。
+// 语义："起始符号的执行会触及哪些代码"。
+func (c *APIClient) GetTransitiveCallees(ctx context.Context, symbolID string, depth int) (*TransitiveResponse, error) {
+	var response TransitiveResponse
+	path := fmt.Sprintf("/api/v1/symbols/%s/transitive-callees", symbolID)
+	if depth > 0 {
+		path = fmt.Sprintf("%s?depth=%d", path, depth)
+	}
+	err := c.doRequestWithRetry(ctx, "GET", path, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("get transitive callees request failed: %w", err)
+	}
+	return &response, nil
+}
+
+// GetTransitiveCallers 返回沿调用边反向递归可达的全部符号（反向影响范围）。
+// depth 控制最大跳数，<=0 时由服务端使用默认值。
+// 语义："修改起始符号会影响哪些代码"。
+func (c *APIClient) GetTransitiveCallers(ctx context.Context, symbolID string, depth int) (*TransitiveResponse, error) {
+	var response TransitiveResponse
+	path := fmt.Sprintf("/api/v1/symbols/%s/transitive-callers", symbolID)
+	if depth > 0 {
+		path = fmt.Sprintf("%s?depth=%d", path, depth)
+	}
+	err := c.doRequestWithRetry(ctx, "GET", path, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("get transitive callers request failed: %w", err)
 	}
 	return &response, nil
 }

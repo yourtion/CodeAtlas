@@ -117,7 +117,6 @@ func TestCHeaderImplPairing(t *testing.T) {
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_c_header_impl_graph",
 	}
 
 	idx := indexer.NewIndexer(testDB.DB, config)
@@ -260,7 +259,6 @@ func TestCppHeaderImplPairing(t *testing.T) {
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_cpp_header_impl_graph",
 	}
 
 	idx := indexer.NewIndexer(testDB.DB, config)
@@ -389,7 +387,6 @@ func TestObjCHeaderImplPairing(t *testing.T) {
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_objc_header_impl_graph",
 	}
 
 	idx := indexer.NewIndexer(testDB.DB, config)
@@ -574,7 +571,6 @@ int calculate(int x, int y) {
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_cross_file_deps_graph",
 	}
 
 	idx := indexer.NewIndexer(testDB.DB, config)
@@ -754,7 +750,6 @@ class UserService(private val repository: UserRepository) {
 		SkipVectors:     true,
 		Incremental:     false,
 		UseTransactions: true,
-		GraphName:       "test_knowledge_graph",
 	}
 
 	idx := indexer.NewIndexer(testDB.DB, config)

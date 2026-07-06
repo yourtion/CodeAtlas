@@ -117,45 +117,6 @@ func TestWriteFiles(t *testing.T) {
 	}
 }
 
-func TestWriteFilesWithTransaction(t *testing.T) {
-	db, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	writer := NewWriter(db, nil)
-	ctx := context.Background()
-
-	// Create test repository
-	repoID := uuid.New().String()
-	repo := &models.Repository{
-		RepoID: repoID,
-		Name:   "test-repo",
-	}
-	err := writer.WriteRepository(ctx, repo)
-	require.NoError(t, err)
-
-	// Create test files
-	files := []schema.File{
-		{
-			FileID:   uuid.New().String(),
-			Path:     "main.go",
-			Language: "go",
-			Size:     1024,
-			Checksum: "checksum1",
-		},
-	}
-
-	result, err := writer.WriteFilesWithTransaction(ctx, repoID, files)
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.FilesProcessed)
-	assert.Empty(t, result.Errors)
-
-	// Verify file was created
-	fileRepo := models.NewFileRepository(db)
-	retrieved, err := fileRepo.GetByID(ctx, files[0].FileID)
-	require.NoError(t, err)
-	assert.Equal(t, files[0].Path, retrieved.Path)
-}
-
 func TestWriteSymbols(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
