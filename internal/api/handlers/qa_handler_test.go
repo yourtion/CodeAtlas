@@ -17,9 +17,9 @@ var errSentinel = errors.New("boom")
 
 // mockQAService 记录收到的 AskRequest 并返回预设响应。
 type mockQAService struct {
-	lastReq    *qa.AskRequest
-	resp       *qa.AskResponse
-	err        error
+	lastReq *qa.AskRequest
+	resp    *qa.AskResponse
+	err     error
 }
 
 func (m *mockQAService) Ask(ctx context.Context, req qa.AskRequest) (*qa.AskResponse, error) {
