@@ -29,6 +29,7 @@ type Server struct {
 	repoHandler          *handlers.RepositoryHandler
 	searchHandler        *handlers.SearchHandler
 	relationshipHandler  *handlers.RelationshipHandler
+	qaHandler            *handlers.QAHandler
 }
 
 // NewServer creates a new API server
@@ -50,6 +51,7 @@ func NewServer(db *models.DB, config *ServerConfig) *Server {
 		repoHandler:         handlers.NewRepositoryHandler(db),
 		searchHandler:       handlers.NewSearchHandler(db, config.EmbedderConfig),
 		relationshipHandler: handlers.NewRelationshipHandler(db),
+		qaHandler:           handlers.NewQAHandler(db, config.EmbedderConfig),
 	}
 }
 
@@ -111,6 +113,10 @@ func (s *Server) RegisterRoutes(r *gin.Engine) {
 
 		// Commit endpoints
 		v1.POST("/commits", s.createCommit)
+
+		// QA endpoints
+		v1.POST("/qa", s.qaHandler.Ask)
+		v1.GET("/qa/chunks", s.qaHandler.GetChunks)
 	}
 }
 
