@@ -256,6 +256,14 @@ EMBEDDING_DIMENSIONS=1024
 - **子测试** - 使用 `t.Run()` 组织测试
 - **清理资源** - 使用 `defer` 确保清理
 - **测试独立性** - 测试之间不应有依赖
+- **验证范围要对齐 CI** - 做完 schema/数据模型变更后，必须本地跑一遍
+  `make test-integration`（或起 PostgreSQL 全量测试），不能只跑 `make test`
+  （`-short` 会 skip 集成测试）就声称"已验证"。CI 跑的是全量测试 +
+  覆盖率检查，覆盖面远大于单元测试；只跑单元测试会把 schema 列数/约束/
+  维度/迁移一致性等问题全部漏掉，最终让 CI 用多轮迭代来暴露。
+- **变更 schema 时排查所有 schema 来源** - 改迁移文件时，必须 grep 全代码库
+  的 schema 定义（`grep -rn "CREATE TABLE"` 含测试代码、CI 配置、init.sql），
+  确保没有遗漏的"第三套 schema"与迁移真源脱节。
 
 ### Go 代码规范
 
