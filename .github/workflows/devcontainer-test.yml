@@ -26,6 +26,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build devcontainer
+        env:
+          # GitHub Actions Linux runner 的工作目录归 UID 1001 的 runner 用户所有。
+          # 容器内 vscode 用户须用相同 UID 才能写入挂载的 /workspace。
+          USER_UID: "1001"
         run: |
           docker compose -f .devcontainer/docker-compose.yml build
 
@@ -52,11 +56,11 @@ jobs:
 
       - name: Test Go build
         run: |
-          docker compose -f .devcontainer/docker-compose.yml exec --user root -T dev make build
+          docker compose -f .devcontainer/docker-compose.yml exec -T dev make build
 
       - name: Run tests with enhanced output
         run: |
-          docker compose -f .devcontainer/docker-compose.yml exec --user root -T dev make test-ci
+          docker compose -f .devcontainer/docker-compose.yml exec -T dev make test
 
       - name: Extract test results
         if: always()

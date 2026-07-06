@@ -6,6 +6,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # 容器用户 UID。本地默认 1000；CI（GitHub Actions runner）需 1001
+        # 才能写入挂载的 /workspace（runner 工作目录归 UID 1001 的 runner 用户所有）
+        USER_UID: ${USER_UID:-1000}
     volumes:
       - ..:/workspace:cached
     command: sleep infinity
