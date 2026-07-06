@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/yourtionguo/CodeAtlas/internal/schema"
@@ -201,6 +202,60 @@ type SymbolInfo struct {
 	SemanticSummary string `json:"semantic_summary,omitempty"`
 }
 
+// QARequest represents the request for POST /api/v1/qa
+type QARequest struct {
+	Query         string   `json:"query"`
+	RepoIDs       []string `json:"repo_ids,omitempty"`
+	Language      string   `json:"language,omitempty"`
+	Kind          []string `json:"kind,omitempty"`
+	Mode          string   `json:"mode,omitempty"`
+	Limit         int      `json:"limit,omitempty"`
+	IncludeSource bool     `json:"include_source,omitempty"`
+	ExpandCallers *bool    `json:"expand_callers,omitempty"`
+	ExpandCallees *bool    `json:"expand_callees,omitempty"`
+}
+
+// QAResponse represents the response for POST /api/v1/qa
+type QAResponse struct {
+	Query     string    `json:"query"`
+	Blocks    []QABlock `json:"blocks"`
+	Prompt    string    `json:"prompt"`
+	Truncated bool      `json:"truncated"`
+	ChunkIDs  []string  `json:"chunk_ids"`
+}
+
+type QABlock struct {
+	Symbol     QASymbol   `json:"symbol"`
+	Similarity float64    `json:"similarity"`
+	MatchMode  string     `json:"match_mode"`
+	Callers    []QASymbol `json:"callers"`
+	Callees    []QASymbol `json:"callees"`
+	ChunkID    string     `json:"chunk_id"`
+	Source     string     `json:"source,omitempty"`
+}
+
+type QASymbol struct {
+	SymbolID  string `json:"symbol_id"`
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	Signature string `json:"signature,omitempty"`
+	FilePath  string `json:"file_path,omitempty"`
+	Language  string `json:"language,omitempty"`
+	Docstring string `json:"docstring,omitempty"`
+}
+
+// ChunksResponse represents the response for GET /api/v1/qa/chunks
+type ChunksResponse struct {
+	Chunks []Chunk `json:"chunks"`
+}
+
+type Chunk struct {
+	ChunkID  string `json:"chunk_id"`
+	SymbolID string `json:"symbol_id"`
+	Content  string `json:"content"`
+	FilePath string `json:"file_path,omitempty"`
+}
+
 // Index sends parse output to API server for indexing
 func (c *APIClient) Index(ctx context.Context, req *IndexRequest) (*IndexResponse, error) {
 	var response IndexResponse
@@ -311,6 +366,30 @@ func (c *APIClient) GetFileSymbols(ctx context.Context, fileID string) (*Symbols
 	err := c.doRequestWithRetry(ctx, "GET", path, nil, &response)
 	if err != nil {
 		return nil, fmt.Errorf("get file symbols request failed: %w", err)
+	}
+	return &response, nil
+}
+
+// Ask performs a QA context query
+func (c *APIClient) Ask(ctx context.Context, req *QARequest) (*QAResponse, error) {
+	var response QAResponse
+	err := c.doRequestWithRetry(ctx, "POST", "/api/v1/qa", req, &response)
+	if err != nil {
+		return nil, fmt.Errorf("ask request failed: %w", err)
+	}
+	return &response, nil
+}
+
+// GetChunks fetches source content by chunk IDs
+func (c *APIClient) GetChunks(ctx context.Context, ids []string) (*ChunksResponse, error) {
+	if len(ids) == 0 {
+		return &ChunksResponse{Chunks: []Chunk{}}, nil
+	}
+	path := "/api/v1/qa/chunks?ids=" + strings.Join(ids, ",")
+	var response ChunksResponse
+	err := c.doRequestWithRetry(ctx, "GET", path, nil, &response)
+	if err != nil {
+		return nil, fmt.Errorf("get chunks request failed: %w", err)
 	}
 	return &response, nil
 }
