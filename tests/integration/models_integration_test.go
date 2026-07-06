@@ -957,7 +957,7 @@ func TestVectorOperations(t *testing.T) {
 
 		vector := &models.Vector{
 			VectorID:   uuid.New().String(),
-			EntityID:   testSymbol.SymbolID,
+			EntityID:   uuid.New().String(), // 独立 EntityID，避免与 CreateAndGet 的 unique_entity_chunk 约束冲突
 			EntityType: "symbol",
 			Embedding:  embedding,
 			Content:    "original content",
@@ -1162,7 +1162,7 @@ func TestVectorOperations(t *testing.T) {
 		embedding := make([]float32, vectorDim)
 		vector := &models.Vector{
 			VectorID:   uuid.New().String(),
-			EntityID:   testSymbol.SymbolID,
+			EntityID:   uuid.New().String(), // 独立 EntityID，避免与 CreateAndGet 的 unique_entity_chunk 约束冲突
 			EntityType: "symbol",
 			Embedding:  embedding,
 			Content:    "delete test",

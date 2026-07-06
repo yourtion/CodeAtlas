@@ -88,8 +88,8 @@ func TestHeaderImplAssociation(t *testing.T) {
 
 	// Verify file-level implements_header edge (using virtual file symbols)
 	t.Run("VerifyFileLevelImplementsHeaderEdge", func(t *testing.T) {
-		// Query for implements_header edges
-		query := `SELECT * FROM edges WHERE edge_type = 'implements_header'`
+		// Query for implements_header edges（显式列名，避免 SELECT * 的列顺序/数量依赖）
+		query := `SELECT edge_id, source_id, target_id, edge_type, source_file, target_file, target_module, created_at FROM edges WHERE edge_type = 'implements_header'`
 		rows, err := testDB.DB.QueryContext(ctx, query)
 		if err != nil {
 			t.Fatalf("Failed to query edges: %v", err)
@@ -142,8 +142,8 @@ func TestHeaderImplAssociation(t *testing.T) {
 	})
 
 	t.Run("VerifyImplementsDeclarationEdge", func(t *testing.T) {
-		// Query for implements_declaration edges
-		query := `SELECT * FROM edges WHERE edge_type = 'implements_declaration'`
+		// Query for implements_declaration edges（显式列名）
+		query := `SELECT edge_id, source_id, target_id, edge_type, source_file, target_file, target_module, created_at FROM edges WHERE edge_type = 'implements_declaration'`
 		rows, err := testDB.DB.QueryContext(ctx, query)
 		if err != nil {
 			t.Fatalf("Failed to query edges: %v", err)
