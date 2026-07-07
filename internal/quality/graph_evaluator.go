@@ -95,12 +95,15 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 		totalDangling += count
 	}
 
+	// 结构断言类指标：这轮仅观察、建基线，不做硬门禁（spec §3.4）。
+	// Threshold=0 表示无阈值；具体建议值见 metrics.go 的 ThresholdXxx 常量（下一轮启用）。
+	//
 	// 悬空边率（总值 + 分桶）
 	if totalEdges > 0 {
 		mv := MetricValue{
 			Name: "dangling_edge_ratio", Category: CategoryGraph,
 			Value:     float64(totalDangling) / float64(totalEdges),
-			Threshold: ThresholdDanglingEdgeRatio, HigherIsBetter: false,
+			Threshold: 0, HigherIsBetter: false, // 仅观察（下一轮启用 ThresholdDanglingEdgeRatio）
 		}
 		mv.EvaluatePassed()
 		metrics = append(metrics, mv)
@@ -125,7 +128,7 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 		res := MetricValue{
 			Name: "symbol_resolution_rate", Category: CategoryGraph,
 			Value:     1 - float64(totalDangling)/float64(totalEdges),
-			Threshold: ThresholdSymbolResolution, HigherIsBetter: true,
+			Threshold: 0, HigherIsBetter: true, // 仅观察（下一轮启用 ThresholdSymbolResolution）
 		}
 		res.EvaluatePassed()
 		metrics = append(metrics, res)
@@ -136,7 +139,7 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 		mv := MetricValue{
 			Name: "orphan_symbol_ratio", Category: CategoryGraph,
 			Value:     float64(orphans) / float64(totalSymbols),
-			Threshold: ThresholdOrphanSymbolRatio, HigherIsBetter: false,
+			Threshold: 0, HigherIsBetter: false, // 仅观察（下一轮启用 ThresholdOrphanSymbolRatio）
 		}
 		mv.EvaluatePassed()
 		metrics = append(metrics, mv)
@@ -147,7 +150,7 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 		mv := MetricValue{
 			Name: "cross_file_connectivity", Category: CategoryGraph,
 			Value:     float64(crossFile) / float64(totalEdges),
-			Threshold: ThresholdCrossFileConnectivity, HigherIsBetter: true,
+			Threshold: 0, HigherIsBetter: true, // 仅观察（下一轮启用 ThresholdCrossFileConnectivity）
 		}
 		mv.EvaluatePassed()
 		metrics = append(metrics, mv)

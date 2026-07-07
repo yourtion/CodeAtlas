@@ -86,10 +86,11 @@ func ComputeSummary(metrics []MetricValue) Summary {
 }
 
 // OverrideThreshold 覆盖指定指标的阈值并重新计算 Passed。
-// 用于集成测试按 fixture 放宽阈值。name 匹配 MetricValue.Name（含分桶则所有同 name 的都覆盖）。
+// 用于集成测试按 fixture 放宽阈值。只匹配 Bucket=="" 的总值；
+// 分桶保持 Threshold=0（仅观察）不变。
 func (r *Report) OverrideThreshold(name string, newThreshold float64) {
 	for i := range r.Metrics {
-		if r.Metrics[i].Name == name {
+		if r.Metrics[i].Name == name && r.Metrics[i].Bucket == "" {
 			r.Metrics[i].Threshold = newThreshold
 			r.Metrics[i].EvaluatePassed()
 		}
@@ -99,12 +100,13 @@ func (r *Report) OverrideThreshold(name string, newThreshold float64) {
 
 // --- 阈值常量（初定，跑出基线后调整） ---
 
-// 结构断言类（这轮仅观察，Threshold=0）
+// 结构断言类建议基线：这轮仅观察、Threshold=0（不做硬门禁）。
+// Evaluate 当前不使用这些常量；下一轮跑出基线后启用为硬门禁阈值。
 const (
-	ThresholdDanglingEdgeRatio     = 0.30 // 建议值，这轮不做硬门禁
-	ThresholdSymbolResolution      = 0.70
-	ThresholdOrphanSymbolRatio     = 0.40
-	ThresholdCrossFileConnectivity = 0.20
+	ThresholdDanglingEdgeRatio     = 0.30 // 建议值，下一轮启用
+	ThresholdSymbolResolution      = 0.70 // 建议值，下一轮启用
+	ThresholdOrphanSymbolRatio     = 0.40 // 建议值，下一轮启用
+	ThresholdCrossFileConnectivity = 0.20 // 建议值，下一轮启用
 )
 
 // fixture 真值类（硬门禁）

@@ -2,6 +2,7 @@ package quality
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -118,4 +119,15 @@ func TestGraphEvaluator_FixtureMode_IncludesTruthMetrics(t *testing.T) {
 	assert.InDelta(t, 0.5, found["edge_precision"], 0.001)
 	// 连通性：9/10=0.9
 	assert.InDelta(t, 0.9, found["call_chain_connectivity"], 0.001)
+}
+
+// TestGraphEvaluator_FetcherError 验证 fetcher 错误被正确包装返回。
+func TestGraphEvaluator_FetcherError(t *testing.T) {
+	fetcher := &stubGraphFetcher{
+		err: fmt.Errorf("db connection lost"),
+	}
+	eval := NewGraphEvaluator(fetcher, nil)
+	_, err := eval.Evaluate(context.Background(), "repo-1", EvalModeRepo)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CountEdgesByType")
 }
