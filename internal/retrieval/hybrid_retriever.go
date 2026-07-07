@@ -2,6 +2,7 @@ package retrieval
 
 import (
 	"context"
+	"log"
 	"sort"
 	"sync"
 
@@ -176,8 +177,9 @@ func (r *HybridRetriever) search(ctx context.Context, mode, query string, filter
 // 该 block 的对应邻居为空，不影响其它 block。因此不用 errgroup（它会
 // 在首个错误时取消整组）。
 //
-// 方向开关：ExpandCallers/ExpandCallees 直接按布尔值控制。字段注释虽标注
-// "默认 true"，但 bool 零值为 false 无法三态区分，故以调用方显式填入为准。
+// 方向开关：ExpandCallers/ExpandCallees 按 bool 值控制（零值 false = 不扩展）。
+// 三态"默认 true"语义由 handler 层的 *bool 处理后显式传入；retrieval 层本身
+// 是"显式设置"契约，直接调用本层的调用方须自行设置这两个字段。
 func (r *HybridRetriever) expandGraph(ctx context.Context, blocks []ContextBlock, req RetrievalRequest) {
 	// 信号量：缓冲 channel，写入即占槽，读出即释放。
 	sem := make(chan struct{}, r.config.EdgeConcurrency)
@@ -201,8 +203,10 @@ func (r *HybridRetriever) expandGraph(ctx context.Context, blocks []ContextBlock
 				<-sem
 				if err == nil {
 					blocks[i].Callers = topNeighbors(callers, r.config.NeighborLimit)
+				} else {
+					// 图谱查询失败不中断整体（该 block 的 callers 留空），但记录日志便于排查。
+					log.Printf("retrieval: GetCallersWithDetails for %s failed (skipped): %v", symbolID, err)
 				}
-				// err != nil 静默跳过
 			}
 			if req.ExpandCallees {
 				sem <- struct{}{}
@@ -210,8 +214,9 @@ func (r *HybridRetriever) expandGraph(ctx context.Context, blocks []ContextBlock
 				<-sem
 				if err == nil {
 					blocks[i].Callees = topNeighbors(callees, r.config.NeighborLimit)
+				} else {
+					log.Printf("retrieval: GetCalleesWithDetails for %s failed (skipped): %v", symbolID, err)
 				}
-				// err != nil 静默跳过
 			}
 		}()
 	}

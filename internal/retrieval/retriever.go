@@ -19,8 +19,8 @@ type RetrievalRequest struct {
 	Mode          string   // "hybrid"(默认) | "vector" | "keyword"
 	Limit         int      // Top-K，默认 10
 	ExpandHops    int      // 图谱扩展跳数，固定 1（保留字段供未来扩展）
-	ExpandCallers bool     // 默认 true，是否拉取 callers
-	ExpandCallees bool     // 默认 true，是否拉取 callees
+	ExpandCallers bool     // 是否拉取 callers（无三态；调用方须显式设置。handler 层用 *bool 把"未传"解析为 true）
+	ExpandCallees bool     // 是否拉取 callees（同上）
 }
 
 // ContextSymbol 是图谱/检索共用的符号视图。
