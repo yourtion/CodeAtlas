@@ -98,13 +98,25 @@ func CountTotalSymbols(ctx context.Context, r *SymbolRepository, repoID string) 
 // CountOrphanSymbols 统计无任何出入边的孤立符号数
 // （既不作为任何边的 source，也不作为任何边的 target）。
 func CountOrphanSymbols(ctx context.Context, r *SymbolRepository, repoID string) (int, error) {
+	// 子查询 JOIN symbols+files 按 repo_id 过滤，避免多 repo 场景下其它仓库的边
+	// 把本仓库符号误判为非孤立。target_id 子查询显式排除 NULL 以规避 NOT IN 的 NULL 中毒。
 	query := `
 		SELECT COUNT(*)
 		FROM symbols s
 		JOIN files f ON s.file_id = f.file_id
 		WHERE f.repo_id = $1
-		  AND s.symbol_id NOT IN (SELECT source_id FROM edges WHERE source_id IS NOT NULL)
-		  AND s.symbol_id NOT IN (SELECT target_id FROM edges WHERE target_id IS NOT NULL)
+		  AND s.symbol_id NOT IN (
+			SELECT e.source_id FROM edges e
+			JOIN symbols es ON e.source_id = es.symbol_id
+			JOIN files ef ON es.file_id = ef.file_id
+			WHERE ef.repo_id = $1
+		  )
+		  AND s.symbol_id NOT IN (
+			SELECT e.target_id FROM edges e
+			JOIN symbols ts ON e.target_id = ts.symbol_id
+			JOIN files tf ON ts.file_id = tf.file_id
+			WHERE tf.repo_id = $1 AND e.target_id IS NOT NULL
+		  )
 	`
 	var count int
 	err := r.db.QueryRowContext(ctx, query, repoID).Scan(&count)

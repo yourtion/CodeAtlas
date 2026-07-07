@@ -1411,37 +1411,43 @@ func TestGraphMetrics_AggregationQueries(t *testing.T) {
 	edgeRepo := models.NewEdgeRepository(testDB.DB)
 	symbolRepo := models.NewSymbolRepository(testDB.DB)
 
+	// fixture 已知数据（createTestParseOutputWithRelationships）：
+	//   3 个符号：symbolID1(main) → symbolID2(helper), symbolID3(Utility)
+	//   2 条 call 边：
+	//     - symbolID1 → symbolID2，同文件 (src/main.go → src/main.go)
+	//     - symbolID1 → symbolID3，跨文件 (src/main.go → src/utils.go)
+	//   两条边 target_id 均非空，无悬空边。
+	//   symbolID1 是 source，symbolID2/symbolID3 是 target，故无孤立符号。
+
 	// 1. CountEdgesByType
 	byType, err := models.CountEdgesByType(ctx, edgeRepo, repoID)
 	require.NoError(t, err)
-	assert.NotEmpty(t, byType, "应有至少一种 edge_type")
+	assert.Equal(t, 2, byType["call"], "应有 2 条 call 边")
+	assert.Len(t, byType, 1, "应只有 call 一种 edge_type")
 	totalEdges := 0
 	for _, count := range byType {
 		totalEdges += count
 	}
+	assert.Equal(t, 2, totalEdges, "总边数应为 2")
 
 	// 2. CountDanglingEdges
 	dangling, err := models.CountDanglingEdges(ctx, edgeRepo, repoID)
 	require.NoError(t, err)
-	danglingTotal := 0
-	for _, count := range dangling {
-		danglingTotal += count
-	}
-	assert.LessOrEqual(t, danglingTotal, totalEdges, "悬空边数不应超过总边数")
+	assert.Empty(t, dangling, "两条边 target 均已解析，无悬空边")
 
 	// 3. CountTotalSymbols
 	totalSymbols, err := models.CountTotalSymbols(ctx, symbolRepo, repoID)
 	require.NoError(t, err)
-	assert.Greater(t, totalSymbols, 0, "应有符号")
+	assert.Equal(t, 3, totalSymbols, "应有 3 个符号")
 
 	// 4. CountOrphanSymbols
 	orphans, err := models.CountOrphanSymbols(ctx, symbolRepo, repoID)
 	require.NoError(t, err)
-	assert.LessOrEqual(t, orphans, totalSymbols, "孤立符号数不应超过总符号数")
+	assert.Equal(t, 0, orphans, "所有符号都参与边，应无孤立符号")
 
 	// 5. CountCrossFileEdges
 	crossFile, err := models.CountCrossFileEdges(ctx, edgeRepo, repoID)
 	require.NoError(t, err)
-	assert.LessOrEqual(t, crossFile, totalEdges, "跨文件边数不应超过总边数")
+	assert.Equal(t, 1, crossFile, "应有 1 条跨文件边")
 }
 
