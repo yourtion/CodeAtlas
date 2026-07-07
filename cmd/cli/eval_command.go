@@ -44,9 +44,9 @@ EXAMPLES:
 				Usage: "Evaluate fixture ground truth (fixture mode)",
 			},
 			&cli.StringFlag{
-				Name:     "db",
-				Usage:    "PostgreSQL connection string",
-				EnvVars:  []string{"DATABASE_URL", "DB_DSN"},
+				Name:    "db",
+				Usage:   "PostgreSQL connection string",
+				EnvVars: []string{"DATABASE_URL", "DB_DSN"},
 			},
 			&cli.StringFlag{
 				Name:  "only",
