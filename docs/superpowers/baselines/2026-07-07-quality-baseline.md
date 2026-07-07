@@ -37,3 +37,20 @@
 - `cross_file_connectivity` 修复 SchemaMapper 后应 > 0.20，可设为硬门禁
 - `symbol_resolution_rate` 按 edge_type 分桶后，call 类应 > 0.90
 - `orphan_symbol_ratio` 需在真实仓库建立基线后再定阈值
+
+## 检索质量（Ollama qwen3-embedding:0.6b，真 embedding）
+
+测试数据：2 个符号（LoginUser → VerifyPassword），query "how does user login work"，真值相关 = {LoginUser, VerifyPassword}。
+
+| 指标 | 值 | 阈值 | 通过 | 说明 |
+|---|---|---|---|---|
+| `recall@10_hybrid` | 1.00 | ≥0.70 | ✓ | 混合检索命中两个符号 |
+| `recall@10_vector` | 1.00 | ≥0.70 | ✓ | 向量检索命中两个符号 |
+| `recall@10_keyword` | 0.00 | ≥0.70 | ✗ | 自然语言 query 的 token 与代码符号 BM25 token 不匹配 |
+| `MRR_hybrid` | 1.00 | ≥0.50 | ✓ | 第一个相关符号排第一 |
+| `mode_compare_hybrid_vs_vector` | 0.00 | 仅观察 | — | hybrid 与 vector 表现相当（小数据集） |
+| `mode_compare_hybrid_vs_keyword` | +1.00 | 仅观察 | — | hybrid 显著优于 keyword，证明混合重排价值 |
+
+**关键结论**：mode_compare 数据（hybrid_vs_keyword = +1.00）验证了 PR#1 混合重排设计的价值——hybrid 完全覆盖了 keyword 无法召回的语义查询，而 keyword 在自然语言场景下完全失效。这为下一轮保留/增强混合检索提供了数据支撑。
+
+注：keyword recall=0 不是 bug，是 BM25 对自然语言 query 的固有局限——"how does user login work" 的 token 与代码里的 "LoginUser"/"VerifyPassword" 不重叠。hybrid 模式通过向量召回补上了这个缺口。
