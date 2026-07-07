@@ -110,6 +110,43 @@ func (r *VectorRepository) GetByID(ctx context.Context, vectorID string) (*Vecto
 	return &vector, nil
 }
 
+// GetByVectorIDs 按 vector_id 批量查询向量记录（用于按需取源码片段）。
+// 返回顺序不保证，调用方按 VectorID 自行对齐。
+func (r *VectorRepository) GetByVectorIDs(ctx context.Context, ids []string) ([]*Vector, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	query := `
+		SELECT vector_id, entity_id, entity_type, embedding::text, content, model, chunk_index, created_at
+		FROM vectors WHERE vector_id = ANY($1)
+	`
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var vectors []*Vector
+	for rows.Next() {
+		var vector Vector
+		var embeddingStr string
+		if err := rows.Scan(
+			&vector.VectorID, &vector.EntityID, &vector.EntityType, &embeddingStr,
+			&vector.Content, &vector.Model, &vector.ChunkIndex, &vector.CreatedAt); err != nil {
+			return nil, err
+		}
+
+		embedding, err := parseVectorFromPgvector(embeddingStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse embedding for vector %s: %w", vector.VectorID, err)
+		}
+		vector.Embedding = embedding
+		vectors = append(vectors, &vector)
+	}
+	return vectors, rows.Err()
+}
+
 // GetByEntityID retrieves all vectors for an entity
 func (r *VectorRepository) GetByEntityID(ctx context.Context, entityID, entityType string) ([]*Vector, error) {
 	query := `
@@ -337,7 +374,7 @@ func (r *VectorRepository) SimilaritySearch(ctx context.Context, queryEmbedding 
 // SimilaritySearchWithFilters performs vector similarity search with additional filters
 func (r *VectorRepository) SimilaritySearchWithFilters(ctx context.Context, queryEmbedding []float32, filters VectorSearchFilters) ([]*VectorSearchResult, error) {
 	// 判断是否需要 JOIN symbols/files：任一符号/文件维度过滤非空，或显式请求详情。
-	needJoin := len(filters.Kind) > 0 || filters.Language != "" || filters.RepoID != "" || filters.WithDetails
+	needJoin := len(filters.Kind) > 0 || filters.Language != "" || len(filters.RepoIDs) > 0 || filters.WithDetails
 
 	args := []interface{}{formatVectorForPgvector(queryEmbedding)}
 	argIndex := 2
@@ -400,8 +437,8 @@ func (r *VectorRepository) SimilaritySearchWithFilters(ctx context.Context, quer
 	if filters.Language != "" {
 		whereClause += fmt.Sprintf(" AND f.language = %s", addArg(filters.Language))
 	}
-	if filters.RepoID != "" {
-		whereClause += fmt.Sprintf(" AND f.repo_id = %s", addArg(filters.RepoID))
+	if len(filters.RepoIDs) > 0 {
+		whereClause += fmt.Sprintf(" AND f.repo_id = ANY(%s)", addArg(pq.Array(filters.RepoIDs)))
 	}
 
 	// ORDER BY + LIMIT（过滤在 LIMIT 前应用，保证返回数满 limit）
@@ -452,7 +489,7 @@ func (r *VectorRepository) SimilaritySearchWithFilters(ctx context.Context, quer
 // 检索调用方使用，且 ts_rank 与 cosine 距离的 MinSimilarity 阈值语义不同。
 // 如未来需要，应在此扩展并同步更新 search_handler 的 keyword 分支。
 func (r *VectorRepository) KeywordSearch(ctx context.Context, query string, filters VectorSearchFilters) ([]*VectorSearchResult, error) {
-	needJoin := len(filters.Kind) > 0 || filters.Language != "" || filters.RepoID != "" || filters.WithDetails
+	needJoin := len(filters.Kind) > 0 || filters.Language != "" || len(filters.RepoIDs) > 0 || filters.WithDetails
 
 	args := []interface{}{query}
 	argIndex := 2
@@ -500,8 +537,8 @@ func (r *VectorRepository) KeywordSearch(ctx context.Context, query string, filt
 	if filters.Language != "" {
 		whereClause += fmt.Sprintf(" AND f.language = %s", addArg(filters.Language))
 	}
-	if filters.RepoID != "" {
-		whereClause += fmt.Sprintf(" AND f.repo_id = %s", addArg(filters.RepoID))
+	if len(filters.RepoIDs) > 0 {
+		whereClause += fmt.Sprintf(" AND f.repo_id = ANY(%s)", addArg(pq.Array(filters.RepoIDs)))
 	}
 
 	orderBy := "\n\t\t\tORDER BY similarity DESC"
@@ -761,7 +798,7 @@ type VectorSearchFilters struct {
 	// 任一非空即触发 JOIN。
 	Kind     []string `json:"kind,omitempty"`     // OR 语义
 	Language string   `json:"language,omitempty"` // 精确匹配
-	RepoID   string   `json:"repo_id,omitempty"`  // 精确匹配
+	RepoIDs  []string `json:"repo_ids,omitempty"` // 精确匹配（多 repo）
 
 	// WithDetails 控制是否 JOIN 并返回符号/文件详情（Name/Kind/FilePath 等）。
 	// 传入 kind/language/repo 任一即隐含 WithDetails=true。

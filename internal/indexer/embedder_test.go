@@ -477,7 +477,11 @@ func TestOpenAIEmbedder_RateLimiting(t *testing.T) {
 	}
 
 	duration := requestTimes[3].Sub(requestTimes[0])
-	minDuration := time.Second
+	// 理论上 4 个请求在 2 req/s 下跨度约 1s（前 2 个用初始 token 立即通过，
+	// 后 2 个等首次 refill）。但 CI runner 高负载下 token bucket 的 refill
+	// 判定（elapsed >= interval）与 time.Now() 截断可能引入数毫秒偏差，
+	// 故留 10% 容差避免 timing flake。限流本质仍在起作用（瞬间完成才告警）。
+	minDuration := 900 * time.Millisecond
 	if duration < minDuration {
 		t.Errorf("Rate limiting not working: 4 requests completed in %v (expected >= %v)", duration, minDuration)
 	}

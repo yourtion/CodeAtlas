@@ -129,7 +129,7 @@ Content-Type: application/json
 
 {
   "query": "function that handles user authentication",
-  "repo_id": "uuid",
+  "repo_ids": ["uuid"],
   "limit": 10
 }
 ```
@@ -252,6 +252,102 @@ GET /api/v1/symbols/:id/transitive-callers?depth=5
 
 > 注：递归深度通过 `depth` 控制（默认 5），防止大型调用图上的递归爆炸。
 > 服务端用 `WITH RECURSIVE` + `UNION` 去重，天然防环。
+
+### QA 上下文组装
+
+QA 端点把"检索 + 1 跳图谱扩展"组装为可直接喂给 LLM 的上下文。服务端**不做生成**，只返回结构化上下文块 + 拼好的 Markdown prompt，调用方（CLI / 外部 LLM 工具）自行消费。
+
+#### 提问答上下文
+
+```http
+POST /api/v1/qa
+Content-Type: application/json
+
+{
+  "query": "用户登录流程涉及哪些函数",
+  "repo_ids": ["repo-uuid-1", "repo-uuid-2"],
+  "language": "go",
+  "kind": ["function"],
+  "mode": "hybrid",
+  "limit": 10,
+  "include_source": false,
+  "expand_callers": true,
+  "expand_callees": true
+}
+```
+
+请求字段：
+
+| 字段 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| `query` | string | — | 自然语言问题或符号名（必填） |
+| `repo_ids` | string[] | 全库 | 仓库 ID 列表，支持多仓库过滤 |
+| `language` | string | 不限 | 按语言过滤 |
+| `kind` | string[] | 不限 | 按符号类型过滤（function/class/...） |
+| `mode` | string | `hybrid` | 检索模式：`hybrid`（向量+关键词重排）/`vector`/`keyword` |
+| `limit` | int | 10 | Top-K 命中数 |
+| `include_source` | bool | false | 是否在 prompt 中内联源码片段（按 chunk 取） |
+| `expand_callers` | bool | true | 是否拉取命中符号的 1 跳 caller |
+| `expand_callees` | bool | true | 是否拉取命中符号的 1 跳 callee |
+
+> `expand_callers`/`expand_callees` 是三态字段：省略时默认 `true`，显式传 `false` 才关闭。
+
+响应：
+```json
+{
+  "query": "用户登录流程涉及哪些函数",
+  "blocks": [
+    {
+      "symbol": {
+        "symbol_id": "uuid",
+        "name": "Login",
+        "kind": "function",
+        "signature": "func Login(ctx, creds) error",
+        "file_path": "auth/login.go:42",
+        "language": "go",
+        "docstring": "..."
+      },
+      "similarity": 0.87,
+      "match_mode": "hybrid",
+      "callers": [/* 1 跳调用方，每边 Top-5 */],
+      "callees": [/* 1 跳被调用方 */],
+      "chunk_id": "vec-xxx"
+    }
+  ],
+  "prompt": "# Code Context\n\n## Question\n...",
+  "truncated": false,
+  "chunk_ids": ["vec-xxx", "vec-yyy"]
+}
+```
+
+- `prompt` 是拼好的 Markdown（含 Question / Repositories / Relevant Symbols 三段，每个符号带签名、docstring、callers/callees），可直接粘贴给 LLM。`truncated` 标记是否因 8000 token 软上限被截断（超限时优先保留高相似度 block）。
+- `chunk_ids` 是所有 block 的 chunk id 汇总，供按需取源码（见下）。
+
+#### 按 chunk id 取源码
+
+默认路径（`include_source=false`）不返回源码。需要时用此端点批量拉取：
+
+```http
+GET /api/v1/qa/chunks?ids=id1,id2,id3
+```
+
+| 参数 | 说明 |
+|------|------|
+| `ids` | 逗号分隔的 chunk id 列表，最多 50 个 |
+
+响应：
+```json
+{
+  "chunks": [
+    {
+      "chunk_id": "id1",
+      "symbol_id": "sym-1",
+      "content": "func Login(...) error { ... }"
+    }
+  ]
+}
+```
+
 
 ### 文件和符号
 

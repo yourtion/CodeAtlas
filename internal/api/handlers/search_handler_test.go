@@ -27,7 +27,7 @@ func TestSearchHandler_Search_InvalidRequest(t *testing.T) {
 		},
 		{
 			name:           "missing query",
-			requestBody:    `{"repo_id": "test-repo"}`,
+			requestBody:    `{"repo_ids": ["test-repo"]}`,
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "Invalid request body",
 		},
@@ -84,7 +84,7 @@ func TestSearchRequest_Validation(t *testing.T) {
 			name: "valid request with all fields",
 			request: SearchRequest{
 				Query:    "test query",
-				RepoID:   "repo-1",
+				RepoIDs:  []string{"repo-1"},
 				Language: "go",
 				Kind:     []string{"function", "class"},
 				Limit:    10,
@@ -101,7 +101,7 @@ func TestSearchRequest_Validation(t *testing.T) {
 		{
 			name: "invalid request - missing query",
 			request: SearchRequest{
-				RepoID: "repo-1",
+				RepoIDs: []string{"repo-1"},
 			},
 			valid: false,
 		},

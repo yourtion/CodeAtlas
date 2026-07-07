@@ -48,7 +48,7 @@ func NewSearchHandlerWithEmbedder(db *models.DB, embedder indexer.Embedder) *Sea
 // SearchRequest represents the request body for POST /api/v1/search
 type SearchRequest struct {
 	Query    string   `json:"query" binding:"required"`
-	RepoID   string   `json:"repo_id,omitempty"`
+	RepoIDs  []string `json:"repo_ids,omitempty"`
 	Language string   `json:"language,omitempty"`
 	Kind     []string `json:"kind,omitempty"`
 	Limit    int      `json:"limit,omitempty"`
@@ -106,7 +106,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		Limit:       req.Limit,
 		Kind:        req.Kind,
 		Language:    req.Language,
-		RepoID:      req.RepoID,
+		RepoIDs:     req.RepoIDs,
 		WithDetails: true, // JOIN 顺带返回 name/kind/signature/docstring/file_path/language/repo
 	}
 

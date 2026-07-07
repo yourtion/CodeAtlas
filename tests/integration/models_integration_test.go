@@ -1225,3 +1225,151 @@ func TestVectorOperations(t *testing.T) {
 	})
 }
 
+// TestVectorSearch_RepoIDsFilter 验证 VectorSearchFilters.RepoIDs（[]string + ANY() 匹配）
+// 在真 DB 上正确工作。覆盖 Task 1 的 breaking change：单 repo 过滤与多 repo 过滤。
+func TestVectorSearch_RepoIDsFilter(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
+
+	ctx := context.Background()
+	vectorRepo := models.NewVectorRepository(testDB.DB)
+	repoRepo := models.NewRepositoryRepository(testDB.DB)
+	fileRepo := models.NewFileRepository(testDB.DB)
+	symbolRepo := models.NewSymbolRepository(testDB.DB)
+
+	// 向量维度与迁移硬编码（1024）一致。
+	vectorDim := getEnvInt("EMBEDDING_DIMENSIONS", 1024)
+
+	// 创建两个独立 repo（repo_id 为 UUID 外键，不能用任意字符串）。
+	repoA := &models.Repository{RepoID: uuid.New().String(), Name: "repo-a"}
+	if err := repoRepo.Create(ctx, repoA); err != nil {
+		t.Fatalf("Failed to create repo-a: %v", err)
+	}
+	repoB := &models.Repository{RepoID: uuid.New().String(), Name: "repo-b"}
+	if err := repoRepo.Create(ctx, repoB); err != nil {
+		t.Fatalf("Failed to create repo-b: %v", err)
+	}
+
+	// 每个 repo 一个 file + 一个 symbol，附带一条向量。
+	// 用相同的 embedding（全 1）确保两个 repo 的命中都会被相似度搜索召回，
+	// 从而把过滤的正确性交给 RepoIDs 维度而非相似度排序。
+	embedding := make([]float32, vectorDim)
+	for i := range embedding {
+		embedding[i] = 1.0
+	}
+
+	type fixture struct {
+		repo     *models.Repository
+		file     *models.File
+		symbol   *models.Symbol
+		vectorID string
+	}
+	mkFixture := func(repo *models.Repository) fixture {
+		file := &models.File{
+			FileID:   uuid.New().String(),
+			RepoID:   repo.RepoID,
+			Path:     fmt.Sprintf("%s/main.go", repo.Name),
+			Language: "go",
+			Size:     100,
+			Checksum: repo.Name,
+		}
+		if err := fileRepo.Create(ctx, file); err != nil {
+			t.Fatalf("Failed to create file for %s: %v", repo.Name, err)
+		}
+		sym := &models.Symbol{
+			SymbolID:  uuid.New().String(),
+			FileID:    file.FileID,
+			Name:      repo.Name + "Func",
+			Kind:      "function",
+			Signature: "func " + repo.Name + "Func()",
+			StartLine: 1,
+			EndLine:   5,
+			Docstring: repo.Name + " function",
+		}
+		if err := symbolRepo.Create(ctx, sym); err != nil {
+			t.Fatalf("Failed to create symbol for %s: %v", repo.Name, err)
+		}
+		vec := &models.Vector{
+			VectorID:   uuid.New().String(),
+			EntityID:   sym.SymbolID,
+			EntityType: "symbol",
+			Embedding:  embedding,
+			Content:    sym.Docstring,
+			Model:      "test-model",
+		}
+		if err := vectorRepo.Create(ctx, vec); err != nil {
+			t.Fatalf("Failed to create vector for %s: %v", repo.Name, err)
+		}
+		return fixture{repo: repo, file: file, symbol: sym, vectorID: vec.VectorID}
+	}
+
+	fixA := mkFixture(repoA)
+	fixB := mkFixture(repoB)
+
+	// 查询向量与入库向量相同 → 相似度为 1，所有命中都应被召回。
+	queryEmbedding := make([]float32, vectorDim)
+	for i := range queryEmbedding {
+		queryEmbedding[i] = 1.0
+	}
+
+	// assertOnlyRepos 校验结果集合恰好为期望的 repo 集合，无遗漏无越界。
+	assertOnlyRepos := func(t *testing.T, results []*models.VectorSearchResult, want map[string]bool) {
+		t.Helper()
+		if len(results) != len(want) {
+			t.Fatalf("Expected %d results, got %d", len(want), len(results))
+		}
+		for _, r := range results {
+			if !want[r.RepoID] {
+				t.Errorf("Unexpected repo_id in result: %s", r.RepoID)
+			}
+		}
+	}
+
+	t.Run("single repo filter", func(t *testing.T) {
+		filters := models.VectorSearchFilters{
+			EntityType: "symbol",
+			Model:      "test-model",
+			RepoIDs:    []string{repoA.RepoID},
+			Limit:      10,
+		}
+		results, err := vectorRepo.SimilaritySearchWithFilters(ctx, queryEmbedding, filters)
+		if err != nil {
+			t.Fatalf("SimilaritySearchWithFilters failed: %v", err)
+		}
+		assertOnlyRepos(t, results, map[string]bool{repoA.RepoID: true})
+		// 确认确实召回了 repo-a 的那条向量。
+		if len(results) == 1 && results[0].VectorID != fixA.vectorID {
+			t.Errorf("Expected vector %s, got %s", fixA.vectorID, results[0].VectorID)
+		}
+	})
+
+	t.Run("multi repo filter", func(t *testing.T) {
+		filters := models.VectorSearchFilters{
+			EntityType: "symbol",
+			Model:      "test-model",
+			RepoIDs:    []string{repoA.RepoID, repoB.RepoID},
+			Limit:      10,
+		}
+		results, err := vectorRepo.SimilaritySearchWithFilters(ctx, queryEmbedding, filters)
+		if err != nil {
+			t.Fatalf("SimilaritySearchWithFilters failed: %v", err)
+		}
+		assertOnlyRepos(t, results, map[string]bool{
+			repoA.RepoID: true,
+			repoB.RepoID: true,
+		})
+		// 确认两个 repo 的向量都被召回。
+		got := make(map[string]bool, len(results))
+		for _, r := range results {
+			got[r.VectorID] = true
+		}
+		if !got[fixA.vectorID] || !got[fixB.vectorID] {
+			t.Errorf("Expected both vectors (%s, %s) to be recalled, got %v", fixA.vectorID, fixB.vectorID, got)
+		}
+	})
+}
+

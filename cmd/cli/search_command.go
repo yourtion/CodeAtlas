@@ -194,9 +194,11 @@ func executeSearchCommand(c *cli.Context) error {
 
 	// Build search filters
 	filters := client.SearchFilters{
-		RepoID:   c.String("repo-id"),
 		Language: c.String("language"),
 		Limit:    c.Int("limit"),
+	}
+	if repoID := c.String("repo-id"); repoID != "" {
+		filters.RepoIDs = []string{repoID}
 	}
 
 	// Parse kind filter
