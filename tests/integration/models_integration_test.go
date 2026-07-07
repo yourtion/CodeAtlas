@@ -6,6 +6,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/yourtionguo/CodeAtlas/internal/indexer"
+	"github.com/yourtionguo/CodeAtlas/internal/schema"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
@@ -1371,5 +1375,73 @@ func TestVectorSearch_RepoIDsFilter(t *testing.T) {
 			t.Errorf("Expected both vectors (%s, %s) to be recalled, got %v", fixA.vectorID, fixB.vectorID, got)
 		}
 	})
+}
+
+// createTestParseOutputWithEdges 构造一个带 call 边（含同文件与跨文件）的 parseOutput，
+// 用于图指标聚合查询测试。复用 createTestParseOutputWithRelationships（已含同文件 call
+// 边 + 跨文件 call 边）。
+func createTestParseOutputWithEdges(repoID string) *schema.ParseOutput {
+	_ = repoID // repo_id 由 indexer.Index 按配置写入，fixture 本身不携带 repo 信息
+	return createTestParseOutputWithRelationships()
+}
+
+// TestGraphMetrics_AggregationQueries 验证 5 个聚合查询方法的正确性。
+func TestGraphMetrics_AggregationQueries(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
+
+	ctx := context.Background()
+	repoID := uuid.New().String()
+
+	// 索引一个已知 fixture（带 call 边：一条同文件、一条跨文件）
+	parseOutput := createTestParseOutputWithEdges(repoID)
+	config := &indexer.IndexerConfig{
+		RepoID: repoID, RepoName: "graph-metrics-test", BatchSize: 10,
+		WorkerCount: 2, SkipVectors: true, UseTransactions: true,
+	}
+	idx := indexer.NewIndexer(testDB.DB, config)
+	if _, err := idx.Index(ctx, parseOutput); err != nil {
+		t.Fatalf("Indexing failed: %v", err)
+	}
+
+	edgeRepo := models.NewEdgeRepository(testDB.DB)
+	symbolRepo := models.NewSymbolRepository(testDB.DB)
+
+	// 1. CountEdgesByType
+	byType, err := models.CountEdgesByType(ctx, edgeRepo, repoID)
+	require.NoError(t, err)
+	assert.NotEmpty(t, byType, "应有至少一种 edge_type")
+	totalEdges := 0
+	for _, count := range byType {
+		totalEdges += count
+	}
+
+	// 2. CountDanglingEdges
+	dangling, err := models.CountDanglingEdges(ctx, edgeRepo, repoID)
+	require.NoError(t, err)
+	danglingTotal := 0
+	for _, count := range dangling {
+		danglingTotal += count
+	}
+	assert.LessOrEqual(t, danglingTotal, totalEdges, "悬空边数不应超过总边数")
+
+	// 3. CountTotalSymbols
+	totalSymbols, err := models.CountTotalSymbols(ctx, symbolRepo, repoID)
+	require.NoError(t, err)
+	assert.Greater(t, totalSymbols, 0, "应有符号")
+
+	// 4. CountOrphanSymbols
+	orphans, err := models.CountOrphanSymbols(ctx, symbolRepo, repoID)
+	require.NoError(t, err)
+	assert.LessOrEqual(t, orphans, totalSymbols, "孤立符号数不应超过总符号数")
+
+	// 5. CountCrossFileEdges
+	crossFile, err := models.CountCrossFileEdges(ctx, edgeRepo, repoID)
+	require.NoError(t, err)
+	assert.LessOrEqual(t, crossFile, totalEdges, "跨文件边数不应超过总边数")
 }
 
