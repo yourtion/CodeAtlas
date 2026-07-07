@@ -34,8 +34,8 @@ type MetricValue struct {
 	Threshold      float64            `json:"threshold"`        // 0 = 仅观察无阈值
 	HigherIsBetter bool               `json:"higher_is_better"` // true: Value≥Threshold 达标；false: Value≤Threshold 达标
 	Passed         bool               `json:"passed"`
-	Bucket         string             `json:"bucket,omitempty"`  // 分桶标签，如 "import"/"call"；空 = 总值
-	Detail         map[string]float64 `json:"detail,omitempty"`  // 子分桶明细
+	Bucket         string             `json:"bucket,omitempty"` // 分桶标签，如 "import"/"call"；空 = 总值
+	Detail         map[string]float64 `json:"detail,omitempty"` // 子分桶明细
 }
 
 // EvaluatePassed 根据 Threshold/HigherIsBetter/Value 计算 Passed。
@@ -63,9 +63,9 @@ type Report struct {
 
 // Summary 指标通过情况汇总。
 type Summary struct {
-	Total    int `json:"total"`
-	Passed   int `json:"passed"`
-	Failed   int `json:"failed"`
+	Total       int `json:"total"`
+	Passed      int `json:"passed"`
+	Failed      int `json:"failed"`
 	NoThreshold int `json:"no_threshold"`
 }
 
