@@ -85,19 +85,21 @@ func (e *RetrievalEvaluator) Evaluate(ctx context.Context, repoIDs []string) ([]
 			}
 
 			// neighbor_hit_rate：邻居里含真值相关符号的比例
-			neighborHit := 0
+			// 用 set 去重：同一相关符号在多个 block 的邻居里出现只算一次
+			neighborHitSet := make(map[string]bool)
 			for _, b := range blocks {
 				for _, c := range b.Callers {
 					if relevantSet[c.Name] {
-						neighborHit++
+						neighborHitSet[c.Name] = true
 					}
 				}
 				for _, c := range b.Callees {
 					if relevantSet[c.Name] {
-						neighborHit++
+						neighborHitSet[c.Name] = true
 					}
 				}
 			}
+			neighborHit := len(neighborHitSet)
 			neighborRate := 0.0
 			if len(relevantSet) > 0 {
 				neighborRate = float64(neighborHit) / float64(len(relevantSet))
