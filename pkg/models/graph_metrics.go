@@ -122,3 +122,69 @@ func CountOrphanSymbols(ctx context.Context, r *SymbolRepository, repoID string)
 	err := r.db.QueryRowContext(ctx, query, repoID).Scan(&count)
 	return count, err
 }
+
+// ChainSpec 调用链端点对（models 层定义，避免循环依赖 quality 包）。
+type ChainSpec struct {
+	StartName string
+	EndName   string
+	StartFile string
+	EndFile   string
+}
+
+// CheckSingleChainConnectivity 用递归 CTE 查 start 是否能经 call 边到达 end。
+func CheckSingleChainConnectivity(ctx context.Context, r *EdgeRepository, repoID string, c ChainSpec) (bool, error) {
+	query := `
+		WITH RECURSIVE reach AS (
+			SELECT s.symbol_id FROM symbols s
+			JOIN files f ON s.file_id = f.file_id
+			WHERE f.repo_id = $1 AND s.name = $2 AND f.path = $3
+			UNION
+			SELECT e.target_id FROM reach r
+			JOIN edges e ON e.source_id = r.symbol_id
+			WHERE e.edge_type = 'call' AND e.target_id IS NOT NULL
+		)
+		SELECT EXISTS(
+			SELECT 1 FROM reach r
+			JOIN symbols s ON r.symbol_id = s.symbol_id
+			JOIN files f ON s.file_id = f.file_id
+			WHERE s.name = $4 AND f.path = $5
+		)
+	`
+	var connected bool
+	err := r.db.QueryRowContext(ctx, query, repoID, c.StartName, c.StartFile, c.EndName, c.EndFile).Scan(&connected)
+	return connected, err
+}
+
+// ExtractedEdge models 层的提取边（供 quality 层转换）。
+type ExtractedEdge struct {
+	SourceName string
+	EdgeType   string
+	TargetName string
+}
+
+// ListExtractedEdges 返回仓库内所有提取出的边（source_name/edge_type/target_name）。
+func ListExtractedEdges(ctx context.Context, r *EdgeRepository, repoID string) ([]ExtractedEdge, error) {
+	query := `
+		SELECT s_source.name, e.edge_type, COALESCE(s_target.name, '')
+		FROM edges e
+		JOIN symbols s_source ON e.source_id = s_source.symbol_id
+		JOIN files f ON s_source.file_id = f.file_id
+		LEFT JOIN symbols s_target ON e.target_id = s_target.symbol_id
+		WHERE f.repo_id = $1
+	`
+	rows, err := r.db.QueryContext(ctx, query, repoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ExtractedEdge
+	for rows.Next() {
+		var e ExtractedEdge
+		if err := rows.Scan(&e.SourceName, &e.EdgeType, &e.TargetName); err != nil {
+			return nil, err
+		}
+		result = append(result, e)
+	}
+	return result, rows.Err()
+}
