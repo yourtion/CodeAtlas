@@ -410,3 +410,23 @@ find "$OUTPUT_DIR" -name "parse-*.json" -mtime +7 -delete
 - 查看 [API 指南](api.md) 了解如何查询索引数据
 - 查看 [配置指南](configuration.md) 自定义解析行为
 - 查看 [架构设计](architecture.md) 了解解析器原理
+- 查看 [质量评估](evaluation.md) 了解如何评估图谱与检索质量
+
+---
+
+## eval 命令
+
+评估代码知识图谱与检索质量，输出指标报告。
+
+```bash
+# 评估真实仓库（结构断言，建基线）
+codeatlas eval --repo <repo_id> --db "host=localhost port=5432 user=codeatlas dbname=codeatlas sslmode=disable"
+
+# 评估 fixture 真值集（门禁用）
+codeatlas eval --fixtures --db "..." --format json
+
+# 只跑某一类
+codeatlas eval --repo <repo_id> --only graph
+```
+
+详见 [质量评估指南](evaluation.md)。

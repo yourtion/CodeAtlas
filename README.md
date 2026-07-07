@@ -191,7 +191,7 @@ CodeAtlas 支持检测跨语言调用关系，包括：
 - [x] CLI 上传文件与 Git 基础信息
 - [x] 服务端解析与入库
 - [x] 多语言解析支持（Go, JS/TS, Python, Kotlin, Java, Swift, Objective-C, C, C++）
-- [ ] 基础语义检索和问答
+- [x] 基础语义检索和问答
 
 ### **Phase 2 - 知识图谱增强**
 
