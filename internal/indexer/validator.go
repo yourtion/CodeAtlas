@@ -591,16 +591,9 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 			})
 		}
 	case schema.EdgeCall, schema.EdgeExtends, schema.EdgeImplements, schema.EdgeReference:
-		// These edge types should have a target_id
-		if edge.TargetID == "" {
-			result.AddError(&ValidationError{
-				Type:       ErrInvalidValue,
-				Message:    fmt.Sprintf("%s edge must have target_id", edge.EdgeType),
-				EntityType: "edge",
-				EntityID:   edge.EdgeID,
-				Field:      "target_id",
-			})
-		}
+		// 这些边类型理想情况下应有 target_id，但跨文件消解可能失败。
+		// 悬空边（target_id 空）是合法状态——保留供 symbol_resolution_rate 指标观测。
+		// 不报 error，不阻塞写入。
 	}
 
 	return result

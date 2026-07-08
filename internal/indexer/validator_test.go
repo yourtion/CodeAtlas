@@ -521,17 +521,17 @@ func TestSchemaValidator_ValidateEdge(t *testing.T) {
 			expectErrors: []ValidationErrorType{ErrInvalidValue},
 		},
 		{
-			name: "call edge without target_id",
+			name: "call edge without target_id (dangling edge is valid)",
 			input: &schema.DependencyEdge{
 				EdgeID:     "edge-1",
 				SourceID:   "symbol-1",
 				EdgeType:   schema.EdgeCall,
 				SourceFile: "/test/file.go",
-				// Missing TargetID
+				// Missing TargetID — dangling edge is a legal state after cross-file resolution
 			},
 			setupSymbols: []string{"symbol-1"},
-			expectValid:  false,
-			expectErrors: []ValidationErrorType{ErrInvalidValue},
+			expectValid:  true,
+			expectErrors: nil,
 		},
 	}
 
