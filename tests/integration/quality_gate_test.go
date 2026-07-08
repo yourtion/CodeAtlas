@@ -44,6 +44,14 @@ func TestQualityGate_FixtureMode(t *testing.T) {
 		truth.Edges = append(truth.Edges, gt.Edges...)
 		truth.Chains = append(truth.Chains, gt.Chains...)
 	}
+
+	// 回填真值边的 symbol_id（索引后才能查到）
+	truthSlice := []quality.GraphGroundTruth{*truth}
+	if err := fixtures.ResolveTruthIDs(ctx, symbolRepo, truthSlice); err != nil {
+		t.Logf("ResolveTruthIDs 出错（非致命，symbol_id 为空的边会被跳过）: %v", err)
+	}
+	truth = &truthSlice[0] // 回填后的真值
+
 	graphEval := quality.NewGraphEvaluator(fetcher, truth)
 
 	report, err := quality.Evaluate(ctx, quality.EvaluateConfig{

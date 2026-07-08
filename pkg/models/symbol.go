@@ -156,6 +156,38 @@ func (r *SymbolRepository) GetByName(ctx context.Context, namePattern string) ([
 	return symbols, rows.Err()
 }
 
+// GetByExactName returns symbols whose name is an exact, case-sensitive match.
+//
+// Unlike GetByName (which uses ILIKE and therefore treats '_' as a single-char
+// wildcard), this returns an exact match — required for truth symbol_id backfill
+// where names like "c_init"/"processCData" must not match "cXinit".
+func (r *SymbolRepository) GetByExactName(ctx context.Context, name string) ([]*Symbol, error) {
+	query := `
+		SELECT symbol_id, file_id, name, kind, signature, start_line, end_line,
+			start_byte, end_byte, docstring, semantic_summary, created_at
+		FROM symbols WHERE name = $1 ORDER BY name
+	`
+	rows, err := r.db.QueryContext(ctx, query, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var symbols []*Symbol
+	for rows.Next() {
+		var symbol Symbol
+		err := rows.Scan(
+			&symbol.SymbolID, &symbol.FileID, &symbol.Name, &symbol.Kind, &symbol.Signature,
+			&symbol.StartLine, &symbol.EndLine, &symbol.StartByte, &symbol.EndByte,
+			&symbol.Docstring, &symbol.SemanticSummary, &symbol.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		symbols = append(symbols, &symbol)
+	}
+	return symbols, rows.Err()
+}
+
 // Update updates an existing symbol record
 func (r *SymbolRepository) Update(ctx context.Context, symbol *Symbol) error {
 	query := `

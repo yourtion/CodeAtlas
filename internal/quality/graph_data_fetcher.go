@@ -69,8 +69,10 @@ func (f *DefaultGraphFetcher) ListExtractedEdges(ctx context.Context, repoID str
 	result := make([]ExtractedEdge, len(rawEdges))
 	for i, e := range rawEdges {
 		result[i] = ExtractedEdge{
+			SourceID:   e.SourceID,
 			SourceName: e.SourceName,
 			EdgeType:   e.EdgeType,
+			TargetID:   e.TargetID,
 			TargetName: e.TargetName,
 		}
 	}

@@ -6,10 +6,13 @@ import (
 )
 
 // ExpectedEdge 真值里的一条期望边。
-// 不依赖 symbol_id（入库后才有），用符号名匹配。
+// SourceID/TargetID 用于 symbol_id 精确匹配（测试里索引后回填）；
+// SourceName/TargetName 保留供人类可读调试。
 type ExpectedEdge struct {
+	SourceID   string // 索引后回填（GenerateDeterministicUUID 产出）
 	SourceName string // "CppClass::CppMethod"
 	EdgeType   string // "call"
+	TargetID   string // 索引后回填
 	TargetName string // "c_init"
 	Optional   bool   // true = 提到了不算漏（如标准库 strlen）
 }
@@ -30,10 +33,14 @@ type GraphGroundTruth struct {
 }
 
 // ExtractedEdge 从 DB 查出的提取边（用于真值匹配）。
+// SourceID/TargetID 用于 symbol_id 精确匹配（解决 C++ 重载同名问题）；
+// SourceName/TargetName 保留供调试日志。
 type ExtractedEdge struct {
+	SourceID   string
 	SourceName string
 	EdgeType   string
-	TargetName string // 悬空时为空
+	TargetID   string // 悬空时为空
+	TargetName string
 }
 
 // GraphDataFetcher 收窄 models 依赖，便于 mock。
@@ -209,12 +216,17 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 }
 
 // computeEdgeMatch 计算边召回率和准确率。
-// 真值边匹配提取边：按 (source_name, edge_type, target_name) 三元组。
+// 真值边匹配提取边：按 (source_id, edge_type, target_id) 三元组。
+// symbol_id 匹配从根本上解决 C++ 重载同名符号导致 recall>1.0 的问题。
 // Optional=true 的真值边不计入漏提取（如标准库函数）。
+// 悬空边（TargetID 空）不参与匹配——它们无法对齐到具体符号。
 func computeEdgeMatch(truth []ExpectedEdge, extracted []ExtractedEdge) (recall, precision float64) {
 	extractedSet := make(map[string]bool)
 	for _, e := range extracted {
-		key := e.SourceName + "|" + e.EdgeType + "|" + e.TargetName
+		if e.TargetID == "" {
+			continue // 悬空边不入匹配集
+		}
+		key := e.SourceID + "|" + e.EdgeType + "|" + e.TargetID
 		extractedSet[key] = true
 	}
 
@@ -225,8 +237,11 @@ func computeEdgeMatch(truth []ExpectedEdge, extracted []ExtractedEdge) (recall, 
 		if te.Optional {
 			continue
 		}
+		if te.TargetID == "" {
+			continue // 真值边无 target_id 也不计入（不应发生，但防御）
+		}
 		required++
-		key := te.SourceName + "|" + te.EdgeType + "|" + te.TargetName
+		key := te.SourceID + "|" + te.EdgeType + "|" + te.TargetID
 		if extractedSet[key] {
 			hit++
 		}
@@ -235,21 +250,29 @@ func computeEdgeMatch(truth []ExpectedEdge, extracted []ExtractedEdge) (recall, 
 		recall = float64(hit) / float64(required)
 	}
 
-	// precision：提取边中匹配真值的比例
+	// precision：提取边中匹配真值的比例（悬空边不计入分母）
 	truthSet := make(map[string]bool)
 	for _, te := range truth {
-		key := te.SourceName + "|" + te.EdgeType + "|" + te.TargetName
+		if te.TargetID == "" {
+			continue
+		}
+		key := te.SourceID + "|" + te.EdgeType + "|" + te.TargetID
 		truthSet[key] = true
 	}
-	if len(extracted) > 0 {
-		matched := 0
-		for _, e := range extracted {
-			key := e.SourceName + "|" + e.EdgeType + "|" + e.TargetName
-			if truthSet[key] {
-				matched++
-			}
+	matchedNonDangling := 0
+	totalNonDangling := 0
+	for _, e := range extracted {
+		if e.TargetID == "" {
+			continue // 悬空边不计入 precision 分母
 		}
-		precision = float64(matched) / float64(len(extracted))
+		totalNonDangling++
+		key := e.SourceID + "|" + e.EdgeType + "|" + e.TargetID
+		if truthSet[key] {
+			matchedNonDangling++
+		}
+	}
+	if totalNonDangling > 0 {
+		precision = float64(matchedNonDangling) / float64(totalNonDangling)
 	}
 
 	return recall, precision

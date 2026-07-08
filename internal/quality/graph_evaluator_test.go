@@ -97,15 +97,15 @@ func TestGraphEvaluator_FixtureMode_IncludesTruthMetrics(t *testing.T) {
 		chainOK:    9,
 		chainTotal: 10,
 		extracted: []ExtractedEdge{
-			{SourceName: "A", EdgeType: "call", TargetName: "B"}, // 命中真值
-			{SourceName: "A", EdgeType: "call", TargetName: "X"}, // 不在真值里（降低 precision）
+			{SourceID: "a-id", SourceName: "A", EdgeType: "call", TargetID: "b-id", TargetName: "B"}, // 命中真值
+			{SourceID: "a-id", SourceName: "A", EdgeType: "call", TargetID: "x-id", TargetName: "X"}, // 不在真值里（降低 precision）
 		},
 	}
 	truth := &GraphGroundTruth{
 		FixtureFile: "test.go",
 		Edges: []ExpectedEdge{
-			{SourceName: "A", EdgeType: "call", TargetName: "B"},
-			{SourceName: "A", EdgeType: "call", TargetName: "C", Optional: true}, // optional，不算漏
+			{SourceID: "a-id", SourceName: "A", EdgeType: "call", TargetID: "b-id", TargetName: "B"},
+			{SourceID: "a-id", SourceName: "A", EdgeType: "call", TargetID: "c-id", TargetName: "C", Optional: true}, // optional，不算漏
 		},
 		Chains: []ExpectedChain{
 			{StartName: "A", EndName: "B", StartFile: "a.go", EndFile: "b.go"},
@@ -130,6 +130,86 @@ func TestGraphEvaluator_FixtureMode_IncludesTruthMetrics(t *testing.T) {
 	assert.InDelta(t, 0.5, found["edge_precision"], 0.001)
 	// 连通性：9/10=0.9
 	assert.InDelta(t, 0.9, found["call_chain_connectivity"], 0.001)
+}
+
+func TestExtractedEdge_HasIDFields(t *testing.T) {
+	e := ExtractedEdge{
+		SourceID:   "src-uuid-1",
+		SourceName: "MyClass",
+		EdgeType:   "call",
+		TargetID:   "tgt-uuid-1",
+		TargetName: "doSomething",
+	}
+	if e.SourceID == "" || e.TargetID == "" {
+		t.Fatalf("ExtractedEdge 应有 SourceID/TargetID 字段，got SourceID=%q TargetID=%q", e.SourceID, e.TargetID)
+	}
+}
+
+func TestExpectedEdge_HasIDFields(t *testing.T) {
+	e := ExpectedEdge{
+		SourceID:   "src-uuid-1",
+		SourceName: "MyClass",
+		EdgeType:   "call",
+		TargetID:   "tgt-uuid-1",
+		TargetName: "doSomething",
+	}
+	if e.SourceID == "" || e.TargetID == "" {
+		t.Fatalf("ExpectedEdge 应有 SourceID/TargetID 字段")
+	}
+}
+
+func TestComputeEdgeMatch_SymbolID_Dedup(t *testing.T) {
+	truth := []ExpectedEdge{
+		{SourceID: "src-1", EdgeType: "call", TargetID: "tgt-1"},
+	}
+	extracted := []ExtractedEdge{
+		{SourceID: "src-1", EdgeType: "call", TargetID: "tgt-1"},
+		{SourceID: "src-2", EdgeType: "call", TargetID: "tgt-2"},
+	}
+	recall, precision := computeEdgeMatch(truth, extracted)
+	if recall > 1.0 {
+		t.Fatalf("recall 不应超过 1.0，got %f", recall)
+	}
+	if recall != 1.0 {
+		t.Fatalf("真值边命中，recall 应为 1.0，got %f", recall)
+	}
+	if precision != 0.5 {
+		t.Fatalf("precision 应为 0.5（2条里1条匹配），got %f", precision)
+	}
+}
+
+func TestComputeEdgeMatch_DanglingExcluded(t *testing.T) {
+	// 悬空边（TargetID 空）不参与 symbol_id 匹配，也不计入 precision 分母——
+	// 它们无法对齐到具体符号（见 computeEdgeMatch 注释）。
+	truth := []ExpectedEdge{
+		{SourceID: "src-1", EdgeType: "call", TargetID: "tgt-1"},
+	}
+	extracted := []ExtractedEdge{
+		{SourceID: "src-1", EdgeType: "call", TargetID: "tgt-1"},
+		{SourceID: "src-2", EdgeType: "call", TargetID: ""}, // 悬空，不入分母
+	}
+	recall, precision := computeEdgeMatch(truth, extracted)
+	if recall != 1.0 {
+		t.Fatalf("recall 应为 1.0，got %f", recall)
+	}
+	// 1 条非悬空边且命中 → precision = 1/1 = 1.0（悬空边从分母剔除）。
+	if precision != 1.0 {
+		t.Fatalf("precision 应为 1.0（悬空边不计入分母），got %f", precision)
+	}
+}
+
+func TestComputeEdgeMatch_OptionalSkipped(t *testing.T) {
+	truth := []ExpectedEdge{
+		{SourceID: "src-1", EdgeType: "call", TargetID: "tgt-1"},
+		{SourceID: "src-2", EdgeType: "call", TargetID: "", Optional: true},
+	}
+	extracted := []ExtractedEdge{
+		{SourceID: "src-1", EdgeType: "call", TargetID: "tgt-1"},
+	}
+	recall, _ := computeEdgeMatch(truth, extracted)
+	if recall != 1.0 {
+		t.Fatalf("Optional 边不计入分母，recall 应为 1.0，got %f", recall)
+	}
 }
 
 // TestGraphEvaluator_FetcherError 验证 fetcher 错误被正确包装返回。
