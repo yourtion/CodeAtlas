@@ -178,4 +178,34 @@ var RetrievalGroundTruths = []quality.RetrievalGroundTruth{
 		},
 		Repos: []string{"swift_calls_objc.swift", "kotlin_calls_java.kt"},
 	},
+
+	// ──────────────────────────────────────────────────────────────
+	// 单语言 3（Java）：UserRepository 方法级检索
+	// ──────────────────────────────────────────────────────────────
+	{
+		Query: "如何根据 ID 查找用户",
+		RelevantSymbols: []string{
+			"findById",
+			"UserRepository",
+		},
+		RelevantFiles: []string{
+			"tests/fixtures/java/src/main/java/com/example/myapp/repository/UserRepository.java",
+		},
+		Repos: []string{"UserRepository.java"},
+	},
+	// ──────────────────────────────────────────────────────────────
+	// 单语言 4（Kotlin）：UserService 方法级检索
+	// ──────────────────────────────────────────────────────────────
+	{
+		Query: "如何创建和删除用户",
+		RelevantSymbols: []string{
+			"createUser",
+			"deleteUser",
+			"UserService",
+		},
+		RelevantFiles: []string{
+			"tests/fixtures/kotlin/src/main/kotlin/com/example/myapp/service/UserService.kt",
+		},
+		Repos: []string{"UserService.kt"},
+	},
 }
