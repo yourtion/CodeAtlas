@@ -20,28 +20,39 @@ type stubGraphFetcher struct {
 	chainTotal   int
 	extracted    []ExtractedEdge
 	err          error
+	// errMethod 设置后，仅当被调用的方法名匹配时返回 errMethodErr，
+	// 用于精细覆盖各方法在 GraphEvaluator.Evaluate 中的错误包装路径。
+	errMethod    string
+	errMethodErr error
+}
+
+func (s *stubGraphFetcher) methodErr(method string) error {
+	if s.errMethod != "" && s.errMethod == method {
+		return s.errMethodErr
+	}
+	return s.err
 }
 
 func (s *stubGraphFetcher) CountEdgesByType(ctx context.Context, repoID string) (map[string]int, error) {
-	return s.byType, s.err
+	return s.byType, s.methodErr("CountEdgesByType")
 }
 func (s *stubGraphFetcher) CountDanglingEdges(ctx context.Context, repoID string) (map[string]int, error) {
-	return s.dangling, s.err
+	return s.dangling, s.methodErr("CountDanglingEdges")
 }
 func (s *stubGraphFetcher) CountOrphanSymbols(ctx context.Context, repoID string) (int, error) {
-	return s.orphans, s.err
+	return s.orphans, s.methodErr("CountOrphanSymbols")
 }
 func (s *stubGraphFetcher) CountCrossFileEdges(ctx context.Context, repoID string) (int, error) {
-	return s.crossFile, s.err
+	return s.crossFile, s.methodErr("CountCrossFileEdges")
 }
 func (s *stubGraphFetcher) CountTotalSymbols(ctx context.Context, repoID string) (int, error) {
-	return s.totalSymbols, s.err
+	return s.totalSymbols, s.methodErr("CountTotalSymbols")
 }
 func (s *stubGraphFetcher) CheckCallChainConnectivity(ctx context.Context, repoID string, chains []ExpectedChain) (int, int, error) {
-	return s.chainOK, s.chainTotal, s.err
+	return s.chainOK, s.chainTotal, s.methodErr("CheckCallChainConnectivity")
 }
 func (s *stubGraphFetcher) ListExtractedEdges(ctx context.Context, repoID string) ([]ExtractedEdge, error) {
-	return s.extracted, s.err
+	return s.extracted, s.methodErr("ListExtractedEdges")
 }
 
 func TestGraphEvaluator_RepoMode_StructuralMetrics(t *testing.T) {
@@ -130,4 +141,67 @@ func TestGraphEvaluator_FetcherError(t *testing.T) {
 	_, err := eval.Evaluate(context.Background(), "repo-1", EvalModeRepo)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CountEdgesByType")
+}
+
+// TestGraphEvaluator_StructuralFetchErrors 逐一覆盖结构断言类各方法的错误包装路径
+// （CountDanglingEdges / CountOrphanSymbols / CountCrossFileEdges / CountTotalSymbols）。
+// 用 errMethod 精细注入，前序方法成功、目标方法失败，确保每个错误分支被走到。
+func TestGraphEvaluator_StructuralFetchErrors(t *testing.T) {
+	base := stubGraphFetcher{
+		byType:       map[string]int{"call": 10},
+		dangling:     map[string]int{"call": 1},
+		orphans:      2,
+		crossFile:    3,
+		totalSymbols: 5,
+	}
+	for _, method := range []string{
+		"CountDanglingEdges", "CountOrphanSymbols", "CountCrossFileEdges", "CountTotalSymbols",
+	} {
+		t.Run(method, func(t *testing.T) {
+			f := base
+			f.errMethod = method
+			f.errMethodErr = fmt.Errorf("%s boom", method)
+			eval := NewGraphEvaluator(&f, nil)
+			_, err := eval.Evaluate(context.Background(), "repo-1", EvalModeRepo)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), method)
+		})
+	}
+}
+
+// TestGraphEvaluator_FixtureModeFetchErrors 覆盖 fixture 模式下
+// ListExtractedEdges 与 CheckCallChainConnectivity 的错误包装路径。
+func TestGraphEvaluator_FixtureModeFetchErrors(t *testing.T) {
+	truth := &GraphGroundTruth{
+		FixtureFile: "test.go",
+		Edges:       []ExpectedEdge{{SourceName: "A", EdgeType: "call", TargetName: "B"}},
+		Chains:      []ExpectedChain{{StartName: "A", EndName: "B"}},
+	}
+
+	t.Run("ListExtractedEdges", func(t *testing.T) {
+		f := &stubGraphFetcher{
+			byType:       map[string]int{"call": 10},
+			totalSymbols: 5,
+			errMethod:    "ListExtractedEdges",
+			errMethodErr: fmt.Errorf("list boom"),
+		}
+		eval := NewGraphEvaluator(f, truth)
+		_, err := eval.Evaluate(context.Background(), "repo-1", EvalModeFixture)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ListExtractedEdges")
+	})
+
+	t.Run("CheckCallChainConnectivity", func(t *testing.T) {
+		f := &stubGraphFetcher{
+			byType:       map[string]int{"call": 10},
+			totalSymbols: 5,
+			extracted:    []ExtractedEdge{{SourceName: "A", EdgeType: "call", TargetName: "B"}},
+			errMethod:    "CheckCallChainConnectivity",
+			errMethodErr: fmt.Errorf("chain boom"),
+		}
+		eval := NewGraphEvaluator(f, truth)
+		_, err := eval.Evaluate(context.Background(), "repo-1", EvalModeFixture)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "CheckCallChainConnectivity")
+	})
 }
