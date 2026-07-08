@@ -29,6 +29,7 @@ package fixtures
 
 import (
 	"context"
+	"sort"
 
 	"github.com/yourtionguo/CodeAtlas/internal/quality"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
@@ -167,6 +168,74 @@ var CallAnalysisGroundTruth = []quality.GraphGroundTruth{
 			{SourceName: "useCoreFoundation", EdgeType: "call", TargetName: "", Optional: true},
 		},
 	},
+
+	// ──────────────────────────────────────────────────────────────
+	// 6. UserService.kt —— Kotlin 跨文件方法调用。
+	//    UserService 的方法调用 UserRepository 的方法（跨文件）。
+	//    方法符号展平后，这些调用边的 target_id 应能消解到 UserRepository 的方法符号。
+	//    Optional 的边为 Kotlin 标准库调用（toList/find/removeIf 等，源文件无定义）。
+	//
+	// ResolveTruthIDs 现按各条目的 FixtureFile 做 source/target 同文件消歧，
+	// 故 Kotlin/Java 同名方法可分别落到各自文件的符号上。
+	//
+	// 注：这里不挂 Chains——getAllUsers→findAll 的 target 在索引器消歧时因
+	// Kotlin/Java 两个 UserRepository 同名（import 模块基名撞）会落到 Java 的 findAll，
+	// 使「getAllUsers(KT) → findAll(KT repo)」链不可达。该跨语言消歧弱点超出本任务
+	// （方法符号展平）范围；跨文件方法调用链的连通性由第 8 条（Java findById→getId）
+	// 验证，后者终点 getId 仅存在于 User.java，无同名歧义。
+	// ──────────────────────────────────────────────────────────────
+	{
+		FixtureFile: "tests/fixtures/kotlin/src/main/kotlin/com/example/myapp/service/UserService.kt",
+		Edges: []quality.ExpectedEdge{
+			{SourceName: "getAllUsers", EdgeType: "call", TargetName: "findAll"},
+			{SourceName: "getUserById", EdgeType: "call", TargetName: "findById"},
+			{SourceName: "createUser", EdgeType: "call", TargetName: "save"},
+			{SourceName: "deleteUser", EdgeType: "call", TargetName: "delete"},
+			// Kotlin 标准库调用（悬空）
+			{SourceName: "getAllUsers", EdgeType: "call", TargetName: "", Optional: true},
+		},
+	},
+	// ──────────────────────────────────────────────────────────────
+	// 7. UserRepository.kt —— Kotlin 仓库方法间调用。
+	//    findById/delete 内部用 it.id（Kotlin 属性访问，消解到 User.kt 的 id 字段）；
+	//    save 调用 users.add(user)（同文件内 Kotlin 标准库 List.add）。
+	// ──────────────────────────────────────────────────────────────
+	{
+		FixtureFile: "tests/fixtures/kotlin/src/main/kotlin/com/example/myapp/repository/UserRepository.kt",
+		Edges: []quality.ExpectedEdge{
+			// findById/delete 内部 it.id 属性访问（消解到 User.kt 的 id 字段）
+			{SourceName: "findById", EdgeType: "call", TargetName: "id"},
+			{SourceName: "delete", EdgeType: "call", TargetName: "id"},
+			// save 调用 users.add(user)（Kotlin 标准库 List.add）
+			{SourceName: "save", EdgeType: "call", TargetName: "add"},
+			// Kotlin 标准库调用（悬空）
+			{SourceName: "findAll", EdgeType: "call", TargetName: "", Optional: true},
+		},
+	},
+	// ──────────────────────────────────────────────────────────────
+	// 8. UserRepository.java —— Java 仓库方法间调用（跨文件到 User.java）。
+	//    findById/delete 内部调用 user.getId()（Java getter，跨文件到 User.java）；
+	//    save 调用 users.add(user)（Java 标准库 List.add）。
+	//    方法符号展平后可验证 Java 方法级符号入库与跨文件方法调用消解。
+	// ──────────────────────────────────────────────────────────────
+	{
+		FixtureFile: "tests/fixtures/java/src/main/java/com/example/myapp/repository/UserRepository.java",
+		Edges: []quality.ExpectedEdge{
+			// findById/delete 内部调用 user.getId()（跨文件到 User.java）
+			{SourceName: "findById", EdgeType: "call", TargetName: "getId"},
+			{SourceName: "delete", EdgeType: "call", TargetName: "getId"},
+			// save 调用 users.add(user)（Java 标准库 List.add）
+			{SourceName: "save", EdgeType: "call", TargetName: "add"},
+			// Java 标准库调用（悬空）
+			{SourceName: "findAll", EdgeType: "call", TargetName: "", Optional: true},
+		},
+		Chains: []quality.ExpectedChain{
+			// Java 跨文件方法调用链：findById 调用 user.getId()（跨文件到 User.java）。
+			{StartName: "findById", EndName: "getId",
+				StartFile: "tests/fixtures/java/src/main/java/com/example/myapp/repository/UserRepository.java",
+				EndFile:   "tests/fixtures/java/src/main/java/com/example/myapp/model/User.java"},
+		},
+	},
 }
 
 // ResolveTruthIDs 索引 fixture 后回填真值边的 SourceID/TargetID。
@@ -174,27 +243,67 @@ var CallAnalysisGroundTruth = []quality.GraphGroundTruth{
 // symbol_id 是 GenerateDeterministicUUID 基于 (file_id, name, start_line, start_byte) 产出的，
 // 虽然确定性，但硬编码脆弱。改为索引后从 DB 查出回填。
 //
-// 匹配策略：按 name 精确查询符号（GetByExactName，区分大小写，不把 _ 当通配符），
-// 取首个候选。Symbol 表只有 file_id 无 file_path，故不做 file_path 消歧——
-// fixture 仓库内同名符号少，首个候选即可。
+// 匹配策略：按 name 精确查询符号（GetByExactName，区分大小写，不把 _ 当通配符）。
+// 单候选直接取；多候选时按与索引器一致的同文件优先策略消歧——
+//   - target 优先取与「source 符号所在文件」同文件的候选（如 findById→id，
+//     二者同在 UserRepository.kt），其次取与 FixtureFile 同文件的候选；
+//   - 仍歧义则按 symbol_id 升序取首个（确定性）。
+//
+// 这与 SchemaMapper.disambiguate 的「同文件优先」对齐，使真值边的 (source,target)
+// 能落到索引器实际解析出的同一对符号上。fileRepo 用于把 file_id 解析为 path 做比较；
+// 传 nil 则退化为首个候选（旧行为）。
 //
 // 查不到的 ID 留空——computeEdgeMatch 会跳过 TargetID 空的边（不计入 recall/precision）。
 // Optional 边或 TargetName 空的边（如标准库 strlen、外部 import 模块）也无须回填。
 // DB 错误会立即返回（不再吞掉），以便真正的 DB 故障能暴露。
-func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, truth []quality.GraphGroundTruth) error {
+func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, fileRepo *models.FileRepository, truth []quality.GraphGroundTruth) error {
+	// file_id -> path 缓存（避免重复查询）。
+	pathCache := make(map[string]string)
+	pathOf := func(fileID string) (string, error) {
+		if p, ok := pathCache[fileID]; ok {
+			return p, nil
+		}
+		if fileRepo == nil {
+			return "", nil
+		}
+		f, err := fileRepo.GetByID(ctx, fileID)
+		if err != nil {
+			return "", err
+		}
+		var p string
+		if f != nil {
+			p = f.Path
+		}
+		pathCache[fileID] = p
+		return p, nil
+	}
+
 	for gi := range truth {
 		gt := &truth[gi]
 		for i := range gt.Edges {
 			edge := &gt.Edges[i]
 			if edge.SourceName != "" && edge.SourceID == "" {
-				sid, err := lookupSymbolID(ctx, symbolRepo, edge.SourceName)
+				// source 优先取与 FixtureFile 同文件的候选——各真值条目的
+				// FixtureFile 标明了边所在的源文件，据此把同名符号（如 Kotlin 与
+				// Java 各自的 findById）区分开。
+				sid, srcFileID, err := lookupSymbolInFile(ctx, symbolRepo, fileRepo, edge.SourceName, []string{gt.FixtureFile})
 				if err != nil {
 					return err
 				}
 				edge.SourceID = sid
+				// 记下 source 所在文件路径，供 target 同文件消歧。
+				if srcFileID != "" {
+					p, err := pathOf(srcFileID)
+					if err != nil {
+						return err
+					}
+					edge.SourceFilePath = p
+				}
 			}
 			if edge.TargetName != "" && edge.TargetID == "" {
-				sid, err := lookupSymbolID(ctx, symbolRepo, edge.TargetName)
+				// target 优先与 source 同文件，其次与 FixtureFile 同文件。
+				prefer := []string{edge.SourceFilePath, gt.FixtureFile}
+				sid, _, err := lookupSymbolInFile(ctx, symbolRepo, fileRepo, edge.TargetName, prefer)
 				if err != nil {
 					return err
 				}
@@ -206,15 +315,48 @@ func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, t
 	return nil
 }
 
-// lookupSymbolID 按 name 精确查符号 ID，取首个候选。
-// 找不到时返回 ("", nil)——调用方据此保留 ID 为空；DB 错误时返回 ("", err)。
-func lookupSymbolID(ctx context.Context, repo *models.SymbolRepository, name string) (string, error) {
+// lookupSymbolInFile 在 name 命中的候选里，优先取 file_id 对应 path 命中 preferPaths
+// 任一者的候选；无命中（或 fileRepo/preferPaths 为空）则取首个（按 symbol_id 升序）。
+// fileRepo 用于解析 file_id -> path；为 nil 时退化为首个候选。返回 (symbolID, fileID)。
+//
+// 多候选消歧与 SchemaMapper.disambiguate 的「同文件优先」对齐：真值边的 target
+// 优先取与 source 同文件的符号，使真值 (source,target) 落到索引器实际解析出的
+// 同一对符号上（如 findById→id 二者同在 UserRepository.kt）。
+func lookupSymbolInFile(ctx context.Context, repo *models.SymbolRepository, fileRepo *models.FileRepository, name string, preferPaths []string) (string, string, error) {
 	syms, err := repo.GetByExactName(ctx, name)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if len(syms) == 0 {
-		return "", nil
+		return "", "", nil
 	}
-	return syms[0].SymbolID, nil
+	if fileRepo != nil && len(preferPaths) > 0 {
+		prefer := make(map[string]bool, len(preferPaths))
+		for _, p := range preferPaths {
+			if p != "" {
+				prefer[p] = true
+			}
+		}
+		var matched []*models.Symbol
+		for _, s := range syms {
+			f, err := fileRepo.GetByID(ctx, s.FileID)
+			if err != nil {
+				return "", "", err
+			}
+			if f != nil && prefer[f.Path] {
+				matched = append(matched, s)
+			}
+		}
+		if len(matched) > 0 {
+			sortSymbolsByID(matched)
+			return matched[0].SymbolID, matched[0].FileID, nil
+		}
+	}
+	sortSymbolsByID(syms)
+	return syms[0].SymbolID, syms[0].FileID, nil
+}
+
+// sortSymbolsByID 按 SymbolID 升序排序（确定性消歧）。
+func sortSymbolsByID(syms []*models.Symbol) {
+	sort.Slice(syms, func(i, j int) bool { return syms[i].SymbolID < syms[j].SymbolID })
 }

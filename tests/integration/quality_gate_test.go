@@ -36,21 +36,24 @@ func TestQualityGate_FixtureMode(t *testing.T) {
 
 	edgeRepo := models.NewEdgeRepository(testDB.DB)
 	symbolRepo := models.NewSymbolRepository(testDB.DB)
+	fileRepo := models.NewFileRepository(testDB.DB)
 	fetcher := quality.NewDefaultGraphFetcher(edgeRepo, symbolRepo)
+
+	// 先按「每个真值条目」回填 symbol_id——保留各条目的 FixtureFile 做 source/target
+	// 同文件消歧（如 Kotlin UserRepository 的 findById→id 与 Java UserRepository 的
+	// findById→getId，按所在文件区分）。回填后再合并为单一真值集合送评估。
+	truthSlice := make([]quality.GraphGroundTruth, len(fixtures.CallAnalysisGroundTruth))
+	copy(truthSlice, fixtures.CallAnalysisGroundTruth)
+	if err := fixtures.ResolveTruthIDs(ctx, symbolRepo, fileRepo, truthSlice); err != nil {
+		t.Logf("ResolveTruthIDs 出错（非致命，symbol_id 为空的边会被跳过）: %v", err)
+	}
 
 	// 合并真值
 	truth := &quality.GraphGroundTruth{FixtureFile: "merged"}
-	for _, gt := range fixtures.CallAnalysisGroundTruth {
+	for _, gt := range truthSlice {
 		truth.Edges = append(truth.Edges, gt.Edges...)
 		truth.Chains = append(truth.Chains, gt.Chains...)
 	}
-
-	// 回填真值边的 symbol_id（索引后才能查到）
-	truthSlice := []quality.GraphGroundTruth{*truth}
-	if err := fixtures.ResolveTruthIDs(ctx, symbolRepo, truthSlice); err != nil {
-		t.Logf("ResolveTruthIDs 出错（非致命，symbol_id 为空的边会被跳过）: %v", err)
-	}
-	truth = &truthSlice[0] // 回填后的真值
 
 	graphEval := quality.NewGraphEvaluator(fetcher, truth)
 
@@ -131,6 +134,12 @@ func indexRealFixtures(t *testing.T, testDB *TestDB, ctx context.Context) string
 		{"tests/fixtures/kotlin/kotlin_calls_java.kt", "kotlin"},
 		{"tests/fixtures/swift/swift_calls_objc.swift", "swift"},
 		{"tests/fixtures/js/typescript_calls_js.ts", "js"},
+		// 多文件 fixture：验证 Java/Kotlin 方法符号展平 + 跨文件方法调用边消解
+		{"tests/fixtures/kotlin/src/main/kotlin/com/example/myapp/model/User.kt", "kotlin"},
+		{"tests/fixtures/kotlin/src/main/kotlin/com/example/myapp/repository/UserRepository.kt", "kotlin"},
+		{"tests/fixtures/kotlin/src/main/kotlin/com/example/myapp/service/UserService.kt", "kotlin"},
+		{"tests/fixtures/java/src/main/java/com/example/myapp/model/User.java", "java"},
+		{"tests/fixtures/java/src/main/java/com/example/myapp/repository/UserRepository.java", "java"},
 	}
 
 	// 使用两遍扫描：第一遍 CollectSymbols 累积全仓库符号候选 + import 关系，

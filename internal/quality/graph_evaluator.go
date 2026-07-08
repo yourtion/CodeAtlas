@@ -15,6 +15,10 @@ type ExpectedEdge struct {
 	TargetID   string // 索引后回填
 	TargetName string // "c_init"
 	Optional   bool   // true = 提到了不算漏（如标准库 strlen）
+
+	// SourceFilePath 由 ResolveTruthIDs 回填：source 符号所在文件路径，
+	// 供 target 多候选同文件消歧使用。不参与匹配，仅解析阶段内部使用，调用方勿直接设置。
+	SourceFilePath string
 }
 
 // ExpectedChain 真值里的一条调用链（用于 call_chain_connectivity 指标）。

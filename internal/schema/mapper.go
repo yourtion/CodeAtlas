@@ -72,15 +72,15 @@ func (m *SchemaMapper) CollectSymbols(parsed *parser.ParsedFile) (*File, error) 
 		Symbols:  []Symbol{},
 	}
 
-	// 收集符号到候选集（累积，不覆盖）
+	// 收集符号到候选集（累积，不覆盖）。
+	// 递归展平 Children：Java/Kotlin 解析器把方法/构造器放在类的 Children 字段里，
+	// 需要把它们也作为独立符号加入候选集，否则跨文件方法调用边无法消解。
+	// seenIDs 按文件内 symbol_id 去重——部分解析器（如 C++）会把同一方法既作为
+	// 顶层 function 又作为类的 Children(method) 输出，span 一致导致确定性 ID 撞车；
+	// 首次出现的（顶层那条）保留，Children 里的重复条目跳过。
+	seenIDs := make(map[string]bool, len(parsed.Symbols))
 	for _, parsedSymbol := range parsed.Symbols {
-		symbol := m.mapSymbol(parsedSymbol, fileID)
-		file.Symbols = append(file.Symbols, symbol)
-		m.symbolIDMap[parsedSymbol.Name] = symbol.SymbolID // 向后兼容
-		m.symbolCandidates[parsedSymbol.Name] = append(
-			m.symbolCandidates[parsedSymbol.Name],
-			symbolCandidate{SymbolID: symbol.SymbolID, FileID: fileID, FilePath: parsed.Path},
-		)
+		m.collectSymbolRecursive(parsedSymbol, fileID, parsed.Path, file, seenIDs)
 	}
 
 	// 收集外部模块符号（保持现有逻辑）
@@ -107,6 +107,30 @@ func (m *SchemaMapper) CollectSymbols(parsed *parser.ParsedFile) (*File, error) 
 	}
 
 	return file, nil
+}
+
+// collectSymbolRecursive 递归收集符号到候选集和 file.Symbols。
+// 方法/构造器/字段等 Children 符号也作为独立符号加入，使跨文件方法调用边可消解。
+// seenIDs 记录文件内已收录的 symbol_id，跳过重复条目（部分解析器会把同一符号既放
+// 顶层又放 Children，span 一致导致确定性 ID 撞车）。
+func (m *SchemaMapper) collectSymbolRecursive(parsedSymbol parser.ParsedSymbol, fileID, filePath string, file *File, seenIDs map[string]bool) {
+	symbol := m.mapSymbol(parsedSymbol, fileID)
+	if seenIDs[symbol.SymbolID] {
+		// 已收录过（如 C++ 同一方法既在顶层又在类 Children 里），跳过重复条目。
+		return
+	}
+	seenIDs[symbol.SymbolID] = true
+	file.Symbols = append(file.Symbols, symbol)
+	m.symbolIDMap[parsedSymbol.Name] = symbol.SymbolID // 向后兼容
+	m.symbolCandidates[parsedSymbol.Name] = append(
+		m.symbolCandidates[parsedSymbol.Name],
+		symbolCandidate{SymbolID: symbol.SymbolID, FileID: fileID, FilePath: filePath},
+	)
+
+	// 递归展平子符号
+	for _, child := range parsedSymbol.Children {
+		m.collectSymbolRecursive(child, fileID, filePath, file, seenIDs)
+	}
 }
 
 // collectFileImports records the import relations for a file
