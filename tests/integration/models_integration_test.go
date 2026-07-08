@@ -6,6 +6,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/yourtionguo/CodeAtlas/internal/indexer"
+	"github.com/yourtionguo/CodeAtlas/internal/schema"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
 
@@ -1371,5 +1375,79 @@ func TestVectorSearch_RepoIDsFilter(t *testing.T) {
 			t.Errorf("Expected both vectors (%s, %s) to be recalled, got %v", fixA.vectorID, fixB.vectorID, got)
 		}
 	})
+}
+
+// createTestParseOutputWithEdges 构造一个带 call 边（含同文件与跨文件）的 parseOutput，
+// 用于图指标聚合查询测试。复用 createTestParseOutputWithRelationships（已含同文件 call
+// 边 + 跨文件 call 边）。
+func createTestParseOutputWithEdges(repoID string) *schema.ParseOutput {
+	_ = repoID // repo_id 由 indexer.Index 按配置写入，fixture 本身不携带 repo 信息
+	return createTestParseOutputWithRelationships()
+}
+
+// TestGraphMetrics_AggregationQueries 验证 5 个聚合查询方法的正确性。
+func TestGraphMetrics_AggregationQueries(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	testDB := SetupTestDB(t)
+	defer testDB.TeardownTestDB(t)
+
+	ctx := context.Background()
+	repoID := uuid.New().String()
+
+	// 索引一个已知 fixture（带 call 边：一条同文件、一条跨文件）
+	parseOutput := createTestParseOutputWithEdges(repoID)
+	config := &indexer.IndexerConfig{
+		RepoID: repoID, RepoName: "graph-metrics-test", BatchSize: 10,
+		WorkerCount: 2, SkipVectors: true, UseTransactions: true,
+	}
+	idx := indexer.NewIndexer(testDB.DB, config)
+	if _, err := idx.Index(ctx, parseOutput); err != nil {
+		t.Fatalf("Indexing failed: %v", err)
+	}
+
+	edgeRepo := models.NewEdgeRepository(testDB.DB)
+	symbolRepo := models.NewSymbolRepository(testDB.DB)
+
+	// fixture 已知数据（createTestParseOutputWithRelationships）：
+	//   3 个符号：symbolID1(main) → symbolID2(helper), symbolID3(Utility)
+	//   2 条 call 边：
+	//     - symbolID1 → symbolID2，同文件 (src/main.go → src/main.go)
+	//     - symbolID1 → symbolID3，跨文件 (src/main.go → src/utils.go)
+	//   两条边 target_id 均非空，无悬空边。
+	//   symbolID1 是 source，symbolID2/symbolID3 是 target，故无孤立符号。
+
+	// 1. CountEdgesByType
+	byType, err := models.CountEdgesByType(ctx, edgeRepo, repoID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, byType["call"], "应有 2 条 call 边")
+	assert.Len(t, byType, 1, "应只有 call 一种 edge_type")
+	totalEdges := 0
+	for _, count := range byType {
+		totalEdges += count
+	}
+	assert.Equal(t, 2, totalEdges, "总边数应为 2")
+
+	// 2. CountDanglingEdges
+	dangling, err := models.CountDanglingEdges(ctx, edgeRepo, repoID)
+	require.NoError(t, err)
+	assert.Empty(t, dangling, "两条边 target 均已解析，无悬空边")
+
+	// 3. CountTotalSymbols
+	totalSymbols, err := models.CountTotalSymbols(ctx, symbolRepo, repoID)
+	require.NoError(t, err)
+	assert.Equal(t, 3, totalSymbols, "应有 3 个符号")
+
+	// 4. CountOrphanSymbols
+	orphans, err := models.CountOrphanSymbols(ctx, symbolRepo, repoID)
+	require.NoError(t, err)
+	assert.Equal(t, 0, orphans, "所有符号都参与边，应无孤立符号")
+
+	// 5. CountCrossFileEdges
+	crossFile, err := models.CountCrossFileEdges(ctx, edgeRepo, repoID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, crossFile, "应有 1 条跨文件边")
 }
 

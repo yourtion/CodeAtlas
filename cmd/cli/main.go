@@ -44,6 +44,7 @@ func main() {
 			createSearchCommand(),
 			createImpactCommand(),
 			createAskCommand(),
+			createEvalCommand(),
 			{
 				Name:  "upload",
 				Usage: "Upload repository to CodeAtlas server",
