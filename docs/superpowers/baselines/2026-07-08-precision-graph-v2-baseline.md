@@ -31,6 +31,7 @@
 | `dangling_edge_ratio` | import | 1.0000 | 观察 | — |
 | `dangling_edge_ratio` | reference | 0.6667 | ≤0.80 | ✓ |
 | `dangling_edge_ratio` | extends | 1.0000 | 观察 | — |
+| `dangling_edge_ratio` | implements | — | 观察 | — |
 | `symbol_resolution_rate` | 总体 | 0.1408 | 观察 | — |
 | `symbol_resolution_rate` | call | 0.1556 | ≥0.10 | ✓ |
 | `orphan_symbol_ratio` | 总体 | 0.3277 | ≤0.40 | ✓ |

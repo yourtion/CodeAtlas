@@ -116,7 +116,7 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 		mv := MetricValue{
 			Name: "dangling_edge_ratio", Category: CategoryGraph,
 			Value:     float64(totalDangling) / float64(totalEdges),
-			Threshold: 0, HigherIsBetter: false, // 仅观察（下一轮启用 ThresholdDanglingEdgeRatio）
+			Threshold: 0, HigherIsBetter: false, // 总值仅观察（import 边 100% 悬空拖低总值；分桶已设硬门禁）
 		}
 		mv.EvaluatePassed()
 		metrics = append(metrics, mv)
