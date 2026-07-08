@@ -2,7 +2,8 @@ package schema
 
 import (
 	"fmt"
-	"strings"
+	"path/filepath"
+	"sort"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/yourtionguo/CodeAtlas/internal/parser"
@@ -46,8 +47,6 @@ func NewSchemaMapper() *SchemaMapper {
 		externalSymbols:  make(map[string]*Symbol),
 		symbolCandidates: make(map[string][]symbolCandidate),
 		fileImports:      make(map[string]map[string]bool),
-		pendingDeps:      nil,
-		warnLog:          nil,
 	}
 }
 
@@ -138,11 +137,11 @@ func (m *SchemaMapper) ResolveEdges() ([]DependencyEdge, error) {
 // resolveEdge resolves a single pending dependency to an edge
 func (m *SchemaMapper) resolveEdge(pd pendingDependency) *DependencyEdge {
 	dep := pd.Dep
-	edgeID := utils.GenerateUUID()
-	edgeType := m.mapEdgeType(dep.Type)
 	sourceID := m.resolveCandidateID(dep.Source, pd.SourceFileID, pd.SourceFilePath)
 
 	if dep.Type == "import" {
+		edgeType := m.mapEdgeType(dep.Type)
+		edgeID := utils.GenerateDeterministicUUID(fmt.Sprintf("edge:%s:%s:%s:%s", pd.SourceFilePath, dep.Type, dep.Target, dep.TargetModule))
 		targetID := m.resolveImportTarget(dep)
 		return &DependencyEdge{
 			EdgeID:       edgeID,
@@ -160,7 +159,8 @@ func (m *SchemaMapper) resolveEdge(pd pendingDependency) *DependencyEdge {
 	}
 
 	targetID := m.resolveCandidateID(dep.Target, pd.SourceFileID, pd.SourceFilePath)
-	// target_id 可空（悬空边保留）
+	edgeType := m.mapEdgeType(dep.Type)
+	edgeID := utils.GenerateDeterministicUUID(fmt.Sprintf("edge:%s:%s:%s:%s", sourceID, dep.Type, targetID, pd.SourceFilePath))
 
 	return &DependencyEdge{
 		EdgeID:     edgeID,
@@ -201,17 +201,19 @@ func (m *SchemaMapper) disambiguate(name string, candidates []symbolCandidate, s
 		return sameFile[0].SymbolID
 	}
 	if len(sameFile) > 1 {
+		sort.Slice(sameFile, func(i, j int) bool { return sameFile[i].SymbolID < sameFile[j].SymbolID })
 		m.logDisambiguation(name, sourceFilePath, len(sameFile), "same_file_multiple")
 		return sameFile[0].SymbolID
 	}
 
-	// 2. import 文件优先
+	// 2. import 文件优先（精确匹配文件名，避免 strings.Contains 误匹配）
 	imports := m.fileImports[sourceFileID]
 	if imports != nil {
 		var importMatch []symbolCandidate
 		for _, c := range candidates {
 			for mod := range imports {
-				if strings.Contains(c.FilePath, mod) || strings.Contains(mod, c.FilePath) {
+				modBase := filepath.Base(mod)
+				if filepath.Base(c.FilePath) == modBase || c.FilePath == mod {
 					importMatch = append(importMatch, c)
 					break
 				}
@@ -221,12 +223,14 @@ func (m *SchemaMapper) disambiguate(name string, candidates []symbolCandidate, s
 			return importMatch[0].SymbolID
 		}
 		if len(importMatch) > 1 {
+			sort.Slice(importMatch, func(i, j int) bool { return importMatch[i].SymbolID < importMatch[j].SymbolID })
 			m.logDisambiguation(name, sourceFilePath, len(importMatch), "import_multiple")
 			return importMatch[0].SymbolID
 		}
 	}
 
 	// 3. 首个候选 + 日志
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].SymbolID < candidates[j].SymbolID })
 	m.logDisambiguation(name, sourceFilePath, len(candidates), "first_candidate")
 	return candidates[0].SymbolID
 }
@@ -244,9 +248,13 @@ func (m *SchemaMapper) resolveImportTarget(dep parser.ParsedDependency) string {
 	if dep.TargetModule == "" {
 		return ""
 	}
+	target := dep.TargetModule
+	// 取 import 路径的最后一段作为文件名（如 "c_library.h" from "include/c_library.h"）
+	targetBase := filepath.Base(target)
 	for _, candidates := range m.symbolCandidates {
 		for _, c := range candidates {
-			if strings.Contains(c.FilePath, dep.TargetModule) || strings.Contains(dep.TargetModule, c.FilePath) {
+			// 精确匹配文件名，或文件路径精确等于 target
+			if c.FilePath == target || filepath.Base(c.FilePath) == targetBase {
 				return c.SymbolID
 			}
 		}
@@ -259,6 +267,13 @@ func (m *SchemaMapper) resolveImportTarget(dep parser.ParsedDependency) string {
 // to keep existing single-file behavior intact. For cross-file resolution, use the
 // two-pass CollectSymbols + ResolveEdges flow instead.
 func (m *SchemaMapper) MapToSchema(parsed *parser.ParsedFile) (*File, []DependencyEdge, error) {
+	// MapToSchema 是单文件向后兼容入口，保持隔离语义
+	// 跨文件场景用 CollectSymbols + ResolveEdges
+	m.symbolIDMap = make(map[string]string)
+	m.symbolCandidates = make(map[string][]symbolCandidate)
+	m.fileImports = make(map[string]map[string]bool)
+	m.pendingDeps = nil
+
 	file, err := m.CollectSymbols(parsed)
 	if err != nil {
 		return nil, nil, err
