@@ -28,7 +28,7 @@ func TestTargetIDOptional(t *testing.T) {
 	fileID := uuid.New().String()
 	symbolID := uuid.New().String()
 	edgeID := uuid.New().String()
-	
+
 	parseOutput := &schema.ParseOutput{
 		Files: []schema.File{
 			{
@@ -128,7 +128,9 @@ func TestTargetIDOptional(t *testing.T) {
 	t.Logf("   Target Module: %s", *edge.TargetModule)
 }
 
-// TestTargetIDRequired tests that non-import edges require target_id
+// TestTargetIDRequired tests that non-import edges with empty target_id are accepted
+// as dangling edges (Task 3: validator 放宽——非 import 边空 target_id 不再阻塞写入，
+// 悬空边是合法状态，供 symbol_resolution_rate 指标观测）。
 func TestTargetIDRequired(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -142,11 +144,11 @@ func TestTargetIDRequired(t *testing.T) {
 	ctx := context.Background()
 	repoID := uuid.New().String()
 
-	// Create test parse output with call edge without target_id (should fail validation)
+	// Create test parse output with call edge without target_id（悬空 call 边，合法）
 	fileID := uuid.New().String()
 	symbolID := uuid.New().String()
 	edgeID := uuid.New().String()
-	
+
 	parseOutput := &schema.ParseOutput{
 		Files: []schema.File{
 			{
@@ -175,7 +177,7 @@ func TestTargetIDRequired(t *testing.T) {
 			{
 				EdgeID:     edgeID,
 				SourceID:   symbolID,
-				TargetID:   "", // Empty target_id for call edge (invalid!)
+				TargetID:   "", // Empty target_id：悬空 call 边（如调用未索引的标准库函数）
 				EdgeType:   schema.EdgeCall,
 				SourceFile: "src/main.js",
 			},
@@ -198,17 +200,29 @@ func TestTargetIDRequired(t *testing.T) {
 	}
 	idx := indexer.NewIndexer(db, config)
 
-	// Index the parse output - should fail validation
+	// 悬空 call 边应被接受（不再阻塞写入）。
 	result, err := idx.Index(ctx, parseOutput)
-	if err == nil {
-		t.Fatal("Expected validation error, got nil")
+	if err != nil {
+		t.Fatalf("悬空 call 边应被接受，但索引失败: %v", err)
+	}
+	if result.Status != "success" && result.Status != "success_with_warnings" {
+		t.Errorf("Expected status 'success' or 'success_with_warnings', got '%s'", result.Status)
 	}
 
-	if result == nil || result.Status != "failed" {
-		t.Errorf("Expected status 'failed', got '%v'", result)
+	// 验证悬空边已入库（target_id 为 NULL）。
+	edgeRepo := models.NewEdgeRepository(db)
+	edges, err := edgeRepo.GetBySourceID(ctx, symbolID)
+	if err != nil {
+		t.Fatalf("Failed to get edges: %v", err)
+	}
+	if len(edges) != 1 {
+		t.Fatalf("Expected 1 edge, got %d", len(edges))
+	}
+	if edges[0].TargetID != nil {
+		t.Errorf("悬空边 target_id 应为 nil，got %v", *edges[0].TargetID)
 	}
 
-	t.Logf("✅ Correctly rejected call edge without target_id")
+	t.Logf("✅ 正确接受悬空 call 边（target_id 空），供 symbol_resolution_rate 指标观测")
 }
 
 // TestMixedEdges tests indexing with both internal and external dependencies
@@ -231,7 +245,7 @@ func TestMixedEdges(t *testing.T) {
 	symbolID2 := uuid.New().String()
 	edgeID1 := uuid.New().String()
 	edgeID2 := uuid.New().String()
-	
+
 	parseOutput := &schema.ParseOutput{
 		Files: []schema.File{
 			{

@@ -125,9 +125,12 @@ func indexRealFixtures(t *testing.T, testDB *TestDB, ctx context.Context) string
 		{"tests/fixtures/js/typescript_calls_js.ts", "js"},
 	}
 
+	// 使用两遍扫描：第一遍 CollectSymbols 累积全仓库符号候选 + import 关系，
+	// 第二遍 ResolveEdges 用候选集解析所有边（含跨文件调用，如
+	// cpp_calls_c.cpp 的 processData -> c_library.h 的 c_process_string）。
+	// 这与 cmd/cli parse/index 命令的实际管线一致。
 	mapper := schema.NewSchemaMapper()
 	var schemaFiles []schema.File
-	var allEdges []schema.DependencyEdge
 	for _, ff := range fixtureFiles {
 		// 读盘路径：测试包在 tests/integration，fixture 在 tests/fixtures。
 		absPath, err := filepath.Abs(filepath.Join("..", "..", ff.path))
@@ -153,15 +156,18 @@ func indexRealFixtures(t *testing.T, testDB *TestDB, ctx context.Context) string
 			continue
 		}
 
-		schemaFile, edges, err := mapper.MapToSchema(parsed)
+		schemaFile, err := mapper.CollectSymbols(parsed)
 		if err != nil {
 			t.Logf("映射 %s 失败（跳过）: %v", ff.path, err)
 			continue
 		}
 		schemaFiles = append(schemaFiles, *schemaFile)
-		allEdges = append(allEdges, edges...)
 	}
 	require.NotEmpty(t, schemaFiles, "至少应成功索引一个 fixture 文件")
+
+	// 第二遍：用全仓库候选集解析所有边（含跨文件调用）。
+	allEdges, err := mapper.ResolveEdges()
+	require.NoError(t, err)
 
 	// 注：不显式收集外部模块符号（mapper.GetExternalSymbols）。
 	// 索引器 ensureExternalFile 会自行创建外部虚拟文件；而多数 import 边的 target
@@ -174,12 +180,18 @@ func indexRealFixtures(t *testing.T, testDB *TestDB, ctx context.Context) string
 		Metadata:      schema.ParseMetadata{Version: "1.0.0", TotalFiles: len(schemaFiles), SuccessCount: len(schemaFiles)},
 	}
 
-	// 过滤掉引用完整性失败的边：SchemaMapper 按文件重置符号表，
-	// 跨文件调用（如 cpp_calls_c.cpp -> c_library.h 的函数）的 target_id
-	// 会指向未索引符号，被 indexer 校验器拒绝。这里丢弃这些边，
-	// 使其行为与「索引器只接受已消解的边」一致；这类跨文件解析能力
-	// 由 header_impl_associator 等关联器单独处理，不在此测试范围内。
+	// 调试：统计 ResolveEdges 产出的边
+	t.Logf("ResolveEdges 产出 %d 条边（filterValidEdges 前）", len(allEdges))
+
+	// 过滤掉违反 DB 约束的边，使其满足 indexer 校验器：
+	//   - source_id 必须非空（edges.source_id 为 NOT NULL uuid）。
+	//   - target_id 若非空，必须指向已索引符号（edges.target_id 为外键）。
+	// target_id 空（悬空）的边保留——validator 已允许非 import 边悬空，
+	// 这是合法状态，供 symbol_resolution_rate 指标观测。
+	// 跨文件边若消解成功，target_id 指向另一文件的符号，此处的 symbolIDs 校验
+	// 会通过（所有文件的符号都已收录在 parseOutput.Files 里），不会被误丢。
 	parseOutput.Relationships = filterValidEdges(parseOutput)
+	t.Logf("filterValidEdges 后保留 %d 条边", len(parseOutput.Relationships))
 
 	repoID := uuid.New().String()
 	config := &indexer.IndexerConfig{
@@ -220,13 +232,15 @@ func getParser(ts *parser.TreeSitterParser, lang string) (fixtureParser, error) 
 	}
 }
 
-// filterValidEdges 丢弃无法入库的边，使其满足 indexer 校验器与 DB 约束：
-//   - source_id 必须非空（edges.source_id 为 NOT NULL uuid，import 边在
+// filterValidEdges 丢弃违反 DB 约束的边，使其满足 indexer 校验器：
+//   - source_id 必须非空（edges.source_id 为 NOT NULL uuid；import 边在
 //     parser 层 Source="" 时会得到空 source_id，需丢弃）。
-//   - target_id 若非空，必须指向已索引符号（SchemaMapper 按文件重置符号表，
-//     跨文件调用如 cpp_calls_c.cpp -> c_library.h 的 target 无法解析，丢弃）。
+//   - target_id 若非空，必须指向已索引符号（edges.target_id 为外键）。
 //
-// 这类跨文件解析能力由 header_impl_associator 等关联器单独处理，不在此测试范围。
+// 注意：target_id 空（悬空）的边保留——validator 已允许非 import 边悬空，
+// 这是合法状态。跨文件调用经 SchemaMapper 两遍扫描后：
+//   - 若 target 消解到本仓库内某符号，target_id 非空且通过 symbolIDs 校验，保留；
+//   - 若 target 解析不到（如标准库 strlen、未索引的外部类），target_id 空，保留为悬空。
 func filterValidEdges(out *schema.ParseOutput) []schema.DependencyEdge {
 	symbolIDs := make(map[string]bool, len(out.Files)*4)
 	for _, f := range out.Files {

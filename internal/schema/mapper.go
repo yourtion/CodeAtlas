@@ -123,13 +123,24 @@ func (m *SchemaMapper) collectFileImports(deps []parser.ParsedDependency, fileID
 
 // ResolveEdges is the second pass: resolves all accumulated pending deps
 // using the candidate set collected during CollectSymbols.
+//
+// 边 ID 是确定性的（基于 source_id/edge_type/target_id/source_file 等字段），
+// 同一源文件里多次出现同一 (source, type, target) 依赖（如多次调用 console）
+// 会生成相同 edge_id。这里按 edge_id 去重，保留首次出现的边——语义上它们是
+// 同一条关系，与索引器的 upsert 行为一致，也避免 validator 的 duplicate_id 报错。
 func (m *SchemaMapper) ResolveEdges() ([]DependencyEdge, error) {
 	var edges []DependencyEdge
+	seen := make(map[string]bool, len(m.pendingDeps))
 	for _, pd := range m.pendingDeps {
 		edge := m.resolveEdge(pd)
-		if edge != nil {
-			edges = append(edges, *edge)
+		if edge == nil {
+			continue
 		}
+		if seen[edge.EdgeID] {
+			continue
+		}
+		seen[edge.EdgeID] = true
+		edges = append(edges, *edge)
 	}
 	return edges, nil
 }
