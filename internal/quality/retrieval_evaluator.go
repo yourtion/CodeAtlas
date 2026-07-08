@@ -54,6 +54,7 @@ func (e *RetrievalEvaluator) Evaluate(ctx context.Context, repoIDs []string) ([]
 				RepoIDs:       repoIDs,
 				Mode:          mode,
 				Limit:         10,
+				ExpandHops:    1, // 开启 1 跳图谱扩展，否则 HybridRetriever 不会填充 Callers/Callees，neighbor_hit_rate 恒为 0
 				ExpandCallers: true,
 				ExpandCallees: true,
 			}

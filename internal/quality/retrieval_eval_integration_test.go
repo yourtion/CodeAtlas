@@ -147,14 +147,22 @@ func isOllamaAvailable(t *testing.T) bool {
 
 // TestRetrievalEvaluator_Integration 用真 Ollama embedding 跑 hybrid/vector/keyword 三模式。
 //
-// fixture：1 repo + 1 file + 2 个 auth 相关符号（LoginUser 调用 VerifyPassword），
-// 两符号各写一条真 embedding 向量。真值 query "how does user login work" 的相关
-// 符号为 LoginUser/VerifyPassword。
+// fixture：1 repo + 1 file + 3 个 auth 相关符号：
+//   - LoginUser（语义近 "user login"，主命中）调用 VerifyPassword 与 LogAccess
+//   - VerifyPassword（语义近 "password"，主命中）
+//   - LogAccess（语义远 "access log"，不在 Top-K 主命中）
+//
+// 三符号各写一条真 embedding 向量。真值 query "how does user login work" 的相关
+// 符号为 {LoginUser, VerifyPassword, LogAccess}：
+//   - LoginUser/VerifyPassword 经向量召回为主命中（语义近）
+//   - LogAccess 语义远、不进 Top-K 主命中，但作为 LoginUser 的 callee 出现在
+//     邻居扩展里 → neighbor_hit_rate > 0，验证了图谱扩展的价值。
 //
 // 断言：
 //   - 三种 mode 均产出 recall@10 指标
 //   - 产出 mode_compare 指标
 //   - hybrid recall > 0（query 与 docstring 语义相近，真 embedding 应能命中）
+//   - neighbor_hit_rate > 0（LogAccess 只能通过邻居发现，验证图谱扩展）
 func TestRetrievalEvaluator_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
@@ -230,6 +238,20 @@ func TestRetrievalEvaluator_Integration(t *testing.T) {
 	}
 	require.NoError(t, symbolRepo.Create(ctx, verifyFunc))
 
+	// LogAccess：访问日志记录。与 login/password 语义远，向量召回里不会进 Top-K
+	// 主命中；但作为 LoginUser 的 callee，会通过图谱邻居扩展被发现，使 neighbor_hit_rate > 0。
+	logAccessFunc := &models.Symbol{
+		SymbolID:  uuid.New().String(),
+		FileID:    file.FileID,
+		Name:      "LogAccess",
+		Kind:      "function",
+		Signature: "func LogAccess(user, action string)",
+		StartLine: 22,
+		EndLine:   30,
+		Docstring: "LogAccess records an access log entry for auditing",
+	}
+	require.NoError(t, symbolRepo.Create(ctx, logAccessFunc))
+
 	// call 边: LoginUser -> VerifyPassword
 	verifyTargetID := verifyFunc.SymbolID
 	edge := &models.Edge{
@@ -242,12 +264,27 @@ func TestRetrievalEvaluator_Integration(t *testing.T) {
 	}
 	require.NoError(t, edgeRepo.Create(ctx, edge))
 
+	// call 边: LoginUser -> LogAccess（LoginUser 登录成功后记访问日志）
+	logAccessTargetID := logAccessFunc.SymbolID
+	logEdge := &models.Edge{
+		EdgeID:     uuid.New().String(),
+		SourceID:   loginFunc.SymbolID,
+		TargetID:   &logAccessTargetID,
+		EdgeType:   "call",
+		SourceFile: file.Path,
+		TargetFile: &file.Path,
+	}
+	require.NoError(t, edgeRepo.Create(ctx, logEdge))
+
 	// 2. 用真 embedder 生成向量并写入。
 	const loginContent = "LoginUser authenticates a user with username and password"
 	const verifyContent = "VerifyPassword checks password hash"
-	vectors, err := embedder.BatchEmbed(ctx, []string{loginContent, verifyContent})
+	// LogAccess 内容刻意与 login/password 语义拉开距离（讲访问审计日志），
+	// 使其向量召回分数低于 LoginUser/VerifyPassword，不进 Top-K 主命中。
+	const logAccessContent = "LogAccess records an access log entry for auditing purposes"
+	vectors, err := embedder.BatchEmbed(ctx, []string{loginContent, verifyContent, logAccessContent})
 	require.NoError(t, err)
-	require.Len(t, vectors, 2, "BatchEmbed 应返回与输入等长的向量")
+	require.Len(t, vectors, 3, "BatchEmbed 应返回与输入等长的向量")
 	require.Len(t, vectors[0], 1024, "向量维度应为 1024")
 
 	vec1 := &models.Vector{
@@ -270,6 +307,16 @@ func TestRetrievalEvaluator_Integration(t *testing.T) {
 	}
 	require.NoError(t, vectorRepo.Create(ctx, vec2))
 
+	vec3 := &models.Vector{
+		VectorID:   uuid.New().String(),
+		EntityID:   logAccessFunc.SymbolID,
+		EntityType: "symbol",
+		Embedding:  vectors[2],
+		Content:    logAccessContent,
+		Model:      embedderCfg.Model,
+	}
+	require.NoError(t, vectorRepo.Create(ctx, vec3))
+
 	// 3. 构造 retriever（带真 embedder，支持 hybrid/vector 模式生成 query 向量）。
 	retriever := retrieval.NewHybridRetriever(
 		vectorRepo, edgeRepo, embedder,
@@ -277,10 +324,13 @@ func TestRetrievalEvaluator_Integration(t *testing.T) {
 	)
 
 	// 4. 构造 retrieval evaluator。
+	// 真值相关 = {LoginUser, VerifyPassword, LogAccess}：
+	//   - LoginUser/VerifyPassword 经语义召回为主命中
+	//   - LogAccess 不进 Top-K 主命中，但作为 LoginUser callee 进邻居 → neighbor_hit_rate > 0
 	truths := []RetrievalGroundTruth{
 		{
 			Query:           "how does user login work",
-			RelevantSymbols: []string{"LoginUser", "VerifyPassword"},
+			RelevantSymbols: []string{"LoginUser", "VerifyPassword", "LogAccess"},
 		},
 	}
 	eval := NewRetrievalEvaluator(retriever, truths, []string{"hybrid", "vector", "keyword"})
@@ -312,4 +362,11 @@ func TestRetrievalEvaluator_Integration(t *testing.T) {
 	// hybrid 的 recall 应大于 0（query 与 docstring 语义相近，有真 embedding 命中）。
 	// 不卡硬阈值（embedding 质量因模型而异），只验证能跑通 + 命中。
 	assert.Greater(t, found["recall@10_hybrid"], 0.0, "hybrid recall 应大于 0（有语义命中）")
+
+	// neighbor_hit_rate 应大于 0：LogAccess 不在 Top-K 主命中里，但作为 LoginUser
+	// 的 callee 经图谱邻居扩展被发现。这是 neighbor_hit_rate 设计要验证的「图谱扩展
+	// 能召回语义远但调用相关」的价值——若 ExpandHops 未开或数据里无邻居专属符号，
+	// 此指标恒为 0。
+	assert.Greater(t, found["neighbor_hit_rate_hybrid"], 0.0,
+		"neighbor_hit_rate 应大于 0（LogAccess 仅通过邻居发现）")
 }
