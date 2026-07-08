@@ -329,8 +329,9 @@ func parseRepository(path string, workers int, verbose bool, logger *utils.Logge
 	var allEdges []schema.DependencyEdge
 	var mappingErrors []schema.ParseError
 
+	// 第一遍：收集符号
 	for _, parsedFile := range parsedFiles {
-		schemaFile, edges, err := mapper.MapToSchema(parsedFile)
+		schemaFile, err := mapper.CollectSymbols(parsedFile)
 		if err != nil {
 			mappingErrors = append(mappingErrors, schema.ParseError{
 				File:    parsedFile.Path,
@@ -341,8 +342,14 @@ func parseRepository(path string, workers int, verbose bool, logger *utils.Logge
 		}
 
 		schemaFiles = append(schemaFiles, *schemaFile)
-		allEdges = append(allEdges, edges...)
 	}
+
+	// 第二遍：解析边
+	resolvedEdges, err := mapper.ResolveEdges()
+	if err != nil {
+		return schema.ParseOutput{}, fmt.Errorf("resolve edges: %w", err)
+	}
+	allEdges = resolvedEdges
 
 	// Collect all errors
 	var allErrors []schema.ParseError
