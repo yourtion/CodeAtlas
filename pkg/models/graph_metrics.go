@@ -174,7 +174,7 @@ type ExtractedEdge struct {
 func ListExtractedEdges(ctx context.Context, r *EdgeRepository, repoID string) ([]ExtractedEdge, error) {
 	query := `
 		SELECT e.source_id, s_source.name, e.edge_type,
-		       COALESCE(e.target_id, ''), COALESCE(s_target.name, COALESCE(e.target_module, ''))
+		       COALESCE(e.target_id::text, ''), COALESCE(s_target.name, COALESCE(e.target_module, ''))
 		FROM edges e
 		JOIN symbols s_source ON e.source_id = s_source.symbol_id
 		JOIN files f ON s_source.file_id = f.file_id

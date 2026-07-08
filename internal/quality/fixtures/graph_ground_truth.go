@@ -4,9 +4,10 @@
 // expectedXxxCalls/expectedXxxImports/expectedXxxFrameworks 列表系统化迁移而来，
 // 后经集成测试 TestQualityGate_FixtureMode 在真 DB 上校准，与索引器实际入库的边对齐。
 //
-// 每条 Edge 是 (SourceName, EdgeType, TargetName) 三元组，与 models.ListExtractedEdges
-// 返回的 ExtractedEdge 字段一一对应（DB 里 source_symbol.name / edge_type /
-// target_symbol.name；target 悬空时回退到 edges.target_module，对 import 边即模块名）。
+// 匹配按 (SourceID, EdgeType, TargetID) 三元组进行 symbol_id 精确匹配，由
+// ResolveTruthIDs 在索引 fixture 后从 DB 回填 SourceID/TargetID（解决 C++ 重载同名问题）。
+// SourceName/TargetName 仅保留用于调试日志与符号查找；target 悬空时 TargetID 为空，
+// TargetName 回退到 edges.target_module（对 import 边即模块名）。
 //
 // 跨文件符号消解（已修复）：
 //
@@ -156,16 +157,16 @@ var CallAnalysisGroundTruth = []quality.GraphGroundTruth{
 	// 5. swift_calls_objc.swift —— 继承 UIKit/Foundation 基类（外部框架，target 悬空）
 	//    与类自引用。继承/引用边 source 为类名，target 为外部基类（未索引）。
 	// ──────────────────────────────────────────────────────────────
-		{
-			FixtureFile: "tests/fixtures/swift/swift_calls_objc.swift",
-			Edges: []quality.ExpectedEdge{
-				{SourceName: "SwiftViewController", EdgeType: "extends", TargetName: "", Optional: true},
-				{SourceName: "SwiftViewController", EdgeType: "reference", TargetName: "", Optional: true},
-				{SourceName: "BridgedClass", EdgeType: "extends", TargetName: "", Optional: true},
-				{SourceName: "BridgedClass", EdgeType: "reference", TargetName: "", Optional: true},
-				{SourceName: "useCoreFoundation", EdgeType: "call", TargetName: "", Optional: true},
-			},
+	{
+		FixtureFile: "tests/fixtures/swift/swift_calls_objc.swift",
+		Edges: []quality.ExpectedEdge{
+			{SourceName: "SwiftViewController", EdgeType: "extends", TargetName: "", Optional: true},
+			{SourceName: "SwiftViewController", EdgeType: "reference", TargetName: "", Optional: true},
+			{SourceName: "BridgedClass", EdgeType: "extends", TargetName: "", Optional: true},
+			{SourceName: "BridgedClass", EdgeType: "reference", TargetName: "", Optional: true},
+			{SourceName: "useCoreFoundation", EdgeType: "call", TargetName: "", Optional: true},
 		},
+	},
 }
 
 // ResolveTruthIDs 索引 fixture 后回填真值边的 SourceID/TargetID。
@@ -179,20 +180,25 @@ var CallAnalysisGroundTruth = []quality.GraphGroundTruth{
 //
 // 查不到的 ID 留空——computeEdgeMatch 会跳过 TargetID 空的边（不计入 recall/precision）。
 // Optional 边或 TargetName 空的边（如标准库 strlen、外部 import 模块）也无须回填。
+// DB 错误会立即返回（不再吞掉），以便真正的 DB 故障能暴露。
 func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, truth []quality.GraphGroundTruth) error {
 	for gi := range truth {
 		gt := &truth[gi]
 		for i := range gt.Edges {
 			edge := &gt.Edges[i]
 			if edge.SourceName != "" && edge.SourceID == "" {
-				if sid, err := lookupSymbolID(ctx, symbolRepo, edge.SourceName); err == nil && sid != "" {
-					edge.SourceID = sid
+				sid, err := lookupSymbolID(ctx, symbolRepo, edge.SourceName)
+				if err != nil {
+					return err
 				}
+				edge.SourceID = sid
 			}
 			if edge.TargetName != "" && edge.TargetID == "" {
-				if sid, err := lookupSymbolID(ctx, symbolRepo, edge.TargetName); err == nil && sid != "" {
-					edge.TargetID = sid
+				sid, err := lookupSymbolID(ctx, symbolRepo, edge.TargetName)
+				if err != nil {
+					return err
 				}
+				edge.TargetID = sid
 			}
 		}
 		// Chains 用 name+file 查询连通性，不需回填 ID
@@ -201,10 +207,14 @@ func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, t
 }
 
 // lookupSymbolID 按 name 精确查符号 ID，取首个候选。
+// 找不到时返回 ("", nil)——调用方据此保留 ID 为空；DB 错误时返回 ("", err)。
 func lookupSymbolID(ctx context.Context, repo *models.SymbolRepository, name string) (string, error) {
 	syms, err := repo.GetByExactName(ctx, name)
-	if err != nil || len(syms) == 0 {
+	if err != nil {
 		return "", err
+	}
+	if len(syms) == 0 {
+		return "", nil
 	}
 	return syms[0].SymbolID, nil
 }
