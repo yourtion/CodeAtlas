@@ -27,12 +27,15 @@ func TestCallAnalysisGroundTruth_EdgeFieldsValid(t *testing.T) {
 		for _, e := range gt.Edges {
 			assert.NotEmpty(t, e.SourceName, "%s: Edge.SourceName 不能为空", gt.FixtureFile)
 			assert.NotEmpty(t, e.EdgeType, "%s: Edge.EdgeType 不能为空", gt.FixtureFile)
-			// import 边指向外部依赖（无对应符号），入库后 target_name 为空，允许；
-			// 其他类型（call/extends 等）必须有 target_name。
-			if e.EdgeType == "import" {
+			// target_name 为空的情形（合法悬空边）：
+			//   - import 边指向外部依赖（无对应符号），target_name 回退到 target_module（多数为空）。
+			//   - Optional=true 的 call/extends 等边，target 为标准库/外部运行时函数
+			//     （strlen/printf/UIViewController 等），跨文件消解后仍悬空——这是合法状态，
+			//     真值标注它以免拉低 precision。
+			if e.EdgeType == "import" || e.Optional {
 				continue
 			}
-			assert.NotEmpty(t, e.TargetName, "%s: Edge.TargetName 不能为空", gt.FixtureFile)
+			assert.NotEmpty(t, e.TargetName, "%s: Edge.TargetName 不能为空（非 Optional 边应可消解）", gt.FixtureFile)
 		}
 	}
 }
