@@ -169,7 +169,7 @@ func (m *SchemaMapper) resolveEdge(pd pendingDependency) *DependencyEdge {
 		return nil
 	}
 
-	targetID := m.resolveCandidateID(dep.Target, pd.SourceFileID, pd.SourceFilePath)
+	targetID, targetFile := m.resolveCandidateWithFile(dep.Target, pd.SourceFileID, pd.SourceFilePath)
 	edgeType := m.mapEdgeType(dep.Type)
 	edgeID := utils.GenerateDeterministicUUID(fmt.Sprintf("edge:%s:%s:%s:%s", sourceID, dep.Type, targetID, pd.SourceFilePath))
 
@@ -179,7 +179,31 @@ func (m *SchemaMapper) resolveEdge(pd pendingDependency) *DependencyEdge {
 		TargetID:   targetID,
 		EdgeType:   edgeType,
 		SourceFile: pd.SourceFilePath,
+		TargetFile: targetFile,
 	}
+}
+
+// resolveCandidateWithFile 解析符号到 (symbolID, filePath)。
+// 与 resolveCandidateID 逻辑一致，但额外返回候选的 FilePath（用于填充 TargetFile）。
+func (m *SchemaMapper) resolveCandidateWithFile(name, sourceFileID, sourceFilePath string) (string, string) {
+	if name == "" {
+		return "", ""
+	}
+	candidates := m.symbolCandidates[name]
+	if len(candidates) == 0 {
+		return m.symbolIDMap[name], ""
+	}
+	if len(candidates) == 1 {
+		return candidates[0].SymbolID, candidates[0].FilePath
+	}
+	// 多候选消歧——disambiguate 返回 ID，我们再反查 FilePath
+	resolvedID := m.disambiguate(name, candidates, sourceFileID, sourceFilePath)
+	for _, c := range candidates {
+		if c.SymbolID == resolvedID {
+			return resolvedID, c.FilePath
+		}
+	}
+	return resolvedID, ""
 }
 
 // resolveCandidateID resolves a symbol name to its ID using the candidate set,
