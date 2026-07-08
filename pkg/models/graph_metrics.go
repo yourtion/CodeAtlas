@@ -163,9 +163,14 @@ type ExtractedEdge struct {
 }
 
 // ListExtractedEdges 返回仓库内所有提取出的边（source_name/edge_type/target_name）。
+//
+// target_name 取解析后的目标符号名；若未解析到（悬空），则回退到 target_module
+// （对 import 边而言 target_module 是有意义的标识，如 "java.util.ArrayList"）。
+// 这让多条同源 import 边（target 不同模块）可被 (source, type, target) 三元组区分，
+// 否则它们在 edge_recall/precision 对齐时会被压成同一个空 target 不可区分。
 func ListExtractedEdges(ctx context.Context, r *EdgeRepository, repoID string) ([]ExtractedEdge, error) {
 	query := `
-		SELECT s_source.name, e.edge_type, COALESCE(s_target.name, '')
+		SELECT s_source.name, e.edge_type, COALESCE(s_target.name, COALESCE(e.target_module, ''))
 		FROM edges e
 		JOIN symbols s_source ON e.source_id = s_source.symbol_id
 		JOIN files f ON s_source.file_id = f.file_id

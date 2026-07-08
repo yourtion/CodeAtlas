@@ -2,6 +2,8 @@ package schema
 
 import (
 	"fmt"
+	"path/filepath"
+	"sort"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/yourtionguo/CodeAtlas/internal/parser"
@@ -10,24 +12,53 @@ import (
 
 // SchemaMapper transforms parsed files into the unified schema format
 type SchemaMapper struct {
-	// Map to track symbol IDs for dependency resolution
-	symbolIDMap     map[string]string
+	// 旧字段（向后兼容 MapToSchema 单文件场景）
+	symbolIDMap map[string]string
 	// Map to track external symbols (module name -> Symbol)
 	externalSymbols map[string]*Symbol
+
+	// 新字段：两遍扫描
+	// 候选集：符号名 → 该名字的所有候选（累积，不覆盖）
+	symbolCandidates map[string][]symbolCandidate
+	// import 关系：fileID → 该文件 import 过的模块/文件路径集合
+	fileImports map[string]map[string]bool
+	// 累积的待解析依赖（第一遍收集，第二遍解析）
+	pendingDeps []pendingDependency
+	// 日志函数（消歧告警用），nil 则不记日志
+	warnLog func(format string, args ...interface{})
+}
+
+type symbolCandidate struct {
+	SymbolID string
+	FileID   string
+	FilePath string
+}
+
+type pendingDependency struct {
+	Dep            parser.ParsedDependency
+	SourceFileID   string
+	SourceFilePath string
 }
 
 // NewSchemaMapper creates a new schema mapper
 func NewSchemaMapper() *SchemaMapper {
 	return &SchemaMapper{
-		symbolIDMap:     make(map[string]string),
-		externalSymbols: make(map[string]*Symbol),
+		symbolIDMap:      make(map[string]string),
+		externalSymbols:  make(map[string]*Symbol),
+		symbolCandidates: make(map[string][]symbolCandidate),
+		fileImports:      make(map[string]map[string]bool),
 	}
 }
 
-// MapToSchema transforms a ParsedFile into a schema.File
-func (m *SchemaMapper) MapToSchema(parsed *parser.ParsedFile) (*File, []DependencyEdge, error) {
-	// Generate deterministic file ID based on path and checksum
-	// This ensures the same file always gets the same ID
+// SetWarnLog sets a logger function for disambiguation warnings
+func (m *SchemaMapper) SetWarnLog(fn func(format string, args ...interface{})) {
+	m.warnLog = fn
+}
+
+// CollectSymbols is the first pass: collects symbols to candidate set,
+// import relations, pending deps (including imports), external symbols,
+// and AST nodes — but does NOT resolve edges.
+func (m *SchemaMapper) CollectSymbols(parsed *parser.ParsedFile) (*File, error) {
 	checksum := utils.SHA256Checksum(parsed.Content)
 	fileID := utils.GenerateDeterministicUUID(fmt.Sprintf("file:%s:%s", parsed.Path, checksum))
 
@@ -41,21 +72,18 @@ func (m *SchemaMapper) MapToSchema(parsed *parser.ParsedFile) (*File, []Dependen
 		Symbols:  []Symbol{},
 	}
 
-	// Reset symbol ID map for this file
-	m.symbolIDMap = make(map[string]string)
-
-	// Map symbols
+	// 收集符号到候选集（累积，不覆盖）
 	for _, parsedSymbol := range parsed.Symbols {
 		symbol := m.mapSymbol(parsedSymbol, fileID)
 		file.Symbols = append(file.Symbols, symbol)
-
-		// Store symbol ID for dependency resolution
-		m.symbolIDMap[parsedSymbol.Name] = symbol.SymbolID
+		m.symbolIDMap[parsedSymbol.Name] = symbol.SymbolID // 向后兼容
+		m.symbolCandidates[parsedSymbol.Name] = append(
+			m.symbolCandidates[parsedSymbol.Name],
+			symbolCandidate{SymbolID: symbol.SymbolID, FileID: fileID, FilePath: parsed.Path},
+		)
 	}
 
-	// Collect external modules and create virtual symbols
-	// Note: External symbols are tracked but NOT added to this file's symbols
-	// They will be collected and written separately by the indexer
+	// 收集外部模块符号（保持现有逻辑）
 	externalModules := m.collectExternalModules(parsed.Dependencies)
 	for moduleName := range externalModules {
 		externalSymbol := m.createExternalSymbol(moduleName)
@@ -63,15 +91,242 @@ func (m *SchemaMapper) MapToSchema(parsed *parser.ParsedFile) (*File, []Dependen
 		m.symbolIDMap[moduleName] = externalSymbol.SymbolID
 	}
 
-	// Map AST nodes if root node exists
-	if parsed.RootNode != nil {
-		astNodes := m.mapASTNodes(parsed.RootNode, fileID, "", parsed.Content)
-		file.Nodes = astNodes
+	// 收集 import 关系
+	m.collectFileImports(parsed.Dependencies, fileID)
+
+	// 收集所有 dep 到 pendingDeps（含 import，第二遍统一解析）
+	for _, dep := range parsed.Dependencies {
+		m.pendingDeps = append(m.pendingDeps, pendingDependency{
+			Dep: dep, SourceFileID: fileID, SourceFilePath: parsed.Path,
+		})
 	}
 
-	// Map dependencies (now all will have target_id)
-	edges := m.mapDependencies(parsed.Dependencies, fileID, parsed.Path)
+	// 映射 AST 节点（保持现有逻辑）
+	if parsed.RootNode != nil {
+		file.Nodes = m.mapASTNodes(parsed.RootNode, fileID, "", parsed.Content)
+	}
 
+	return file, nil
+}
+
+// collectFileImports records the import relations for a file
+func (m *SchemaMapper) collectFileImports(deps []parser.ParsedDependency, fileID string) {
+	for _, dep := range deps {
+		if dep.Type == "import" && dep.TargetModule != "" {
+			if m.fileImports[fileID] == nil {
+				m.fileImports[fileID] = make(map[string]bool)
+			}
+			m.fileImports[fileID][dep.TargetModule] = true
+		}
+	}
+}
+
+// ResolveEdges is the second pass: resolves all accumulated pending deps
+// using the candidate set collected during CollectSymbols.
+//
+// 边 ID 是确定性的（基于 source_id/edge_type/target_id/source_file 等字段），
+// 同一源文件里多次出现同一 (source, type, target) 依赖（如多次调用 console）
+// 会生成相同 edge_id。这里按 edge_id 去重，保留首次出现的边——语义上它们是
+// 同一条关系，与索引器的 upsert 行为一致，也避免 validator 的 duplicate_id 报错。
+func (m *SchemaMapper) ResolveEdges() ([]DependencyEdge, error) {
+	var edges []DependencyEdge
+	seen := make(map[string]bool, len(m.pendingDeps))
+	for _, pd := range m.pendingDeps {
+		edge := m.resolveEdge(pd)
+		if edge == nil {
+			continue
+		}
+		if seen[edge.EdgeID] {
+			continue
+		}
+		seen[edge.EdgeID] = true
+		edges = append(edges, *edge)
+	}
+	return edges, nil
+}
+
+// resolveEdge resolves a single pending dependency to an edge
+func (m *SchemaMapper) resolveEdge(pd pendingDependency) *DependencyEdge {
+	dep := pd.Dep
+	sourceID := m.resolveCandidateID(dep.Source, pd.SourceFileID, pd.SourceFilePath)
+
+	if dep.Type == "import" {
+		edgeType := m.mapEdgeType(dep.Type)
+		edgeID := utils.GenerateDeterministicUUID(fmt.Sprintf("edge:%s:%s:%s:%s", pd.SourceFilePath, dep.Type, dep.Target, dep.TargetModule))
+		targetID := m.resolveImportTarget(dep)
+		return &DependencyEdge{
+			EdgeID:       edgeID,
+			SourceID:     sourceID,
+			TargetID:     targetID,
+			EdgeType:     edgeType,
+			SourceFile:   pd.SourceFilePath,
+			TargetModule: dep.TargetModule,
+		}
+	}
+
+	// 非 import 边：source 必须存在
+	if sourceID == "" {
+		return nil
+	}
+
+	targetID, targetFile := m.resolveCandidateWithFile(dep.Target, pd.SourceFileID, pd.SourceFilePath)
+	edgeType := m.mapEdgeType(dep.Type)
+	// 悬空边（targetID 空）用 dep.Target 裸名区分，避免同 source 的多个外部调用塌缩为同一边
+	keyPart := targetID
+	if keyPart == "" {
+		keyPart = "unresolved:" + dep.Target
+	}
+	edgeID := utils.GenerateDeterministicUUID(fmt.Sprintf("edge:%s:%s:%s:%s", sourceID, dep.Type, keyPart, pd.SourceFilePath))
+
+	return &DependencyEdge{
+		EdgeID:     edgeID,
+		SourceID:   sourceID,
+		TargetID:   targetID,
+		EdgeType:   edgeType,
+		SourceFile: pd.SourceFilePath,
+		TargetFile: targetFile,
+	}
+}
+
+// resolveCandidateWithFile 解析符号到 (symbolID, filePath)。
+// 与 resolveCandidateID 逻辑一致，但额外返回候选的 FilePath（用于填充 TargetFile）。
+func (m *SchemaMapper) resolveCandidateWithFile(name, sourceFileID, sourceFilePath string) (string, string) {
+	if name == "" {
+		return "", ""
+	}
+	candidates := m.symbolCandidates[name]
+	if len(candidates) == 0 {
+		return m.symbolIDMap[name], ""
+	}
+	if len(candidates) == 1 {
+		return candidates[0].SymbolID, candidates[0].FilePath
+	}
+	// 多候选消歧——disambiguate 返回 ID，我们再反查 FilePath
+	resolvedID := m.disambiguate(name, candidates, sourceFileID, sourceFilePath)
+	for _, c := range candidates {
+		if c.SymbolID == resolvedID {
+			return resolvedID, c.FilePath
+		}
+	}
+	return resolvedID, ""
+}
+
+// resolveCandidateID resolves a symbol name to its ID using the candidate set,
+// falling back to symbolIDMap (which contains external symbols).
+func (m *SchemaMapper) resolveCandidateID(name, sourceFileID, sourceFilePath string) string {
+	if name == "" {
+		return ""
+	}
+	candidates := m.symbolCandidates[name]
+	if len(candidates) == 0 {
+		return m.symbolIDMap[name] // 降级查旧 map（含外部符号）
+	}
+	if len(candidates) == 1 {
+		return candidates[0].SymbolID
+	}
+	return m.disambiguate(name, candidates, sourceFileID, sourceFilePath)
+}
+
+// disambiguate picks a single candidate when multiple exist:
+// 1) same-file candidate, 2) import-path match, 3) first candidate with warning.
+func (m *SchemaMapper) disambiguate(name string, candidates []symbolCandidate, sourceFileID, sourceFilePath string) string {
+	// 1. 同文件优先
+	var sameFile []symbolCandidate
+	for _, c := range candidates {
+		if c.FilePath == sourceFilePath {
+			sameFile = append(sameFile, c)
+		}
+	}
+	if len(sameFile) == 1 {
+		return sameFile[0].SymbolID
+	}
+	if len(sameFile) > 1 {
+		sort.Slice(sameFile, func(i, j int) bool { return sameFile[i].SymbolID < sameFile[j].SymbolID })
+		m.logDisambiguation(name, sourceFilePath, len(sameFile), "same_file_multiple")
+		return sameFile[0].SymbolID
+	}
+
+	// 2. import 文件优先（精确匹配文件名，避免 strings.Contains 误匹配）
+	imports := m.fileImports[sourceFileID]
+	if imports != nil {
+		var importMatch []symbolCandidate
+		for _, c := range candidates {
+			for mod := range imports {
+				modBase := filepath.Base(mod)
+				if filepath.Base(c.FilePath) == modBase || c.FilePath == mod {
+					importMatch = append(importMatch, c)
+					break
+				}
+			}
+		}
+		if len(importMatch) == 1 {
+			return importMatch[0].SymbolID
+		}
+		if len(importMatch) > 1 {
+			sort.Slice(importMatch, func(i, j int) bool { return importMatch[i].SymbolID < importMatch[j].SymbolID })
+			m.logDisambiguation(name, sourceFilePath, len(importMatch), "import_multiple")
+			return importMatch[0].SymbolID
+		}
+	}
+
+	// 3. 首个候选 + 日志
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].SymbolID < candidates[j].SymbolID })
+	m.logDisambiguation(name, sourceFilePath, len(candidates), "first_candidate")
+	return candidates[0].SymbolID
+}
+
+// logDisambiguation logs a disambiguation warning if a warnLog is set
+func (m *SchemaMapper) logDisambiguation(name, sourceFile string, count int, strategy string) {
+	if m.warnLog != nil {
+		m.warnLog("符号消歧: %q 在 %s 有 %d 候选，策略=%s", name, sourceFile, count, strategy)
+	}
+}
+
+// resolveImportTarget resolves an import edge's target to a symbol ID
+// by matching the target module against collected candidate file paths.
+// 多文件同名时按 SymbolID 排序取首个，保证确定性。
+func (m *SchemaMapper) resolveImportTarget(dep parser.ParsedDependency) string {
+	if dep.TargetModule == "" {
+		return ""
+	}
+	target := dep.TargetModule
+	targetBase := filepath.Base(target)
+	var matches []symbolCandidate
+	for _, candidates := range m.symbolCandidates {
+		for _, c := range candidates {
+			if c.FilePath == target || filepath.Base(c.FilePath) == targetBase {
+				matches = append(matches, c)
+			}
+		}
+	}
+	if len(matches) == 0 {
+		return ""
+	}
+	if len(matches) > 1 {
+		m.logDisambiguation(targetBase, "", len(matches), "import_target_multiple")
+		sort.Slice(matches, func(i, j int) bool { return matches[i].SymbolID < matches[j].SymbolID })
+	}
+	return matches[0].SymbolID
+}
+
+// MapToSchema transforms a ParsedFile into a schema.File (single-file backward-compat).
+// Internally calls CollectSymbols, then uses the legacy mapDependencies (via symbolIDMap)
+// to keep existing single-file behavior intact. For cross-file resolution, use the
+// two-pass CollectSymbols + ResolveEdges flow instead.
+func (m *SchemaMapper) MapToSchema(parsed *parser.ParsedFile) (*File, []DependencyEdge, error) {
+	// MapToSchema 是单文件向后兼容入口，保持隔离语义
+	// 跨文件场景用 CollectSymbols + ResolveEdges
+	m.symbolIDMap = make(map[string]string)
+	m.symbolCandidates = make(map[string][]symbolCandidate)
+	m.fileImports = make(map[string]map[string]bool)
+	m.pendingDeps = nil
+
+	file, err := m.CollectSymbols(parsed)
+	if err != nil {
+		return nil, nil, err
+	}
+	// 单文件场景：用旧 mapDependencies（symbolIDMap 已在 CollectSymbols 填充）
+	edges := m.mapDependencies(parsed.Dependencies, file.FileID, parsed.Path)
 	return file, edges, nil
 }
 
@@ -245,6 +500,10 @@ func (m *SchemaMapper) mapEdgeType(depType string) EdgeType {
 		return EdgeExtends
 	case "implements":
 		return EdgeImplements
+	case "implements_declaration":
+		return EdgeImplementsDeclaration
+	case "calls_declaration":
+		return EdgeCallsDeclaration
 	default:
 		return EdgeReference
 	}

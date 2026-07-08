@@ -87,4 +87,5 @@ codeatlas eval --fixtures --only retrieval         # 只跑检索指标（需 em
 
 ## 已知限制
 
-`SchemaMapper` 当前按文件重置符号表，跨文件调用边的 `target_id` 无法解析，导致 `symbol_resolution_rate` 和 `cross_file_connectivity` 基线偏低。这是下一轮"精准依赖图"改造的重点——需要让 SchemaMapper 支持两遍扫描（先收集全仓库符号，再解析边）。
+- **call 类悬空率较高**：`dangling_edge_ratio(call)` 在 fixture 数据上约 55%，主要因为 fixture 代码大量调用标准库/外部函数（strlen/malloc/printf 等），这些函数不在索引范围内。真实仓库的 call 悬空率会低很多。
+- **同名符号消歧用首个候选**：C++ 重载、多文件同名符号等场景，消歧策略是"同文件优先 → import 文件优先 → 首个候选+日志"。首个候选可能不是语义上最准确的，但有 WARN 日志可观测。签名消歧留待后续（需解析器产出更丰富的 Target 字段）。

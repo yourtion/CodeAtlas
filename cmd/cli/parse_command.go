@@ -272,16 +272,16 @@ func (cmd *ParseCommand) Execute() error {
 	// Map to schema
 	mapper := schema.NewSchemaMapper()
 	var schemaFiles []schema.File
-	var allEdges []schema.DependencyEdge
 	var mappingErrors []schema.ParseError
 
 	logger.Debug("Starting schema mapping for %d files", len(parsedFiles))
 	mapStartTime := time.Now()
 
+	// 第一遍：收集所有文件的符号 + import 关系
 	for i, parsedFile := range parsedFiles {
 		logger.Debug("[%d/%d] Mapping file: %s", i+1, len(parsedFiles), parsedFile.Path)
 
-		schemaFile, edges, err := mapper.MapToSchema(parsedFile)
+		schemaFile, err := mapper.CollectSymbols(parsedFile)
 		if err != nil {
 			mappingErrors = append(mappingErrors, schema.ParseError{
 				File:    parsedFile.Path,
@@ -293,10 +293,15 @@ func (cmd *ParseCommand) Execute() error {
 		}
 
 		schemaFiles = append(schemaFiles, *schemaFile)
-		allEdges = append(allEdges, edges...)
-
-		logger.Debug("Mapped %d symbols and %d edges from %s", len(schemaFile.Symbols), len(edges), parsedFile.Path)
+		logger.Debug("Mapped %d symbols from %s", len(schemaFile.Symbols), parsedFile.Path)
 	}
+
+	// 第二遍：用全仓库候选集解析所有边
+	allEdges, err := mapper.ResolveEdges()
+	if err != nil {
+		logger.Error("Failed to resolve edges: %v", err)
+	}
+	logger.Debug("Resolved %d edges across %d files", len(allEdges), len(schemaFiles))
 
 	mapTime := time.Since(mapStartTime)
 	logger.Debug("Schema mapping completed in %v", mapTime)
@@ -420,7 +425,7 @@ func (cmd *ParseCommand) scanSingleFile(logger *utils.Logger) ([]parser.ScannedF
 		"C":           true,
 		"C++":         true,
 	}
-	
+
 	if !supportedLanguages[language] {
 		return nil, fmt.Errorf("unsupported language: %s", language)
 	}
