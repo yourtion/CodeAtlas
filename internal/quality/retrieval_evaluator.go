@@ -63,16 +63,16 @@ func (e *RetrievalEvaluator) Evaluate(ctx context.Context, repoIDs []string) ([]
 				return nil, fmt.Errorf("query %q mode %s: %w", truth.Query, mode, err)
 			}
 
-			// recall@k
-			hit := 0
+			// recall@k：用 set 去重，避免同名符号（如 C++ 重载）重复计数导致 recall > 1.0
+			hitSet := make(map[string]bool)
 			for _, b := range blocks {
 				if relevantSet[b.Symbol.Name] {
-					hit++
+					hitSet[b.Symbol.Name] = true
 				}
 			}
 			recall := 0.0
 			if len(relevantSet) > 0 {
-				recall = float64(hit) / float64(len(relevantSet))
+				recall = float64(len(hitSet)) / float64(len(relevantSet))
 			}
 			recallByMode[mode] = append(recallByMode[mode], recall)
 

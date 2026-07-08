@@ -122,6 +122,15 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 			}
 			bv.EvaluatePassed()
 			metrics = append(metrics, bv)
+
+			// edge_type_distribution：各 edge_type 占比（仅观察）
+			distMV := MetricValue{
+				Name: "edge_type_distribution", Category: CategoryGraph,
+				Value: float64(t) / float64(totalEdges), Bucket: et,
+				Threshold: 0, HigherIsBetter: true,
+			}
+			distMV.EvaluatePassed()
+			metrics = append(metrics, distMV)
 		}
 
 		// 符号消解率（1 - 悬空边率）

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,6 +13,10 @@ import (
 	"github.com/yourtionguo/CodeAtlas/internal/quality/fixtures"
 	"github.com/yourtionguo/CodeAtlas/pkg/models"
 )
+
+// errGateFailed 表示评估门禁未通过（有指标低于阈值）。
+// runEval 返回此 error，由 main 据此 exit 1，避免 outputReport 里直接 os.Exit 绕过 defer。
+var errGateFailed = errors.New("quality gate failed")
 
 // createEvalCommand 创建质量评估命令。
 //
@@ -102,7 +107,15 @@ func runEval(c *cli.Context) error {
 	ctx := context.Background()
 
 	if fixturesMode {
-		// fixture 模式：合并依赖图真值
+		// fixture 模式：评估已索引的 fixture 仓库。
+		// 需要 --repo 指定已索引 fixture 的 repoID（CLI 不自行索引，
+		// 用 codeatlas index 索引 fixture 后再用 --repo + --fixtures 评估）。
+		if repoID == "" {
+			return fmt.Errorf("--fixtures 模式需要 --repo 指定已索引的 fixture repoID。\n" +
+				"先索引 fixture：codeatlas index --path <fixture_dir> --server <url>\n" +
+				"再评估：codeatlas eval --fixtures --repo <repoID> --db ...")
+		}
+		// 合并依赖图真值
 		truth := &quality.GraphGroundTruth{FixtureFile: "merged"}
 		for _, gt := range fixtures.CallAnalysisGroundTruth {
 			truth.Edges = append(truth.Edges, gt.Edges...)
@@ -113,6 +126,7 @@ func runEval(c *cli.Context) error {
 		cfg := quality.EvaluateConfig{
 			Mode:         quality.EvalModeFixture,
 			FixtureSet:   "call_analysis",
+			RepoID:       repoID,
 			RunRetrieval: false, // CLI 暂不支持 retrieval（需 embedder）
 		}
 		if only == "retrieval" {
@@ -197,7 +211,7 @@ func outputReport(report *quality.Report, format string) error {
 		report.Summary.Passed, report.Summary.Failed, report.Summary.NoThreshold)
 
 	if report.Summary.Failed > 0 {
-		os.Exit(1)
+		return errGateFailed
 	}
 	return nil
 }

@@ -528,3 +528,17 @@ func TestQualityGate_FixtureMode(t *testing.T) {
 | 阈值定得不合理（太高全红、太低形同虚设） | 阈值标"初定"，先跑出基线再调；结构断言类这轮不做硬门禁就是为这个 |
 | 聚合查询在大仓库上慢 | 5 个查询都是 `COUNT(*)` + `GROUP BY`，有现成索引；若慢加 `repo_id` 过滤索引即可，这轮不预先优化 |
 | PR#2 回归并入后遗漏原测试场景 | `TestQualityGate_PR2Regression` 的真值覆盖原 `TestVectorSearch_RepoIDsFilter` 和 `TestHybridRetriever_Integration` 的断言点，迁移后**保留原测试文件**直到确认新门禁覆盖等价，下一轮再删，避免这轮就破坏现有测试资产 |
+
+---
+
+## 11. 实现偏离说明（code review 后补充）
+
+以下实现与 spec 设计的偏离，经 review 确认为有意决策，记录在此：
+
+1. **`TestQualityGate_PR2Regression` 未单独实现**：PR#2 的 RepoIDs 多 repo 过滤和 retrieval 端到端验证，由 `internal/quality/retrieval_eval_integration_test.go`（真 Ollama embedding 跑通三模式检索）和 `retrieval_lang_compare_test.go`（7 语言分语言检索对比）共同覆盖，等价于 PR2 回归测试的目标。不再单独写同名测试，避免重复。
+
+2. **`--threshold-override` CLI flag 未实现**：`Report.OverrideThreshold` 方法已实现（供程序化/测试用），但 CLI flag 延后。原因：当前阈值是"初定"值，需先跑出真实仓库基线（见 `docs/superpowers/baselines/`）再决定调参需求，届时再加 flag 更有意义。
+
+3. **结构断言类指标阈值设为 0（仅观察）**：spec §3.4 已说明"这轮只建基线不做硬门禁"，但 spec §5.1 的阈值常量定义了非零建议值。实现里结构断言类指标的 Threshold 统一设 0（仅观察），阈值常量保留供下一轮启用。
+
+4. **CLI `--fixtures` 模式需配合 `--repo`**：fixture 模式评估已索引的 fixture 数据，需 `--repo` 指定 repoID。CLI 不自行索引 fixture（用 `codeatlas index` 先索引）。
