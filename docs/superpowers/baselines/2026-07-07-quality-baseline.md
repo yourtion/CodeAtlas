@@ -37,6 +37,8 @@
 - `cross_file_connectivity` 修复 SchemaMapper 后应 > 0.20，可设为硬门禁
 - `symbol_resolution_rate` 按 edge_type 分桶后，call 类应 > 0.90
 - `orphan_symbol_ratio` 需在真实仓库建立基线后再定阈值
+- `edge_recall/precision` 匹配策略应从纯 name 升级为 `(name, signature)` 或 `symbol_id`，解决 C++ 重载导致的 recall > 1.0 问题
+- Java/Kotlin 解析器应补方法符号提取，当前仅类级符号限制了检索评估的覆盖面
 
 ## 检索质量（Ollama qwen3-embedding:0.6b，真 embedding）
 
@@ -54,3 +56,29 @@
 **关键结论**：mode_compare 数据（hybrid_vs_keyword = +1.00）验证了 PR#1 混合重排设计的价值——hybrid 完全覆盖了 keyword 无法召回的语义查询，而 keyword 在自然语言场景下完全失效。这为下一轮保留/增强混合检索提供了数据支撑。
 
 注：keyword recall=0 不是 bug，是 BM25 对自然语言 query 的固有局限——"how does user login work" 的 token 与代码里的 "LoginUser"/"VerifyPassword" 不重叠。hybrid 模式通过向量召回补上了这个缺口。
+
+修复 `ExpandHops` bug 后（evaluator 未设 ExpandHops=1 导致图谱扩展不触发），neighbor_hit_rate_hybrid 从 0.00 提升到 1.00——验证了 PR#2 图谱扩展在真 embedding 下的价值。
+
+## 全语言检索对比（Ollama qwen3-embedding:0.6b）
+
+7 种语言各自独立索引 fixture + 向量，分语言跑 hybrid 检索评估：
+
+| 语言 | recall@10_hybrid | neighbor_hit_rate | 说明 |
+|---|---|---|---|
+| Go | 1.0000 | 0.0000 | 正常 |
+| Python | 1.0000 | 0.0000 | 正常 |
+| C++ | **1.3333** | 0.3333 | ⚠️ recall > 1.0，C++ 重载函数产生重复符号名 |
+| Java | 1.0000 | 0.0000 | 仅类级符号（解析器不提取方法）|
+| Kotlin | 1.0000 | 0.0000 | 仅类级符号 |
+| Swift | 1.0000 | 0.0000 | 正常 |
+| JS/TS | 1.0000 | 0.0000 | 正常 |
+
+**关键发现**：
+
+1. **C++ recall > 1.0**：`class.cpp` 解析出重复符号名（`MyClass` 构造函数重载、`virtualMethod` 重载），recall 按 `block.Symbol.Name` 计数会重复统计命中。这是评估器"按 name 匹配真值"策略在 C++ 重载场景下的局限。下一轮应考虑按 `(name, signature)` 或 `symbol_id` 匹配。
+
+2. **Java/Kotlin 仅类级符号**：当前解析器不提取 Java/Kotlin 的方法符号，只有类。检索评估只能验证类级召回。下一轮"精准依赖图"应补方法符号提取。
+
+3. **多数语言 neighbor_hit_rate=0**：这些语言的 fixture 里真值相关符号恰好都是主命中（Top-K 内），邻居里没有额外相关符号。需要构造更深的调用链真值才能验证图谱扩展价值——但这不是 bug，是测试数据特征。
+
+4. **embedding 对所有 7 种语言有效**：recall 全部 > 0，证明 `qwen3-embedding:0.6b` 对代码语义理解跨语言有效。
