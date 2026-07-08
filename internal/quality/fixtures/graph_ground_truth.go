@@ -244,22 +244,25 @@ var CallAnalysisGroundTruth = []quality.GraphGroundTruth{
 // 虽然确定性，但硬编码脆弱。改为索引后从 DB 查出回填。
 //
 // 匹配策略：按 name 精确查询符号（GetByExactName，区分大小写，不把 _ 当通配符）。
-// 单候选直接取；多候选时按与索引器一致的同文件优先策略消歧——
+// 单候选直接取；多候选时近似「同文件优先」消歧（见 lookupSymbolInFile 文档）——
 //   - target 优先取与「source 符号所在文件」同文件的候选（如 findById→id，
 //     二者同在 UserRepository.kt），其次取与 FixtureFile 同文件的候选；
 //   - 仍歧义则按 symbol_id 升序取首个（确定性）。
 //
-// 这与 SchemaMapper.disambiguate 的「同文件优先」对齐，使真值边的 (source,target)
-// 能落到索引器实际解析出的同一对符号上。fileRepo 用于把 file_id 解析为 path 做比较；
-// 传 nil 则退化为首个候选（旧行为）。
+// 注意：此消歧仅近似 SchemaMapper.disambiguate 的「同文件优先」第一层，并不包含
+// disambiguate 的 import-path 匹配层（truth 解析阶段拿不到源文件的 import 表，故无法
+// 复刻索引器的 import-match 消歧）。对索引器最终经 import-match 解析的边，真值可能
+// 落到不同符号上而偏离——这些差异会在 edge_recall/precision 里体现，属已知偏差。
+// fileRepo 用于把 file_id 解析为 path 做比较；传 nil 则退化为首个候选（旧行为）。
 //
 // 查不到的 ID 留空——computeEdgeMatch 会跳过 TargetID 空的边（不计入 recall/precision）。
 // Optional 边或 TargetName 空的边（如标准库 strlen、外部 import 模块）也无须回填。
 // DB 错误会立即返回（不再吞掉），以便真正的 DB 故障能暴露。
 func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, fileRepo *models.FileRepository, truth []quality.GraphGroundTruth) error {
-	// file_id -> path 缓存（避免重复查询）。
+	// file_id -> path 缓存（避免重复查询）。供 source 路径回填与候选消歧共用——
+	// lookupSymbolInFile 内逐候选解析 file_id -> path 也走此缓存（通过 fileOf 闭包）。
 	pathCache := make(map[string]string)
-	pathOf := func(fileID string) (string, error) {
+	pathOf := func(ctx context.Context, fileID string) (string, error) {
 		if p, ok := pathCache[fileID]; ok {
 			return p, nil
 		}
@@ -286,14 +289,14 @@ func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, f
 				// source 优先取与 FixtureFile 同文件的候选——各真值条目的
 				// FixtureFile 标明了边所在的源文件，据此把同名符号（如 Kotlin 与
 				// Java 各自的 findById）区分开。
-				sid, srcFileID, err := lookupSymbolInFile(ctx, symbolRepo, fileRepo, edge.SourceName, []string{gt.FixtureFile})
+				sid, srcFileID, err := lookupSymbolInFile(ctx, symbolRepo, pathOf, edge.SourceName, []string{gt.FixtureFile})
 				if err != nil {
 					return err
 				}
 				edge.SourceID = sid
 				// 记下 source 所在文件路径，供 target 同文件消歧。
 				if srcFileID != "" {
-					p, err := pathOf(srcFileID)
+					p, err := pathOf(ctx, srcFileID)
 					if err != nil {
 						return err
 					}
@@ -303,7 +306,7 @@ func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, f
 			if edge.TargetName != "" && edge.TargetID == "" {
 				// target 优先与 source 同文件，其次与 FixtureFile 同文件。
 				prefer := []string{edge.SourceFilePath, gt.FixtureFile}
-				sid, _, err := lookupSymbolInFile(ctx, symbolRepo, fileRepo, edge.TargetName, prefer)
+				sid, _, err := lookupSymbolInFile(ctx, symbolRepo, pathOf, edge.TargetName, prefer)
 				if err != nil {
 					return err
 				}
@@ -315,14 +318,28 @@ func ResolveTruthIDs(ctx context.Context, symbolRepo *models.SymbolRepository, f
 	return nil
 }
 
+// symbolNameLookup 抽象「按精确名字查符号」的仓库操作，便于 lookupSymbolInFile
+// 在不依赖 *models.SymbolRepository 具体类型的情况下被单测（用内存假实现替换）。
+// *models.SymbolRepository 天然满足此接口。
+type symbolNameLookup interface {
+	GetByExactName(ctx context.Context, name string) ([]*models.Symbol, error)
+}
+
 // lookupSymbolInFile 在 name 命中的候选里，优先取 file_id 对应 path 命中 preferPaths
-// 任一者的候选；无命中（或 fileRepo/preferPaths 为空）则取首个（按 symbol_id 升序）。
-// fileRepo 用于解析 file_id -> path；为 nil 时退化为首个候选。返回 (symbolID, fileID)。
+// 任一者的候选；无命中（或 fileOf 为 nil / preferPaths 为空）则取首个（按 symbol_id 升序）。
+// fileOf 用于解析候选 file_id -> path；为 nil 时退化为首个候选。返回 (symbolID, fileID)。
 //
-// 多候选消歧与 SchemaMapper.disambiguate 的「同文件优先」对齐：真值边的 target
-// 优先取与 source 同文件的符号，使真值 (source,target) 落到索引器实际解析出的
-// 同一对符号上（如 findById→id 二者同在 UserRepository.kt）。
-func lookupSymbolInFile(ctx context.Context, repo *models.SymbolRepository, fileRepo *models.FileRepository, name string, preferPaths []string) (string, string, error) {
+// preferPaths 是一个无序集合（非优先级列表）——多条目间无先后优先级，仅用于判定
+// 「候选所在文件是否属于偏好集合」。
+//
+// 与 SchemaMapper.disambiguate 的关系：此函数近似 disambiguate 的「同文件优先」第一层
+// （preferPaths 即真值侧的「source 同文件 / FixtureFile」集合），但 **不包含**
+// disambiguate 的第二层 import-path 匹配——truth 解析阶段拿不到源文件的 import 表，
+// 无法复刻索引器的 import-match 消歧。故对索引器最终经 import-match 解析的边，真值
+// 可能落到不同符号上而偏离（已知偏差）。fileOf 解析候选 file_id -> path；调用方
+// （ResolveTruthIDs）在其实现里带 file_id -> path 缓存，故 source 与候选的路径解析
+// 共用同一缓存，避免逐候选重复查 DB。
+func lookupSymbolInFile(ctx context.Context, repo symbolNameLookup, fileOf func(ctx context.Context, fileID string) (string, error), name string, preferPaths []string) (string, string, error) {
 	syms, err := repo.GetByExactName(ctx, name)
 	if err != nil {
 		return "", "", err
@@ -330,7 +347,7 @@ func lookupSymbolInFile(ctx context.Context, repo *models.SymbolRepository, file
 	if len(syms) == 0 {
 		return "", "", nil
 	}
-	if fileRepo != nil && len(preferPaths) > 0 {
+	if fileOf != nil && len(preferPaths) > 0 {
 		prefer := make(map[string]bool, len(preferPaths))
 		for _, p := range preferPaths {
 			if p != "" {
@@ -339,11 +356,11 @@ func lookupSymbolInFile(ctx context.Context, repo *models.SymbolRepository, file
 		}
 		var matched []*models.Symbol
 		for _, s := range syms {
-			f, err := fileRepo.GetByID(ctx, s.FileID)
+			p, err := fileOf(ctx, s.FileID)
 			if err != nil {
 				return "", "", err
 			}
-			if f != nil && prefer[f.Path] {
+			if prefer[p] {
 				matched = append(matched, s)
 			}
 		}
