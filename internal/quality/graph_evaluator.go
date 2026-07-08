@@ -106,8 +106,10 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 		totalDangling += count
 	}
 
-	// 结构断言类指标：这轮仅观察、建基线，不做硬门禁（spec §3.4）。
-	// Threshold=0 表示无阈值；具体建议值见 metrics.go 的 ThresholdXxx 常量（下一轮启用）。
+	// 结构断言类指标：分桶硬门禁已启用（spec §3.4）。
+	// call/reference 分桶、orphan_symbol_ratio、cross_file_connectivity 设阈值；
+	// 总值（不分桶）与 import/extends 分桶保持 Threshold=0 仅观察（因 import 边 100% 悬空符合预期）。
+	// 具体阈值见 metrics.go 的 ThresholdXxx 常量。
 	//
 	// 悬空边率（总值 + 分桶）
 	if totalEdges > 0 {
@@ -126,10 +128,18 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 			if t == 0 {
 				continue
 			}
+			// 分桶硬门禁：call/reference 类设阈值，import/extends 类保持观察
+			bucketThreshold := 0.0
+			switch et {
+			case "call":
+				bucketThreshold = ThresholdDanglingEdgeRatioCall
+			case "reference":
+				bucketThreshold = ThresholdDanglingEdgeRatioReference
+			}
 			bv := MetricValue{
 				Name: "dangling_edge_ratio", Category: CategoryGraph,
 				Value: float64(d) / float64(t), Bucket: et,
-				Threshold: 0, HigherIsBetter: false, // 分桶仅观察
+				Threshold: bucketThreshold, HigherIsBetter: false,
 			}
 			bv.EvaluatePassed()
 			metrics = append(metrics, bv)
@@ -144,14 +154,27 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 			metrics = append(metrics, distMV)
 		}
 
-		// 符号消解率（1 - 悬空边率）
+		// 符号消解率（总值仅观察，因 import 边 100% 悬空拖低总值）
 		res := MetricValue{
 			Name: "symbol_resolution_rate", Category: CategoryGraph,
 			Value:     1 - float64(totalDangling)/float64(totalEdges),
-			Threshold: 0, HigherIsBetter: true, // 仅观察（下一轮启用 ThresholdSymbolResolution）
+			Threshold: 0, HigherIsBetter: true,
 		}
 		res.EvaluatePassed()
 		metrics = append(metrics, res)
+
+		// call 分桶硬门禁：call 类消解率应达标
+		if callTotal := byType["call"]; callTotal > 0 {
+			callDangling := dangling["call"]
+			callRes := MetricValue{
+				Name: "symbol_resolution_rate", Category: CategoryGraph,
+				Value:     1 - float64(callDangling)/float64(callTotal),
+				Bucket:    "call",
+				Threshold: ThresholdSymbolResolutionCall, HigherIsBetter: true,
+			}
+			callRes.EvaluatePassed()
+			metrics = append(metrics, callRes)
+		}
 	}
 
 	// 孤立符号率
@@ -159,7 +182,7 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 		mv := MetricValue{
 			Name: "orphan_symbol_ratio", Category: CategoryGraph,
 			Value:     float64(orphans) / float64(totalSymbols),
-			Threshold: 0, HigherIsBetter: false, // 仅观察（下一轮启用 ThresholdOrphanSymbolRatio）
+			Threshold: ThresholdOrphanSymbolRatio, HigherIsBetter: false,
 		}
 		mv.EvaluatePassed()
 		metrics = append(metrics, mv)
@@ -170,7 +193,7 @@ func (e *GraphEvaluator) Evaluate(ctx context.Context, repoID string, mode EvalM
 		mv := MetricValue{
 			Name: "cross_file_connectivity", Category: CategoryGraph,
 			Value:     float64(crossFile) / float64(totalEdges),
-			Threshold: 0, HigherIsBetter: true, // 仅观察（下一轮启用 ThresholdCrossFileConnectivity）
+			Threshold: ThresholdCrossFileConnectivity, HigherIsBetter: true,
 		}
 		mv.EvaluatePassed()
 		metrics = append(metrics, mv)
