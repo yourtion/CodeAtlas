@@ -171,7 +171,12 @@ func (m *SchemaMapper) resolveEdge(pd pendingDependency) *DependencyEdge {
 
 	targetID, targetFile := m.resolveCandidateWithFile(dep.Target, pd.SourceFileID, pd.SourceFilePath)
 	edgeType := m.mapEdgeType(dep.Type)
-	edgeID := utils.GenerateDeterministicUUID(fmt.Sprintf("edge:%s:%s:%s:%s", sourceID, dep.Type, targetID, pd.SourceFilePath))
+	// 悬空边（targetID 空）用 dep.Target 裸名区分，避免同 source 的多个外部调用塌缩为同一边
+	keyPart := targetID
+	if keyPart == "" {
+		keyPart = "unresolved:" + dep.Target
+	}
+	edgeID := utils.GenerateDeterministicUUID(fmt.Sprintf("edge:%s:%s:%s:%s", sourceID, dep.Type, keyPart, pd.SourceFilePath))
 
 	return &DependencyEdge{
 		EdgeID:     edgeID,
@@ -279,22 +284,29 @@ func (m *SchemaMapper) logDisambiguation(name, sourceFile string, count int, str
 
 // resolveImportTarget resolves an import edge's target to a symbol ID
 // by matching the target module against collected candidate file paths.
+// 多文件同名时按 SymbolID 排序取首个，保证确定性。
 func (m *SchemaMapper) resolveImportTarget(dep parser.ParsedDependency) string {
 	if dep.TargetModule == "" {
 		return ""
 	}
 	target := dep.TargetModule
-	// 取 import 路径的最后一段作为文件名（如 "c_library.h" from "include/c_library.h"）
 	targetBase := filepath.Base(target)
+	var matches []symbolCandidate
 	for _, candidates := range m.symbolCandidates {
 		for _, c := range candidates {
-			// 精确匹配文件名，或文件路径精确等于 target
 			if c.FilePath == target || filepath.Base(c.FilePath) == targetBase {
-				return c.SymbolID
+				matches = append(matches, c)
 			}
 		}
 	}
-	return ""
+	if len(matches) == 0 {
+		return ""
+	}
+	if len(matches) > 1 {
+		m.logDisambiguation(targetBase, "", len(matches), "import_target_multiple")
+		sort.Slice(matches, func(i, j int) bool { return matches[i].SymbolID < matches[j].SymbolID })
+	}
+	return matches[0].SymbolID
 }
 
 // MapToSchema transforms a ParsedFile into a schema.File (single-file backward-compat).

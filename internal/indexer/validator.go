@@ -548,11 +548,14 @@ func (v *SchemaValidator) ValidateEdge(edge *schema.DependencyEdge) *ValidationR
 		})
 	} else {
 		validTypes := map[schema.EdgeType]bool{
-			schema.EdgeImport:     true,
-			schema.EdgeCall:       true,
-			schema.EdgeExtends:    true,
-			schema.EdgeImplements: true,
-			schema.EdgeReference:  true,
+			schema.EdgeImport:                true,
+			schema.EdgeCall:                  true,
+			schema.EdgeExtends:               true,
+			schema.EdgeImplements:            true,
+			schema.EdgeReference:             true,
+			schema.EdgeImplementsHeader:      true,
+			schema.EdgeImplementsDeclaration: true,
+			schema.EdgeCallsDeclaration:      true,
 		}
 
 		if !validTypes[edge.EdgeType] {

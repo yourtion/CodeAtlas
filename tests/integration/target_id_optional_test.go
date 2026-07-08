@@ -131,7 +131,7 @@ func TestTargetIDOptional(t *testing.T) {
 // TestTargetIDRequired tests that non-import edges with empty target_id are accepted
 // as dangling edges (Task 3: validator 放宽——非 import 边空 target_id 不再阻塞写入，
 // 悬空边是合法状态，供 symbol_resolution_rate 指标观测）。
-func TestTargetIDRequired(t *testing.T) {
+func TestNonImportEdgeEmptyTargetIDAccepted(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
