@@ -14,6 +14,28 @@
 | `orphan_symbol_ratio` | 0.8654 | 87% 的符号无出入边——fixture 数据量小，孤立符号占比高 |
 | `cross_file_connectivity` | 0.0000 | **0% 跨文件边**——SchemaMapper 按文件重置符号表，跨文件调用边被丢弃 |
 
+## 跨文件消解改造后（2026-07-08）
+
+SchemaMapper 两遍扫描（CollectSymbols + ResolveEdges + 候选集消歧）改造完成后，指标变化：
+
+| 指标 | 改造前 | 改造后 | 变化 | 说明 |
+|---|---|---|---|---|
+| `cross_file_connectivity` | 0.0000 | **0.2157** | ✅ 从 0 提升 | 跨文件调用边现在能消解，TargetFile 填充 |
+| `orphan_symbol_ratio` | 0.8654 | **0.3077** | ✅ 降 56% | 跨文件边连通了符号，孤立率大幅下降 |
+| `symbol_resolution_rate` | 0.2857 | 0.2941 | 持平 | 被 import 边（100% 悬空）拖累；call 类 45% 解析率 |
+| `dangling_edge_ratio` (call) | 0.0000 | 0.5484 | ⚠️ 升高 | 现在保留了消解不到的 call 边（外部库函数），之前直接丢弃 |
+| `edge_recall` | 1.0000 | **1.0000** | 保持 | 跨文件真值恢复后仍满分 |
+| `edge_precision` | 0.9286 | **1.0000** | ✅ 提升 | 真值恢复后准确率满分 |
+| `call_chain_connectivity` | 1.0000 | **1.0000** | 保持 | 跨文件调用链连通 |
+
+**关键结论**：
+1. `cross_file_connectivity` 从 0 提升到 0.22，超过 > 0.20 成功标准——跨文件消解生效
+2. `orphan_symbol_ratio` 从 87% 降到 31%——跨文件边把原本孤立的符号连通了
+3. `dangling_edge_ratio(call)` 从 0 升到 55%——这是**预期变化**：之前消解不到的 call 边被丢弃（不计入），现在保留为悬空边（计入分母）。55% 悬空主要是外部库函数（strlen/printf 等），不在索引范围内
+4. 门禁全绿：edge_recall/precision/connectivity 全 1.00
+
+**call 类悬空率高的原因**：fixture 代码大量调用标准库/外部函数（C 的 strlen/malloc/printf、JS 的 console.log/setTimeout 等），这些函数不在索引范围内。真实仓库的 call 悬空率会低很多（内部调用占比高）。
+
 ## fixture 真值类（门禁通过）
 
 | 指标 | 值 | 阈值 | 通过 |
