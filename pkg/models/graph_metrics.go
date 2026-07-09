@@ -157,20 +157,24 @@ func CheckSingleChainConnectivity(ctx context.Context, r *EdgeRepository, repoID
 
 // ExtractedEdge models 层的提取边（供 quality 层转换）。
 type ExtractedEdge struct {
+	SourceID   string
 	SourceName string
 	EdgeType   string
+	TargetID   string
 	TargetName string
 }
 
-// ListExtractedEdges 返回仓库内所有提取出的边（source_name/edge_type/target_name）。
+// ListExtractedEdges 返回仓库内所有提取出的边（source_id/edge_type/target_id +
+// 对应 name，用于 symbol_id 精确匹配解决 C++ 重载同名问题）。
 //
-// target_name 取解析后的目标符号名；若未解析到（悬空），则回退到 target_module
-// （对 import 边而言 target_module 是有意义的标识，如 "java.util.ArrayList"）。
-// 这让多条同源 import 边（target 不同模块）可被 (source, type, target) 三元组区分，
-// 否则它们在 edge_recall/precision 对齐时会被压成同一个空 target 不可区分。
+// target_id 取解析后的目标符号 ID；若未解析到（悬空），COALESCE 回空串。
+// target_name 取解析后的目标符号名；悬空时回退到 target_module
+// （对 import 边而言 target_module 是有意义的标识，如 "java.util.ArrayList"），
+// 仅供调试日志——匹配只用 symbol_id 三元组。
 func ListExtractedEdges(ctx context.Context, r *EdgeRepository, repoID string) ([]ExtractedEdge, error) {
 	query := `
-		SELECT s_source.name, e.edge_type, COALESCE(s_target.name, COALESCE(e.target_module, ''))
+		SELECT e.source_id, s_source.name, e.edge_type,
+		       COALESCE(e.target_id::text, ''), COALESCE(s_target.name, COALESCE(e.target_module, ''))
 		FROM edges e
 		JOIN symbols s_source ON e.source_id = s_source.symbol_id
 		JOIN files f ON s_source.file_id = f.file_id
@@ -186,7 +190,7 @@ func ListExtractedEdges(ctx context.Context, r *EdgeRepository, repoID string) (
 	var result []ExtractedEdge
 	for rows.Next() {
 		var e ExtractedEdge
-		if err := rows.Scan(&e.SourceName, &e.EdgeType, &e.TargetName); err != nil {
+		if err := rows.Scan(&e.SourceID, &e.SourceName, &e.EdgeType, &e.TargetID, &e.TargetName); err != nil {
 			return nil, err
 		}
 		result = append(result, e)

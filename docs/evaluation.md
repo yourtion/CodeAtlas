@@ -36,12 +36,12 @@ codeatlas eval --fixtures --only retrieval         # 只跑检索指标（需 em
 
 #### 结构断言类（无需真值，真实仓库可跑）
 
-| 指标 | 说明 | 建议基线 |
+| 指标 | 说明 | 阈值 |
 |---|---|---|
-| `dangling_edge_ratio` | `target_id IS NULL` 的边占比，按 edge_type 分桶 | < 30% |
-| `symbol_resolution_rate` | `target_id` 已解析的边占比（1 - 悬空边率） | > 70% |
-| `orphan_symbol_ratio` | 无出入边的孤立符号占比 | < 40% |
-| `cross_file_connectivity` | `source_file ≠ target_file` 的边占比 | > 20% |
+| `dangling_edge_ratio` | `target_id IS NULL` 的边占比，按 edge_type 分桶 | call ≤ 0.90；reference ≤ 0.80；import/extends/总值 观察 |
+| `symbol_resolution_rate` | `target_id` 已解析的边占比（1 - 悬空边率） | call 分桶 ≥ 0.10；总值 观察（被 import 边拖低） |
+| `orphan_symbol_ratio` | 无出入边的孤立符号占比 | ≤ 0.40 |
+| `cross_file_connectivity` | `source_file ≠ target_file` 的边占比 | ≥ 0.10 |
 
 #### fixture 真值类（门禁）
 
@@ -63,7 +63,7 @@ codeatlas eval --fixtures --only retrieval         # 只跑检索指标（需 em
 ## 门禁机制
 
 - **fixture 真值类**：CI 硬门禁，不达标 `exit 1`
-- **结构断言类**：当前版本仅建基线，不做硬门禁。下一轮有基线数据后收紧为硬门禁
+- **结构断言类**：分桶硬门禁已启用。dangling_edge_ratio/symbol_resolution_rate 按 edge_type 分桶，call/reference 类设阈值，import/extends 类保持观察（悬空符合预期）。orphan_symbol_ratio/cross_file_connectivity 总值设阈值。阈值依据见 `docs/superpowers/baselines/2026-07-08-precision-graph-v2-baseline.md`
 
 ## 评估驱动的 case 补充
 
@@ -87,5 +87,5 @@ codeatlas eval --fixtures --only retrieval         # 只跑检索指标（需 em
 
 ## 已知限制
 
-- **call 类悬空率较高**：`dangling_edge_ratio(call)` 在 fixture 数据上约 55%，主要因为 fixture 代码大量调用标准库/外部函数（strlen/malloc/printf 等），这些函数不在索引范围内。真实仓库的 call 悬空率会低很多。
+- **call 类悬空率较高**：`dangling_edge_ratio(call)` 在 fixture 数据上约 84%（方法符号展平后大增），主要因为 fixture 代码大量调用标准库/外部函数（strlen/malloc/printf 等），这些函数不在索引范围内。已对 call 分桶设 ≤0.90 硬门禁；真实仓库的 call 悬空率会低很多。
 - **同名符号消歧用首个候选**：C++ 重载、多文件同名符号等场景，消歧策略是"同文件优先 → import 文件优先 → 首个候选+日志"。首个候选可能不是语义上最准确的，但有 WARN 日志可观测。签名消歧留待后续（需解析器产出更丰富的 Target 字段）。

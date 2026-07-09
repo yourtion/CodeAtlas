@@ -87,7 +87,7 @@ func ComputeSummary(metrics []MetricValue) Summary {
 
 // OverrideThreshold 覆盖指定指标的阈值并重新计算 Passed。
 // 用于集成测试按 fixture 放宽阈值。只匹配 Bucket=="" 的总值；
-// 分桶保持 Threshold=0（仅观察）不变。
+// 分桶阈值（如 dangling_edge_ratio 的 call/reference 桶）不受影响。
 func (r *Report) OverrideThreshold(name string, newThreshold float64) {
 	for i := range r.Metrics {
 		if r.Metrics[i].Name == name && r.Metrics[i].Bucket == "" {
@@ -100,13 +100,17 @@ func (r *Report) OverrideThreshold(name string, newThreshold float64) {
 
 // --- 阈值常量（初定，跑出基线后调整） ---
 
-// 结构断言类建议基线：这轮仅观察、Threshold=0（不做硬门禁）。
-// Evaluate 当前不使用这些常量；下一轮跑出基线后启用为硬门禁阈值。
+// 结构断言类硬门禁阈值。
+// 总值（不分桶）保持 Threshold=0（仅观察），因 import 边 100% 悬空会拖低总值。
+// 分桶阈值只对 call/reference 类设硬门禁；import/extends 类悬空符合预期，保持观察。
+//
+// 阈值依据：2026-07-08 基线值 ± 安全边际（见 baselines/2026-07-08-precision-graph-v2-baseline.md）。
 const (
-	ThresholdDanglingEdgeRatio     = 0.30 // 建议值，下一轮启用
-	ThresholdSymbolResolution      = 0.70 // 建议值，下一轮启用
-	ThresholdOrphanSymbolRatio     = 0.40 // 建议值，下一轮启用
-	ThresholdCrossFileConnectivity = 0.20 // 建议值，下一轮启用
+	ThresholdDanglingEdgeRatioCall      = 0.90 // 基线 0.84，留 6% 安全边际
+	ThresholdDanglingEdgeRatioReference = 0.80 // 基线 0.67，留 13% 安全边际
+	ThresholdSymbolResolutionCall       = 0.10 // 基线 0.16（1-0.84），留 6% 安全边际
+	ThresholdOrphanSymbolRatio          = 0.40 // 基线 0.33，留 7% 安全边际
+	ThresholdCrossFileConnectivity      = 0.10 // 基线 0.12，留 2% 安全边际
 )
 
 // fixture 真值类（硬门禁）

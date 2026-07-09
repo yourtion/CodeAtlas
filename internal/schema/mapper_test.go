@@ -845,3 +845,95 @@ func hello() {
 		t.Error("Call edge target ID not found in file symbols")
 	}
 }
+
+// TestCollectSymbols_FlattenChildren 验证 CollectSymbols 递归展平 Children：
+// Java/Kotlin 解析器把方法/构造器放在类的 Children 字段里，需把它们也作为独立符号
+// 加入 file.Symbols 与 symbolCandidates，否则跨文件方法调用边无法消解。
+func TestCollectSymbols_FlattenChildren(t *testing.T) {
+	mapper := NewSchemaMapper()
+
+	parsed := &parser.ParsedFile{
+		Path:     "Test.java",
+		Language: "java",
+		Content:  []byte("class Foo { void bar() {} }"),
+		Symbols: []parser.ParsedSymbol{
+			{
+				Name: "Foo",
+				Kind: "class",
+				Span: parser.ParsedSpan{StartLine: 1, StartByte: 0, EndLine: 1, EndByte: 25},
+				Children: []parser.ParsedSymbol{
+					{
+						Name: "bar",
+						Kind: "method",
+						Span: parser.ParsedSpan{StartLine: 1, StartByte: 12, EndLine: 1, EndByte: 23},
+					},
+				},
+			},
+		},
+	}
+
+	file, err := mapper.CollectSymbols(parsed)
+	if err != nil {
+		t.Fatalf("CollectSymbols 失败: %v", err)
+	}
+
+	if len(file.Symbols) != 2 {
+		t.Fatalf("应展平出 2 个符号（1 class + 1 method），got %d: %+v", len(file.Symbols), file.Symbols)
+	}
+
+	candidates := mapper.symbolCandidates["bar"]
+	if len(candidates) == 0 {
+		t.Fatal("方法符号 bar 应进入 symbolCandidates，但未找到")
+	}
+}
+
+// TestCollectSymbols_DedupDuplicateChildren 验证当解析器把同一符号既放顶层又放
+// Children（如 C++ 把方法同时输出为顶层 function 和类 Children(method)，span 一致）
+// 时，按确定性 symbol_id 去重，避免 validator 报 duplicate symbol_id。
+func TestCollectSymbols_DedupDuplicateChildren(t *testing.T) {
+	mapper := NewSchemaMapper()
+
+	// processData 既作为顶层 function 出现，又作为类 Foo 的 Children(method) 出现，
+	// 二者 span 完全一致——确定性 symbol_id 会撞车。
+	dupSpan := parser.ParsedSpan{StartLine: 39, StartByte: 609, EndLine: 50, EndByte: 800}
+	parsed := &parser.ParsedFile{
+		Path:     "Dup.cpp",
+		Language: "cpp",
+		Content:  []byte("class Foo { void processData() {} }; void processData() {}"),
+		Symbols: []parser.ParsedSymbol{
+			{Name: "processData", Kind: "function", Span: dupSpan},
+			{
+				Name: "Foo", Kind: "class",
+				Span: parser.ParsedSpan{StartLine: 1, StartByte: 0, EndLine: 1, EndByte: 10},
+				Children: []parser.ParsedSymbol{
+					{Name: "processData", Kind: "method", Span: dupSpan},
+				},
+			},
+		},
+	}
+
+	file, err := mapper.CollectSymbols(parsed)
+	if err != nil {
+		t.Fatalf("CollectSymbols 失败: %v", err)
+	}
+
+	// 顶层 Foo + 顶层 processData，Children 里重复的 processData 应被去重。
+	if len(file.Symbols) != 2 {
+		t.Fatalf("去重后应剩 2 个符号（Foo + processData），got %d", len(file.Symbols))
+	}
+
+	// 候选集里 processData 也只应有一个候选（不重复追加）。
+	candidates := mapper.symbolCandidates["processData"]
+	if len(candidates) != 1 {
+		t.Fatalf("processData 候选应去重为 1，got %d", len(candidates))
+	}
+
+	// 验证去重后无重复 SymbolID（validator 会拒绝 duplicate symbol_id）。
+	ids := make(map[string]bool, len(file.Symbols))
+	for _, s := range file.Symbols {
+		if ids[s.SymbolID] {
+			t.Fatalf("出现重复 symbol_id: %s", s.SymbolID)
+		}
+		ids[s.SymbolID] = true
+	}
+}
