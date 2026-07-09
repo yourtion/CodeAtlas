@@ -262,8 +262,3 @@ func TestLookupSymbolInFile_FileOfCalledOncePerCandidate(t *testing.T) {
 // 具体类型，故无法直接注入 fakeSymbolRepo。此测试改为验证 lookupSymbolInFile 的
 // 端到端语义（source 同文件 / target 同 source / 无命中退化）已在上述子测试覆盖；
 // ResolveTruthIDs 的 DB 集成验证由 tests/integration/quality_gate_test.go 承担。
-func TestResolveTruthIDs_DocumentedHere(t *testing.T) {
-	// 占位：保持此文件聚焦 lookupSymbolInFile 单测。
-	// ResolveTruthIDs 的覆盖见集成测试 TestQualityGate_FixtureMode。
-	t.Log("lookupSymbolInFile 单测覆盖消歧各分支；ResolveTruthIDs 集成验证见 quality_gate_test.go")
-}

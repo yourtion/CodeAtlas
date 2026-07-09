@@ -206,8 +206,8 @@ var CallAnalysisGroundTruth = []quality.GraphGroundTruth{
 			// findById/delete 内部 it.id 属性访问（消解到 User.kt 的 id 字段）
 			{SourceName: "findById", EdgeType: "call", TargetName: "id"},
 			{SourceName: "delete", EdgeType: "call", TargetName: "id"},
-			// save 调用 users.add(user)（Kotlin 标准库 List.add）
-			{SourceName: "save", EdgeType: "call", TargetName: "add"},
+			// save 调用 users.add(user)（Kotlin 标准库 List.add，悬空）
+			{SourceName: "save", EdgeType: "call", TargetName: "add", Optional: true},
 			// Kotlin 标准库调用（悬空）
 			{SourceName: "findAll", EdgeType: "call", TargetName: "", Optional: true},
 		},
@@ -224,8 +224,8 @@ var CallAnalysisGroundTruth = []quality.GraphGroundTruth{
 			// findById/delete 内部调用 user.getId()（跨文件到 User.java）
 			{SourceName: "findById", EdgeType: "call", TargetName: "getId"},
 			{SourceName: "delete", EdgeType: "call", TargetName: "getId"},
-			// save 调用 users.add(user)（Java 标准库 List.add）
-			{SourceName: "save", EdgeType: "call", TargetName: "add"},
+			// save 调用 users.add(user)（Java 标准库 ArrayList.add，悬空）
+			{SourceName: "save", EdgeType: "call", TargetName: "add", Optional: true},
 			// Java 标准库调用（悬空）
 			{SourceName: "findAll", EdgeType: "call", TargetName: "", Optional: true},
 		},

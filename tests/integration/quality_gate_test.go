@@ -106,7 +106,14 @@ func TestQualityGate_RepoMode(t *testing.T) {
 
 	t.Logf("=== Repo 模式基线 ===")
 	for _, m := range report.Metrics {
-		t.Logf("  %s (bucket=%s) = %.4f", m.Name, m.Bucket, m.Value)
+		t.Logf("  %s (bucket=%s) = %.4f threshold=%.2f passed=%v", m.Name, m.Bucket, m.Value, m.Threshold, m.Passed)
+	}
+
+	// 门禁断言：所有有阈值的指标必须通过（与 fixture 模式一致）
+	for _, m := range report.Metrics {
+		if m.Threshold > 0 && !m.Passed {
+			t.Errorf("质量门禁失败: %s (bucket=%s) = %.4f, 阈值 %.2f", m.Name, m.Bucket, m.Value, m.Threshold)
+		}
 	}
 }
 

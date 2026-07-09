@@ -115,9 +115,19 @@ func runEval(c *cli.Context) error {
 				"先索引 fixture：codeatlas index --path <fixture_dir> --server <url>\n" +
 				"再评估：codeatlas eval --fixtures --repo <repoID> --db ...")
 		}
+		// 先按「每个真值条目」回填 symbol_id——保留各条目的 FixtureFile 做 source/target
+		// 同文件消歧（如 Kotlin UserRepository 的 findById→id 与 Java UserRepository 的
+		// findById→getId，按所在文件区分）。回填后再合并为单一真值集合送评估。
+		fileRepo := models.NewFileRepository(modelsDB)
+		truthSlice := make([]quality.GraphGroundTruth, len(fixtures.CallAnalysisGroundTruth))
+		copy(truthSlice, fixtures.CallAnalysisGroundTruth)
+		if err := fixtures.ResolveTruthIDs(ctx, symbolRepo, fileRepo, truthSlice); err != nil {
+			fmt.Fprintln(os.Stderr, "warn: ResolveTruthIDs:", err)
+		}
+
 		// 合并依赖图真值
 		truth := &quality.GraphGroundTruth{FixtureFile: "merged"}
-		for _, gt := range fixtures.CallAnalysisGroundTruth {
+		for _, gt := range truthSlice {
 			truth.Edges = append(truth.Edges, gt.Edges...)
 			truth.Chains = append(truth.Chains, gt.Chains...)
 		}
